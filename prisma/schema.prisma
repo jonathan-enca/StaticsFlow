@@ -64,6 +64,7 @@ model User {
   password         String?   // hashed with bcrypt (null for OAuth users)
   stripeCustomerId String?   @unique
   plan             Plan      @default(STARTER)
+  isAdmin          Boolean   @default(false) // admin-only: access to BDD Manager
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -107,21 +108,27 @@ model Creative {
   brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 }
 
-// Inspiration templates in the living creative database
+// Inspiration templates in the living BDD (base de données) of ad creatives
+// Fed by admin batch upload + Claude auto-analysis
 model Template {
-  id             String   @id @default(cuid())
-  category       String   // product category: skincare, food, fashion, etc.
-  type           String   // creative type: product_hero, testimonial, etc.
-  hookType       String   // pain, curiosity, social_proof, fomo, benefit, authority, urgency
-  palette        String[] // dominant colors (hex)
-  language       String   @default("fr")
-  sourceImageUrl String   // R2 URL of the inspiration image
-  analysisJson   Json     @default("{}") // Claude analysis of this template
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id             String    @id @default(cuid())
+  category       String    // skincare | food | fashion | tech | fitness | home | beauty | health | pet | other
+  type           String    // product_hero | before_after | comparatif | testimonial | promo | ugc_screenshot | lifestyle | data_stats | listicle | press_mention
+  layout         String    @default("other") // grid | split | centered | overlay | other
+  hookType       String    @default("benefice_direct") // pain | curiosite | social_proof | fomo | benefice_direct | autorite | urgence
+  palette        String[]  // dominant hex colors (top 3)
+  language       String    @default("fr") // fr | en | de | other
+  sourceImageUrl String    // R2 URL of the original uploaded creative
+  thumbnailUrl   String?   // R2 URL of resized thumbnail (generated post-upload)
+  analysisJson   Json      @default("{}") // full Claude analysis output
+  uploadedAt     DateTime  @default(now())
+  analyzedAt     DateTime? // null until Claude analysis completes
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([category, type])
   @@index([hookType])
+  @@index([language])
 }
 
 // ──────────────────────────────────────────────────────────────
