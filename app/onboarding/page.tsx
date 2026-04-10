@@ -2,6 +2,7 @@
 
 // Onboarding flow: URL → Brand DNA → First Creative
 // Target: < 3 minutes end-to-end (SPECS.md §6.2, KPI §11.1)
+// BYOK: users enter their own Claude + Gemini API keys directly in this page (SPECS.md §7.3)
 // This is the "wow moment" — if it doesn't impress, we lose the user.
 
 import { useState } from "react";
@@ -21,12 +22,6 @@ interface BrandDNA {
   productCategory: string;
 }
 
-interface Brand {
-  id: string;
-  name: string;
-  url: string;
-}
-
 interface GeneratedCreative {
   id: string;
   imageUrl: string | null;
@@ -43,10 +38,13 @@ interface GeneratedCreative {
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>("url");
   const [url, setUrl] = useState("");
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [geminiKey, setGeminiKey] = useState("");
+  const [showKeys, setShowKeys] = useState(false);
+
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
 
-  const [brand, setBrand] = useState<Brand | null>(null);
   const [dna, setDna] = useState<BrandDNA | null>(null);
 
   const [generating, setGenerating] = useState(false);
@@ -57,12 +55,19 @@ export default function OnboardingPage() {
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();
     setExtractError(null);
+
+    if (!anthropicKey.trim()) {
+      setExtractError("Your Claude API key is required to extract Brand DNA.");
+      setShowKeys(true);
+      return;
+    }
+
     setExtracting(true);
 
     const res = await fetch("/api/brands/extract", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, anthropicApiKey: anthropicKey.trim() }),
     });
 
     setExtracting(false);
@@ -74,21 +79,33 @@ export default function OnboardingPage() {
     }
 
     const data = await res.json();
-    setBrand(data.brand);
     setDna(data.dna);
     setStep("dna");
   }
 
   // ── Step 2: Generate first creative from validated Brand DNA ──────────────
   async function handleGenerate() {
-    if (!brand) return;
+    if (!dna) return;
+
+    if (!geminiKey.trim()) {
+      setGenerateError("Your Gemini API key is required to generate the creative.");
+      setShowKeys(true);
+      return;
+    }
+
     setGenerateError(null);
     setGenerating(true);
 
-    const res = await fetch("/api/creatives/generate", {
+    const res = await fetch("/api/onboarding/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ brandId: brand.id, format: "1080x1080", angle: "benefit" }),
+      body: JSON.stringify({
+        dna,
+        anthropicApiKey: anthropicKey.trim(),
+        geminiApiKey: geminiKey.trim(),
+        format: "1080x1080",
+        angle: "benefit",
+      }),
     });
 
     setGenerating(false);
@@ -142,7 +159,7 @@ export default function OnboardingPage() {
           ))}
         </div>
 
-        {/* ── Step 1: URL input ──────────────────────────────────────── */}
+        {/* ── Step 1: URL + API keys ─────────────────────────────────── */}
         {step === "url" && (
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-3">
@@ -162,6 +179,78 @@ export default function OnboardingPage() {
                 className="w-full px-4 py-3.5 text-lg rounded-xl border border-gray-200 text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
 
+              {/* API keys — required for BYOK model */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowKeys(!showKeys)}
+                  className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-lg">🔑</span>
+                    Your API Keys
+                    {(!anthropicKey || !geminiKey) && (
+                      <span className="text-xs font-normal px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">
+                        Required
+                      </span>
+                    )}
+                    {anthropicKey && geminiKey && (
+                      <span className="text-xs font-normal px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
+                        ✓ Set
+                      </span>
+                    )}
+                  </span>
+                  <svg
+                    className={`w-4 h-4 text-gray-400 transition-transform ${showKeys ? "rotate-180" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {showKeys && (
+                  <div className="border-t border-gray-200 p-4 space-y-3 bg-gray-50">
+                    <p className="text-xs text-gray-500 mb-3">
+                      StaticsFlow uses your own API keys. They are never stored — only used for this session.
+                    </p>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">
+                        Claude API Key (Anthropic)
+                      </label>
+                      <input
+                        type="password"
+                        value={anthropicKey}
+                        onChange={(e) => setAnthropicKey(e.target.value)}
+                        placeholder="sk-ant-..."
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white font-mono"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">
+                        Get it at{" "}
+                        <span className="font-medium text-gray-600">console.anthropic.com</span>
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">
+                        Gemini API Key (Google)
+                      </label>
+                      <input
+                        type="password"
+                        value={geminiKey}
+                        onChange={(e) => setGeminiKey(e.target.value)}
+                        placeholder="AIza..."
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white font-mono"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">
+                        Get it at{" "}
+                        <span className="font-medium text-gray-600">aistudio.google.com</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {extractError && (
                 <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
                   {extractError}
@@ -171,6 +260,7 @@ export default function OnboardingPage() {
               <button
                 type="submit"
                 disabled={extracting}
+                onClick={() => { if (!showKeys && !anthropicKey) setShowKeys(true); }}
                 className="w-full py-3.5 px-6 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {extracting ? (
@@ -279,6 +369,21 @@ export default function OnboardingPage() {
               )}
             </div>
 
+            {/* Gemini key reminder if missing */}
+            {!geminiKey && (
+              <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                <p className="text-sm font-semibold text-amber-800 mb-2">🔑 Gemini API key needed to generate your creative</p>
+                <input
+                  type="password"
+                  value={geminiKey}
+                  onChange={(e) => setGeminiKey(e.target.value)}
+                  placeholder="AIza..."
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-amber-200 text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white font-mono"
+                />
+                <p className="mt-1 text-xs text-amber-600">Get it at aistudio.google.com</p>
+              </div>
+            )}
+
             {generateError && (
               <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg mb-4">
                 {generateError}
@@ -324,7 +429,14 @@ export default function OnboardingPage() {
 
             {/* Creative preview */}
             <div className="rounded-2xl border border-gray-200 overflow-hidden mb-6">
-              {creative.imageUrl && !creative.imageUrl.startsWith("data:image") ? (
+              {creative.imageUrl && creative.imageUrl.startsWith("data:image/png;base64,") && creative.imageUrl.length > 100 ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={creative.imageUrl}
+                  alt="Generated ad creative"
+                  className="w-full aspect-square object-cover"
+                />
+              ) : creative.imageUrl && !creative.imageUrl.startsWith("data:") ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={creative.imageUrl}
@@ -332,7 +444,7 @@ export default function OnboardingPage() {
                   className="w-full aspect-square object-cover"
                 />
               ) : (
-                /* Placeholder when R2 not yet configured */
+                /* Placeholder: show the brief copy in brand colors */
                 <div
                   className="w-full aspect-square flex flex-col items-center justify-center p-8 text-center"
                   style={{ backgroundColor: dna.colors.primary + "20" }}
@@ -361,7 +473,7 @@ export default function OnboardingPage() {
                     {creative.briefJson?.callToAction ?? "Shop Now"}
                   </div>
                   <p className="mt-4 text-xs text-gray-400">
-                    Configure R2 storage to see the actual generated image
+                    Configure R2 storage to see the full Gemini-generated image
                   </p>
                 </div>
               )}
@@ -401,20 +513,22 @@ export default function OnboardingPage() {
 
             {/* Actions */}
             <div className="flex gap-3">
-              {creative.imageUrl && !creative.imageUrl.includes("...") && (
-                <a
-                  href={creative.imageUrl}
-                  download
-                  className="flex-1 py-3 px-4 bg-black text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors text-center"
-                >
-                  Download Creative
-                </a>
-              )}
+              {creative.imageUrl &&
+                creative.imageUrl.startsWith("data:image/png;base64,") &&
+                creative.imageUrl.length > 100 && (
+                  <a
+                    href={creative.imageUrl}
+                    download="staticsflow-creative.png"
+                    className="flex-1 py-3 px-4 bg-black text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors text-center"
+                  >
+                    Download Creative
+                  </a>
+                )}
               <a
-                href="/dashboard"
+                href="/signup"
                 className="flex-1 py-3 px-4 border border-gray-200 text-gray-900 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors text-center"
               >
-                Go to Dashboard →
+                Create account to save →
               </a>
             </div>
 
