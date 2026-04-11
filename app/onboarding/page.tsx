@@ -4,6 +4,7 @@
 // Target: < 3 minutes end-to-end (SPECS.md §6.2, KPI §11.1)
 // BYOK: users enter their own Claude + Gemini API keys directly in this page (SPECS.md §7.3)
 // UX fixes C5/M6/M7: keys expanded by default, mobile stepper, back navigation
+// STA-49: demo mode — investors can complete the full flow without real API keys
 
 import { useState } from "react";
 
@@ -36,6 +37,40 @@ interface GeneratedCreative {
   status: string;
   score: number | null;
 }
+
+// ── Demo data — hardcoded for investor meeting (STA-49) ──────────────────────
+const DEMO_DNA: BrandDNA = {
+  name: "Lumière Paris",
+  url: "https://lumiere-paris.com",
+  colors: { primary: "#1A1A2E", secondary: "#F5F0EB", accent: "#C9A84C" },
+  fonts: ["Playfair Display", "Inter"],
+  logoUrl: null,
+  toneOfVoice:
+    "Sophisticated, aspirational, and warm. We speak to women who know what they want — timeless elegance, not fleeting trends.",
+  keyBenefits: [
+    "Ethically sourced fabrics from Normandy — luxury with a conscience",
+    "Designed in Paris, made to last a lifetime (not a season)",
+    "Free express delivery + hassle-free returns within 60 days",
+  ],
+  personas: [
+    "Urban professional woman, 28–45, values quality over quantity, builds a capsule wardrobe intentionally",
+  ],
+  brandVoice: "Refined, direct, poetic. Think Coco Chanel meets Glossier.",
+  productCategory: "Premium Fashion / DTC",
+};
+
+const DEMO_CREATIVE: GeneratedCreative = {
+  id: "demo-creative-001",
+  imageUrl: null,
+  briefJson: {
+    headline: "Wear Less. Mean More.",
+    copy: "Crafted in Normandy. Designed in Paris. Built for the woman who has everything — except time to waste.",
+    callToAction: "Shop the Collection",
+    angle: "Aspiration & Identity",
+  },
+  status: "approved",
+  score: 0.92,
+};
 
 // ── Progress stepper ──────────────────────────────────────────────────────────
 function Stepper({ step, onNavigate }: { step: Step; onNavigate: (s: Step) => void }) {
@@ -114,11 +149,21 @@ export default function OnboardingPage() {
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [creative, setCreative] = useState<GeneratedCreative | null>(null);
 
+  // STA-49: demo mode flag — skips all API calls
+  const [isDemo, setIsDemo] = useState(false);
+
   // M7: navigate back to a completed step (clears subsequent data)
   function navigateTo(s: Step) {
     setStep(s);
-    if (s === "url") { setDna(null); setCreative(null); }
+    if (s === "url") { setDna(null); setCreative(null); setIsDemo(false); }
     if (s === "dna") { setCreative(null); }
+  }
+
+  // STA-49: activate demo mode — load hardcoded Brand DNA instantly, no API call
+  function handleTryDemo() {
+    setIsDemo(true);
+    setDna(DEMO_DNA);
+    setStep("dna");
   }
 
   // ── Step 1: Extract Brand DNA ─────────────────────────────────────────────
@@ -153,6 +198,18 @@ export default function OnboardingPage() {
   // ── Step 2: Generate first creative ──────────────────────────────────────
   async function handleGenerate() {
     if (!dna) return;
+
+    // STA-49: demo mode — load hardcoded creative instantly, no Gemini call
+    if (isDemo) {
+      setGenerating(true);
+      // Simulate a brief generation delay for UX realism
+      await new Promise((r) => setTimeout(r, 1200));
+      setGenerating(false);
+      setCreative(DEMO_CREATIVE);
+      setStep("creative");
+      return;
+    }
+
     if (!geminiKey.trim()) {
       setGenerateError("Your Gemini API key is required to generate the creative.");
       return;
@@ -192,6 +249,11 @@ export default function OnboardingPage() {
           <span className="text-white font-bold text-sm">S</span>
         </div>
         <span className="text-lg font-bold text-gray-900">StaticsFlow</span>
+        {isDemo && (
+          <span className="ml-2 text-xs font-semibold px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full">
+            Demo mode
+          </span>
+        )}
       </div>
 
       <div className="max-w-2xl mx-auto px-6 py-12">
@@ -304,8 +366,22 @@ export default function OnboardingPage() {
               </button>
             </form>
 
-            <p className="mt-6 text-sm text-gray-400 text-center">
-              Works best with e-commerce and DTC brand websites
+            {/* STA-49: Demo mode divider + button */}
+            <div className="mt-6 flex items-center gap-4">
+              <div className="flex-1 h-px bg-gray-100" />
+              <span className="text-xs text-gray-400 font-medium">or</span>
+              <div className="flex-1 h-px bg-gray-100" />
+            </div>
+            <button
+              type="button"
+              onClick={handleTryDemo}
+              className="mt-4 w-full py-3 px-6 border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors text-sm flex items-center justify-center gap-2"
+            >
+              <span>✨</span>
+              Try Demo — see the full flow instantly
+            </button>
+            <p className="mt-2 text-xs text-gray-400 text-center">
+              No API keys needed · Uses a sample fashion brand
             </p>
           </div>
         )}
@@ -384,8 +460,8 @@ export default function OnboardingPage() {
               )}
             </div>
 
-            {/* Gemini key reminder if missing */}
-            {!geminiKey && (
+            {/* Gemini key reminder — hidden in demo mode */}
+            {!isDemo && !geminiKey && (
               <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-semibold text-amber-800">🔑 Gemini API key needed</p>
@@ -419,7 +495,7 @@ export default function OnboardingPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Generating your first ad… (~30s)
+                  {isDemo ? "Generating demo creative…" : "Generating your first ad… (~30s)"}
                 </>
               ) : (
                 "Generate First Ad Creative →"
@@ -465,7 +541,14 @@ export default function OnboardingPage() {
                   <div className="px-6 py-2.5 rounded-lg font-semibold text-sm" style={{ backgroundColor: dna.colors.accent, color: "#fff" }}>
                     {creative.briefJson?.callToAction ?? "Shop Now"}
                   </div>
-                  <p className="mt-4 text-xs text-gray-400">Configure R2 storage to see the full Gemini-generated image</p>
+                  {isDemo && (
+                    <p className="mt-4 text-xs text-gray-400">
+                      Demo mode — connect your Gemini key to generate real AI images
+                    </p>
+                  )}
+                  {!isDemo && (
+                    <p className="mt-4 text-xs text-gray-400">Configure R2 storage to see the full Gemini-generated image</p>
+                  )}
                 </div>
               )}
             </div>
