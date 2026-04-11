@@ -14,7 +14,12 @@ export const metadata = {
 };
 
 export default async function LibraryPage() {
-  const session = await auth();
+  let session;
+  try {
+    session = await auth();
+  } catch {
+    redirect("/login");
+  }
   if (!session?.user?.id) redirect("/login");
 
   // Pre-fetch user's favorite IDs on the server for instant rendering

@@ -13,7 +13,12 @@ interface PageProps {
 }
 
 export default async function BrandDnaPage({ params }: PageProps) {
-  const session = await auth();
+  let session;
+  try {
+    session = await auth();
+  } catch {
+    redirect("/login");
+  }
   if (!session?.user?.id) redirect("/login");
 
   const { brandId } = await params;

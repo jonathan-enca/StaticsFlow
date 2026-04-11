@@ -5,7 +5,12 @@ import { prisma } from "@/lib/prisma";
 import type { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
 
 export default async function DashboardPage() {
-  const session = await auth();
+  let session;
+  try {
+    session = await auth();
+  } catch {
+    redirect("/login");
+  }
   if (!session) redirect("/login");
 
   const brands = await prisma.brand.findMany({
