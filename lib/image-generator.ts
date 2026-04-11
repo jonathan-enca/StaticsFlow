@@ -88,6 +88,43 @@ async function generateCreativeBrief(
   const isPortrait = height > width;
   const isLandscape = width > height;
 
+  // Build enrichment context (empty strings when not set — no undefined in prompt)
+  const customerVocab = brandDna.customerVocabulary;
+  const vocabSection = customerVocab
+    ? `
+CUSTOMER VOCABULARY (real words your customers use — mirror this language in copy):
+- Verbatims: ${customerVocab.verbatims.slice(0, 5).join(" | ")}
+- Recurring words: ${customerVocab.recurringWords.join(", ")}
+- Emotional words: ${customerVocab.emotionalWords.join(", ")}`
+    : "";
+
+  const requiredWording = brandDna.requiredWording?.length
+    ? `\n- Required wording (MUST include): ${brandDna.requiredWording.join(", ")}`
+    : "";
+
+  const brandBriefSection = brandDna.brandBrief
+    ? `\n- Brand charter: ${brandDna.brandBrief}`
+    : "";
+
+  const structuredPersonasSection = brandDna.structuredPersonas?.length
+    ? `\n- Detailed personas: ${brandDna.structuredPersonas
+        .map(
+          (p) =>
+            `${p.name} (${p.ageRange}): pain points=${p.painPoints.join(", ")}; aspirations=${p.aspirations.join(", ")}`
+        )
+        .join(" | ")}`
+    : "";
+
+  const anglesSection = brandDna.communicationAngles
+    ? `\n- Preferred angles: ${brandDna.communicationAngles.preferred.join(", ")}` +
+      `\n- FORBIDDEN angles: ${brandDna.communicationAngles.forbidden.join(", ")}`
+    : "";
+
+  const customAssetsSection =
+    brandDna.customAssets?.length
+      ? `\n- Custom brand assets available: ${brandDna.customAssets.map((a) => `${a.type} (${a.url})`).join(", ")}`
+      : "";
+
   const prompt = `You are a senior creative director at a top DTC advertising agency. Create a detailed creative brief for a static Meta Ad that is unmistakably "on brand" for this brand.
 
 BRAND DNA:
@@ -97,12 +134,12 @@ BRAND DNA:
 - Tone of Voice: ${brandDna.toneOfVoice}
 - Brand Voice: ${brandDna.brandVoice}
 - Key Benefits: ${brandDna.keyBenefits.join(", ")}
-- Personas: ${brandDna.personas.join(" | ")}
+- Personas: ${brandDna.personas.join(" | ")}${structuredPersonasSection}
 - Primary Color: ${brandDna.colors.primary}
 - Secondary Color: ${brandDna.colors.secondary}
 - Accent Color: ${brandDna.colors.accent}
 - Fonts: ${brandDna.fonts.join(", ")}
-- Forbidden Words: ${brandDna.forbiddenWords.join(", ")}
+- Forbidden Words: ${brandDna.forbiddenWords.join(", ")}${requiredWording}${brandBriefSection}${anglesSection}${customAssetsSection}${vocabSection}
 
 AD PARAMETERS:
 - Format: ${format} (${isPortrait ? "vertical portrait" : isLandscape ? "horizontal landscape" : "square"})

@@ -89,3 +89,16 @@ export function creativeKey(
 export function templateKey(templateId: string): string {
   return `templates/${templateId}.jpg`;
 }
+
+/**
+ * Generate a storage key for a custom brand asset (packshot, studio, UGC…).
+ * Format: brands/<userId>/<brandId>/assets/<assetId>.<ext>
+ */
+export function brandAssetKey(
+  userId: string,
+  brandId: string,
+  assetId: string,
+  ext: string
+): string {
+  return `brands/${userId}/${brandId}/assets/${assetId}.${ext}`;
+}

@@ -1,5 +1,36 @@
 // StaticsFlow type definitions
 
+/** Customer vocabulary extracted from reviews */
+export interface CustomerVocabulary {
+  verbatims: string[];        // Top 20-30 real quotes from customers
+  recurringWords: string[];   // Words/phrases they repeatedly use
+  emotionalWords: string[];   // Emotional language (joy, frustration, relief…)
+}
+
+/** A detailed buyer persona */
+export interface Persona {
+  name: string;
+  ageRange: string;         // e.g. "25-35"
+  painPoints: string[];
+  aspirations: string[];
+  description: string;      // Free-text summary
+}
+
+/** Communication angle preferences */
+export interface CommunicationAngles {
+  preferred: string[];   // Angles to emphasize (e.g. "authenticity", "transformation")
+  forbidden: string[];   // Angles to never use (e.g. "fear-based", "aggressive")
+}
+
+/** A custom brand asset uploaded by the user */
+export interface CustomAsset {
+  id: string;
+  type: 'packshot' | 'studio' | 'ugc' | 'other';
+  url: string;           // R2 public URL
+  fileName: string;
+  uploadedAt: string;    // ISO date string
+}
+
 /** Brand DNA extracted from a URL */
 export interface BrandDNA {
   id: string

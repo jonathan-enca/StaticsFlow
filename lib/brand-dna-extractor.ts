@@ -3,8 +3,10 @@
 
 import { createClaudeClient, CLAUDE_MODEL } from "@/lib/claude";
 import { scrapeWebsite, ScrapeResult } from "@/lib/scraper";
+import type { CustomerVocabulary, Persona, CommunicationAngles, CustomAsset } from "@/types/index";
 
 export interface ExtractedBrandDNA {
+  // ── Auto-extracted (Phase 1) ───────────────────────────────────────────────
   name: string;
   url: string;
   colors: {
@@ -19,10 +21,26 @@ export interface ExtractedBrandDNA {
   toneOfVoice: string;
   language: string;
   keyBenefits: string[];
-  personas: string[];
+  personas: string[];           // Legacy: simple string[] from Phase 1 extraction
   brandVoice: string;
   forbiddenWords: string[];
   productCategory: string;
+
+  // ── Enrichment layer (Phase 2 — STA-21) ───────────────────────────────────
+  // Customer reviews (section 2.1)
+  reviewsUrl?: string;
+  customerVocabulary?: CustomerVocabulary;
+
+  // Wording rules (section 2.2)
+  requiredWording?: string[];   // Always say (regulatory, brand-mandatory)
+
+  // Custom assets uploaded by user (section 2.2)
+  customAssets?: CustomAsset[];
+
+  // Brand charter (section 2.2)
+  brandBrief?: string;          // "we want to be perceived as X, never as Y"
+  structuredPersonas?: Persona[];
+  communicationAngles?: CommunicationAngles;
 }
 
 /**
@@ -39,6 +57,85 @@ export async function extractBrandDNA(
   const dna = await analyzeBrandWithClaude(scraped, anthropicApiKey);
 
   return dna;
+}
+
+/**
+ * Extract customer vocabulary from a reviews page (section 2.1).
+ * Claude scrapes the reviews URL and extracts verbatims + recurring vocabulary.
+ */
+export async function extractCustomerVocabulary(
+  reviewsUrl: string,
+  brandName: string,
+  anthropicApiKey?: string
+): Promise<CustomerVocabulary> {
+  // Scrape the reviews page
+  let reviewsContent = "";
+  try {
+    const scraped = await scrapeWebsite(reviewsUrl);
+    reviewsContent = scraped.pages
+      .map((p) => `${p.title}\n${p.bodyText}`)
+      .join("\n\n");
+  } catch (err) {
+    throw new Error(
+      `Failed to scrape reviews URL (${reviewsUrl}): ${(err as Error).message}`
+    );
+  }
+
+  if (!reviewsContent.trim()) {
+    throw new Error("No content found at the reviews URL.");
+  }
+
+  const client = createClaudeClient(anthropicApiKey);
+
+  const prompt = `You are a consumer insights analyst. Analyze the following customer reviews for "${brandName}" and extract the authentic vocabulary customers use to describe this brand and its products.
+
+REVIEWS CONTENT:
+${reviewsContent.slice(0, 8000)}
+
+Extract the customer vocabulary and return ONLY a valid JSON object with this exact structure:
+
+{
+  "verbatims": [
+    "Exact quote from a real customer review (max 30 words each)",
+    ... (15-25 most impactful and representative quotes)
+  ],
+  "recurringWords": [
+    "word or short phrase that customers repeatedly use",
+    ... (10-20 items — single words or 2-3 word phrases the customers ACTUALLY used, not generic words like 'good' or 'great')
+  ],
+  "emotionalWords": [
+    "emotional word or phrase showing how customers FEEL",
+    ... (8-15 items — specific emotions like 'finally feel confident', 'game-changer', 'obsessed', 'life-changing')
+  ]
+}
+
+CRITICAL RULES:
+1. Return ONLY the JSON object — no preamble, no markdown fences
+2. verbatims must be EXACT quotes from the reviews, not paraphrases
+3. recurringWords must be words/phrases CUSTOMERS used, not marketing language
+4. emotionalWords must convey real emotion, not just adjectives
+5. Prefer specific language over generic (e.g. "skin feels like silk" > "soft skin")`;
+
+  const response = await client.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 2000,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "";
+  const cleaned = text
+    .replace(/^```(?:json)?\n?/m, "")
+    .replace(/\n?```$/m, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned) as CustomerVocabulary;
+  } catch {
+    throw new Error(
+      `Claude returned invalid JSON for customer vocabulary: ${text.slice(0, 300)}`
+    );
+  }
 }
 
 async function analyzeBrandWithClaude(
