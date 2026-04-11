@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Explicit source paths for Tailwind v4 — required for Vercel builds where
+   automatic content detection may fail to scan TypeScript/TSX files. */
+@source "../app/**/*.{tsx,ts,jsx,js}";
+@source "../components/**/*.{tsx,ts,jsx,js}";
+@source "../lib/**/*.{tsx,ts,jsx,js}";
+
 /* StaticsFlow global styles */
 :root {
   --background: #ffffff;
