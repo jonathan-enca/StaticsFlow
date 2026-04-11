@@ -18,11 +18,27 @@ export default async function DashboardPage() {
     <main className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
-            <span className="text-white font-bold text-sm">S</span>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
+              <span className="text-white font-bold text-sm">S</span>
+            </div>
+            <span className="text-lg font-bold text-gray-900">StaticsFlow</span>
           </div>
-          <span className="text-lg font-bold text-gray-900">StaticsFlow</span>
+          <div className="flex items-center gap-1">
+            <a
+              href="/dashboard"
+              className="px-3 py-1.5 text-sm font-medium text-gray-900 bg-gray-100 rounded-lg"
+            >
+              Dashboard
+            </a>
+            <a
+              href="/library"
+              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              Library
+            </a>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-500">{session.user?.email}</span>
