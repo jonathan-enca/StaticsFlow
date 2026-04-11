@@ -91,8 +91,8 @@ BRAND DNA:
 - Tone of Voice: ${brandDna.toneOfVoice}
 - Brand Voice: ${brandDna.brandVoice}
 - Primary Color: ${brandDna.colors.primary}
-- Key Benefits: ${brandDna.keyBenefits.join(", ")}
-- Forbidden Words: ${brandDna.forbiddenWords.join(", ")}
+- Key Benefits: ${brandDna.keyBenefits?.join(", ") ?? ""}
+- Forbidden Words: ${brandDna.forbiddenWords?.join(", ") ?? ""}
 
 CREATIVE BRIEF:
 - Headline: "${creative.brief.headline}"

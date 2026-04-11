@@ -63,20 +63,24 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (err) {
-    console.error("[onboarding/generate]", err);
-
     const message =
       err instanceof Error ? err.message : "Creative generation failed";
+    console.error("[onboarding/generate] error:", message, err);
+
     const isKeyError =
       message.toLowerCase().includes("api key") ||
       message.toLowerCase().includes("authentication") ||
-      message.toLowerCase().includes("401");
+      message.toLowerCase().includes("401") ||
+      message.toLowerCase().includes("permission") ||
+      message.toLowerCase().includes("403");
 
     return NextResponse.json(
       {
         error: isKeyError
           ? "Invalid API key. Please check your Claude and Gemini API keys."
           : "Creative generation failed. Please try again.",
+        // Include root cause in dev to help debugging
+        ...(process.env.NODE_ENV !== "production" && { detail: message }),
       },
       { status: 500 }
     );

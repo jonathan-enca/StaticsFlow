@@ -169,13 +169,13 @@ BRAND DNA:
 - Category: ${brandDna.productCategory}
 - Tone of Voice: ${brandDna.toneOfVoice}
 - Brand Voice: ${brandDna.brandVoice}
-- Key Benefits: ${brandDna.keyBenefits.join(", ")}
-- Personas: ${brandDna.personas.join(" | ")}${structuredPersonasSection}
+- Key Benefits: ${brandDna.keyBenefits?.join(", ") ?? ""}
+- Personas: ${brandDna.personas?.join(" | ") ?? ""}${structuredPersonasSection}
 - Primary Color: ${brandDna.colors.primary}
 - Secondary Color: ${brandDna.colors.secondary}
 - Accent Color: ${brandDna.colors.accent}
-- Fonts: ${brandDna.fonts.join(", ")}
-- Forbidden Words: ${brandDna.forbiddenWords.join(", ")}${requiredWording}${brandBriefSection}${anglesSection}${customAssetsSection}${vocabSection}
+- Fonts: ${brandDna.fonts?.join(", ") ?? ""}
+- Forbidden Words: ${brandDna.forbiddenWords?.join(", ") ?? ""}${requiredWording}${brandBriefSection}${anglesSection}${customAssetsSection}${vocabSection}
 
 AD PARAMETERS:
 - Format: ${format} (${isPortrait ? "vertical portrait" : isLandscape ? "horizontal landscape" : "square"})
@@ -193,7 +193,7 @@ Return ONLY a valid JSON object with this exact structure:
   "format": "${format}",
   "layout": "Describe the visual layout: e.g., 'Product hero center, headline top-left, CTA bottom-right'",
   "colorGuidance": "Exact color usage: primary ${brandDna.colors.primary} for background, accent ${brandDna.colors.accent} for CTA button",
-  "fontGuidance": "Font hierarchy: ${brandDna.fonts[0] ?? "sans-serif"} for headline bold, same regular for body",
+  "fontGuidance": "Font hierarchy: ${brandDna.fonts?.[0] ?? "sans-serif"} for headline bold, same regular for body",
   "imagePrompt": "A detailed image generation prompt for Gemini that describes EXACTLY what the ad should look like visually. Include: exact layout, product placement, background color (${brandDna.colors.primary}), text positions, visual style. The ad must look like it was made by the brand's in-house design team, not a generic AI tool. Make it specific to ${brandDna.productCategory}. Format: ${format}. Style: photorealistic, professional ad quality, no watermarks, no generic stock photo feel."
 }`;
 
@@ -238,7 +238,7 @@ async function generateImageWithGemini(
 
   // Extract base64 image data
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parts = candidate.content.parts as any[];
+  const parts = (candidate.content?.parts ?? []) as any[];
   const imagePart = parts.find((p) => p.inlineData?.data);
   if (!imagePart) {
     throw new Error("Gemini response did not contain an image");
