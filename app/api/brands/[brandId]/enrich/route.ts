@@ -10,6 +10,17 @@ import type { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
 import type { Persona, CommunicationAngles } from "@/types/index";
 
 interface EnrichPayload {
+  // Auto-extracted fields (editable by user)
+  colors?: { primary: string; secondary: string; accent: string };
+  fonts?: string[];
+  logoUrl?: string | null;
+  toneOfVoice?: string;
+  brandVoice?: string;
+  keyBenefits?: string[];
+  personas?: string[];
+  productImages?: string[];
+  lifestyleImages?: string[];
+  // Manual enrichment fields
   forbiddenWords?: string[];
   requiredWording?: string[];
   brandBrief?: string;
@@ -47,6 +58,17 @@ export async function PUT(
   const existingDna = (brand.brandDnaJson ?? {}) as Partial<ExtractedBrandDNA>;
   const merged: Partial<ExtractedBrandDNA> = {
     ...existingDna,
+    // Auto-extracted (user-editable overrides)
+    ...(payload.colors !== undefined && { colors: payload.colors }),
+    ...(payload.fonts !== undefined && { fonts: payload.fonts }),
+    ...(payload.logoUrl !== undefined && { logoUrl: payload.logoUrl }),
+    ...(payload.toneOfVoice !== undefined && { toneOfVoice: payload.toneOfVoice }),
+    ...(payload.brandVoice !== undefined && { brandVoice: payload.brandVoice }),
+    ...(payload.keyBenefits !== undefined && { keyBenefits: payload.keyBenefits }),
+    ...(payload.personas !== undefined && { personas: payload.personas }),
+    ...(payload.productImages !== undefined && { productImages: payload.productImages }),
+    ...(payload.lifestyleImages !== undefined && { lifestyleImages: payload.lifestyleImages }),
+    // Manual enrichment
     ...(payload.forbiddenWords !== undefined && { forbiddenWords: payload.forbiddenWords }),
     ...(payload.requiredWording !== undefined && { requiredWording: payload.requiredWording }),
     ...(payload.brandBrief !== undefined && { brandBrief: payload.brandBrief }),
