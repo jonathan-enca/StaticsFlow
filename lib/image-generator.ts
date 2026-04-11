@@ -63,13 +63,49 @@ export async function generateCreative(
     const buffer = Buffer.from(imageData, "base64");
     imageUrl = await uploadToR2(key, buffer, "image/png");
   } else {
-    // Dev fallback: return base64 directly (not stored)
+    // Dev fallback: store full data URL so the image is displayable without R2
     imageBase64 = imageData;
-    imageUrl = `data:image/png;base64,${imageData.slice(0, 50)}...`; // placeholder for DB
-    console.warn("[image-generator] R2 not configured — image not persisted");
+    imageUrl = `data:image/png;base64,${imageData}`;
+    console.warn("[image-generator] R2 not configured — image stored as data URL (dev only)");
   }
 
   return { brief, imageUrl, imageBase64 };
+}
+
+/**
+ * Regenerate just the image with QA feedback appended to the original prompt.
+ * Used by the QA loop on iteration 2 when score < 0.7.
+ */
+export async function regenerateImageWithFeedback(
+  previous: GeneratedCreative,
+  feedback: string,
+  userId?: string,
+  brandId?: string,
+  creativeId?: string,
+  geminiApiKey?: string
+): Promise<GeneratedCreative> {
+  const enhancedPrompt = `${previous.brief.imagePrompt}\n\nQA FEEDBACK TO ADDRESS: ${feedback}`;
+  const enhancedBrief = { ...previous.brief, imagePrompt: enhancedPrompt };
+
+  const imageData = await generateImageWithGemini(enhancedBrief, geminiApiKey);
+
+  let imageUrl: string;
+  let imageBase64: string | undefined;
+
+  if (
+    process.env.R2_ACCOUNT_ID &&
+    process.env.R2_ACCOUNT_ID !== "YOUR_CLOUDFLARE_ACCOUNT_ID" &&
+    userId && brandId && creativeId
+  ) {
+    const key = creativeKey(userId, brandId, `${creativeId}_v2`);
+    const buffer = Buffer.from(imageData, "base64");
+    imageUrl = await uploadToR2(key, buffer, "image/png");
+  } else {
+    imageBase64 = imageData;
+    imageUrl = `data:image/png;base64,${imageData}`;
+  }
+
+  return { brief: enhancedBrief, imageUrl, imageBase64 };
 }
 
 /**
@@ -189,11 +225,12 @@ async function generateImageWithGemini(
   const client = createGeminiClient(apiKey);
   const model = client.getGenerativeModel({ model: GEMINI_IMAGE_MODEL });
 
-  // responseModalities is required for image generation but not yet in SDK types
+  // responseModalities is required for image generation but not yet in SDK types.
+  // Must use uppercase "IMAGE" and include "TEXT" as Gemini returns both.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const response = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: brief.imagePrompt }] }],
-    generationConfig: { responseModalities: ["image"] } as any,
+    generationConfig: { responseModalities: ["IMAGE", "TEXT"] } as any,
   } as any);
 
   const candidate = response.response.candidates?.[0];

@@ -2,6 +2,7 @@
 // Max 2 iterations before returning the best result (SPECS.md §4.1 step 6)
 
 import { createClaudeClient, CLAUDE_QA_MODEL } from "@/lib/claude";
+import { regenerateImageWithFeedback } from "@/lib/image-generator";
 import type { GeneratedCreative } from "@/lib/image-generator";
 import type { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
 
@@ -15,13 +16,17 @@ export interface QAResult {
 
 /**
  * Claude QA review of a generated creative.
- * If quality is insufficient (score < 0.7), triggers one regeneration.
+ * If quality is insufficient (score < 0.7), triggers one regeneration with feedback.
  * Returns the best result after max 2 attempts.
  */
 export async function qaReviewCreative(
   creative: GeneratedCreative,
   brandDna: ExtractedBrandDNA,
   anthropicApiKey?: string,
+  geminiApiKey?: string,
+  userId?: string,
+  brandId?: string,
+  creativeId?: string,
   maxIterations = 2
 ): Promise<QAResult> {
   let currentCreative = creative;
@@ -38,10 +43,17 @@ export async function qaReviewCreative(
     }
 
     if (iteration < maxIterations) {
-      // One more attempt: regenerate with QA feedback incorporated
+      // Regenerate with QA feedback incorporated into the image prompt
       console.log(`[qa] Iteration ${iteration} score ${lastResult.score} — regenerating with feedback`);
-      // In a full implementation, we'd re-run the image generator with the feedback
-      // For MVP: we accept the result after 2 iterations regardless
+      const improvements = lastResult.improvements.join("; ");
+      currentCreative = await regenerateImageWithFeedback(
+        currentCreative,
+        improvements,
+        userId,
+        brandId,
+        creativeId,
+        geminiApiKey
+      );
     }
   }
 

@@ -66,11 +66,15 @@ export async function POST(req: NextRequest) {
       user?.geminiApiKey ?? undefined
     );
 
-    // Step 3: QA review loop (Claude reviews, max 2 iterations)
+    // Step 3: QA review loop (Claude reviews, Gemini regenerates if score < 0.7)
     const qaResult = await qaReviewCreative(
       generated,
       brandDna,
-      user?.anthropicApiKey ?? undefined
+      user?.anthropicApiKey ?? undefined,
+      user?.geminiApiKey ?? undefined,
+      session.user.id,
+      brandId,
+      creative.id
     );
 
     // Update creative record with results
