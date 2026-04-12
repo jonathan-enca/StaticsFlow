@@ -565,8 +565,22 @@ function DnaReviewStep({
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>("url");
   const [url, setUrl] = useState("");
-  const [anthropicKey, setAnthropicKey] = useState("");
-  const [geminiKey, setGeminiKey] = useState("");
+  // Keys are persisted in localStorage so users don't have to re-enter them across sessions
+  const [anthropicKey, setAnthropicKeyState] = useState(() =>
+    typeof window !== "undefined" ? (localStorage.getItem("sf_anthropic_key") ?? "") : ""
+  );
+  const [geminiKey, setGeminiKeyState] = useState(() =>
+    typeof window !== "undefined" ? (localStorage.getItem("sf_gemini_key") ?? "") : ""
+  );
+
+  function setAnthropicKey(val: string) {
+    setAnthropicKeyState(val);
+    if (typeof window !== "undefined") localStorage.setItem("sf_anthropic_key", val);
+  }
+  function setGeminiKey(val: string) {
+    setGeminiKeyState(val);
+    if (typeof window !== "undefined") localStorage.setItem("sf_gemini_key", val);
+  }
 
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
@@ -728,7 +742,7 @@ export default function OnboardingPage() {
                 >
                   <Key className="w-4 h-4" style={{ color: 'var(--sf-text-muted)' }} />
                   <span className="text-sm font-semibold" style={{ color: 'var(--sf-text-primary)' }}>Your API Keys</span>
-                  <span className="ml-auto text-xs" style={{ color: 'var(--sf-text-muted)' }}>Used only for this session — never stored</span>
+                  <span className="ml-auto text-xs" style={{ color: 'var(--sf-text-muted)' }}>Saved in your browser — never sent to our servers</span>
                 </div>
                 <div className="p-4 space-y-4" style={{ background: 'var(--sf-bg-secondary)' }}>
                   {/* Claude key */}
