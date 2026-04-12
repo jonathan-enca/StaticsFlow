@@ -43,18 +43,18 @@ function TagInput({
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">{label}</label>
-      <div className="flex flex-wrap gap-2 min-h-[40px] p-2 border border-gray-200 rounded-lg bg-white">
+      <label className="block text-sm font-medium text-[var(--sf-text-primary)]">{label}</label>
+      <div className="flex flex-wrap gap-2 min-h-[40px] p-2 border border-[var(--sf-border)] rounded-lg bg-[var(--sf-bg-secondary)]">
         {tags.map((t, i) => (
           <span
             key={i}
-            className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 rounded-full text-sm"
+            className="inline-flex items-center gap-1 px-2.5 py-1 bg-[var(--sf-bg-elevated)] rounded-full text-sm"
           >
             {t}
             <button
               type="button"
               onClick={() => removeTag(i)}
-              className="text-gray-400 hover:text-gray-600 leading-none"
+              className="text-[var(--sf-text-muted)] hover:text-[var(--sf-text-secondary)] leading-none"
             >
               ×
             </button>
@@ -73,12 +73,12 @@ function TagInput({
             }
           }}
           placeholder={placeholder ?? "Type and press Enter"}
-          className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+          className="flex-1 px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
         />
         <button
           type="button"
           onClick={addTag}
-          className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+          className="px-3 py-2 text-sm bg-[var(--sf-bg-elevated)] hover:bg-[var(--sf-bg-elevated)] rounded-lg font-medium transition-colors"
         >
           Add
         </button>
@@ -98,10 +98,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+    <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        {subtitle && <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>}
+        <h2 className="text-base font-semibold text-[var(--sf-text-primary)]">{title}</h2>
+        {subtitle && <p className="text-sm text-[var(--sf-text-secondary)] mt-0.5">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -130,11 +130,11 @@ function ImageGallery({
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">{label}</label>
+      <label className="block text-sm font-medium text-[var(--sf-text-primary)]">{label}</label>
       {urls.length > 0 && (
         <div className="grid grid-cols-4 gap-2">
           {urls.map((url, i) => (
-            <div key={i} className="relative group rounded-lg overflow-hidden aspect-square bg-gray-100 border border-gray-200">
+            <div key={i} className="relative group rounded-lg overflow-hidden aspect-square bg-[var(--sf-bg-elevated)] border border-[var(--sf-border)]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={url} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
               <button
@@ -155,9 +155,9 @@ function ImageGallery({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }}
           placeholder="https://..."
-          className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+          className="flex-1 px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
         />
-        <button type="button" onClick={addUrl} className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors">
+        <button type="button" onClick={addUrl} className="px-3 py-2 text-sm bg-[var(--sf-bg-elevated)] hover:bg-[var(--sf-bg-elevated)] rounded-lg font-medium transition-colors">
           Add
         </button>
       </div>
@@ -189,7 +189,7 @@ function PillSelect<T extends string>({
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">{label}{max ? ` (max ${max})` : ""}</label>
+      <label className="block text-sm font-medium text-[var(--sf-text-primary)]">{label}{max ? ` (max ${max})` : ""}</label>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => (
           <button
@@ -199,7 +199,7 @@ function PillSelect<T extends string>({
             className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
               selected.includes(opt)
                 ? "bg-black text-white border-black"
-                : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)] hover:border-[var(--sf-border)]"
             }`}
           >
             {opt}
@@ -214,7 +214,7 @@ function PillSelect<T extends string>({
 function GroupHeader({ label, badge }: { label: string; badge?: string }) {
   return (
     <div className="flex items-center gap-2 mb-2">
-      <h2 className="text-lg font-bold text-gray-900">{label}</h2>
+      <h2 className="text-lg font-bold text-[var(--sf-text-primary)]">{label}</h2>
       {badge && (
         <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--sf-accent-muted)', color: 'var(--sf-accent)' }}>
           {badge}
@@ -442,10 +442,10 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <p className="text-sm text-gray-500 mb-1">
+          <p className="text-sm text-[var(--sf-text-secondary)] mb-1">
             <a href="/dashboard" className="hover:underline">Dashboard</a> / Brand DNA
           </p>
-          <h1 className="text-2xl font-bold text-gray-900">{brandName}</h1>
+          <h1 className="text-2xl font-bold text-[var(--sf-text-primary)]">{brandName}</h1>
         </div>
         <SaveButton />
       </div>
@@ -467,13 +467,13 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
             <div className="space-y-3">
               {(["primary", "secondary", "accent"] as const).map((key) => (
                 <div key={key} className="flex items-center gap-3">
-                  <label className="w-24 text-sm font-medium text-gray-700 capitalize">{key}</label>
+                  <label className="w-24 text-sm font-medium text-[var(--sf-text-primary)] capitalize">{key}</label>
                   <div className="relative">
                     <input
                       type="color"
                       value={colors[key]}
                       onChange={(e) => setColors((prev) => ({ ...prev, [key]: e.target.value }))}
-                      className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5 bg-white"
+                      className="w-10 h-10 rounded-lg border border-[var(--sf-border)] cursor-pointer p-0.5 bg-[var(--sf-bg-secondary)]"
                     />
                   </div>
                   <input
@@ -485,12 +485,12 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
                         setColors((prev) => ({ ...prev, [key]: val }));
                       }
                     }}
-                    className="w-28 px-3 py-2 text-sm font-mono border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+                    className="w-28 px-3 py-2 text-sm font-mono border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
                     placeholder="#000000"
                     maxLength={7}
                   />
                   <div
-                    className="flex-1 h-8 rounded-lg border border-gray-200"
+                    className="flex-1 h-8 rounded-lg border border-[var(--sf-border)]"
                     style={{ backgroundColor: colors[key] }}
                   />
                 </div>
@@ -502,7 +502,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
           <Section title="Logo" subtitle="URL of the brand logo. Used in ad templates.">
             <div className="flex items-center gap-3">
               {logoUrl && (
-                <div className="w-12 h-12 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                <div className="w-12 h-12 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] flex items-center justify-center overflow-hidden flex-shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={logoUrl} alt="Logo" className="max-w-full max-h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                 </div>
@@ -512,7 +512,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
                 value={logoUrl}
                 onChange={(e) => setLogoUrl(e.target.value)}
                 placeholder="https://example.com/logo.png"
-                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+                className="flex-1 px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
               />
             </div>
           </Section>
@@ -548,7 +548,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
                     className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
                       brandArchetype === arch
                         ? "bg-black text-white border-black"
-                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                        : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)] hover:border-[var(--sf-border)]"
                     }`}
                   >
                     {arch}
@@ -567,7 +567,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
                     className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors capitalize ${
                       pricePositioning === pos
                         ? "bg-black text-white border-black"
-                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                        : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)] hover:border-[var(--sf-border)]"
                     }`}
                   >
                     {pos}
@@ -597,7 +597,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
               value={productCategory}
               onChange={(e) => setProductCategory(e.target.value)}
               placeholder="e.g. skincare, fashion, food…"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
             />
           </Section>
 
@@ -620,7 +620,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
               onChange={(e) => setToneOfVoice(e.target.value)}
               rows={3}
               placeholder="Casual and warm, uses tutoiement, emphasis on community and authenticity…"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black resize-none"
+              className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)] resize-none"
             />
           </Section>
 
@@ -630,7 +630,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
               onChange={(e) => setBrandVoice(e.target.value)}
               rows={3}
               placeholder="2-3 sentences describing what makes this brand's voice unique…"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black resize-none"
+              className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)] resize-none"
             />
           </Section>
 
@@ -713,7 +713,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
               value={customerDesiredOutcome}
               onChange={(e) => setCustomerDesiredOutcome(e.target.value)}
               placeholder="e.g. feel confident and put-together without effort…"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
             />
           </Section>
 
@@ -732,7 +732,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
                 value={reviewsUrl}
                 onChange={(e) => setReviewsUrl(e.target.value)}
                 placeholder="https://www.trustpilot.com/review/yourbrand.com"
-                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+                className="flex-1 px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
               />
               <button
                 type="button"
@@ -747,10 +747,10 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
             {reviewsError && <p className="text-sm text-red-500">{reviewsError}</p>}
             {dna.customerVocabulary && (
               <div className="space-y-3 pt-2">
-                <p className="text-sm font-medium text-gray-700">Extracted vocabulary</p>
+                <p className="text-sm font-medium text-[var(--sf-text-primary)]">Extracted vocabulary</p>
                 <ul className="space-y-1">
                   {dna.customerVocabulary.verbatims.slice(0, 5).map((v, i) => (
-                    <li key={i} className="text-sm text-gray-700 italic border-l-2 pl-3" style={{ borderColor: 'var(--sf-accent-muted)' }}>
+                    <li key={i} className="text-sm text-[var(--sf-text-primary)] italic border-l-2 pl-3" style={{ borderColor: 'var(--sf-accent-muted)' }}>
                       &ldquo;{v}&rdquo;
                     </li>
                   ))}
@@ -772,9 +772,9 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
             onClick={() => setCampaignOpen((v) => !v)}
             className="flex items-center gap-3 w-full text-left"
           >
-            <h2 className="text-lg font-bold text-gray-900">Campaign Context</h2>
-            <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full font-medium">Advanced</span>
-            <span className="ml-auto text-gray-400 text-sm">{campaignOpen ? "▲ Collapse" : "▼ Expand"}</span>
+            <h2 className="text-lg font-bold text-[var(--sf-text-primary)]">Campaign Context</h2>
+            <span className="text-xs px-2 py-0.5 bg-[var(--sf-bg-elevated)] text-[var(--sf-text-secondary)] rounded-full font-medium">Advanced</span>
+            <span className="ml-auto text-[var(--sf-text-muted)] text-sm">{campaignOpen ? "▲ Collapse" : "▼ Expand"}</span>
           </button>
 
           {campaignOpen && (
@@ -789,7 +789,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
                       className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors capitalize ${
                         currentCampaignObjective === obj
                           ? "bg-black text-white border-black"
-                          : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                          : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)] hover:border-[var(--sf-border)]"
                       }`}
                     >
                       {obj}
@@ -804,7 +804,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
                   value={currentPromotion}
                   onChange={(e) => setCurrentPromotion(e.target.value)}
                   placeholder="e.g. Summer Sale — 20% off all skincare…"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+                  className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
                 />
               </Section>
 
@@ -834,7 +834,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
               onChange={(e) => setBrandBrief(e.target.value)}
               rows={4}
               placeholder="We want to be perceived as X. Our brand is never Y. Our obsession is Z…"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black resize-none"
+              className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)] resize-none"
             />
           </Section>
 
@@ -844,34 +844,34 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
           >
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-700">Personas</label>
+                <label className="text-sm font-medium text-[var(--sf-text-primary)]">Personas</label>
                 <button
                   type="button"
                   onClick={addPersona}
-                  className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+                  className="text-xs px-3 py-1.5 bg-[var(--sf-bg-elevated)] hover:bg-[var(--sf-bg-elevated)] rounded-lg font-medium transition-colors"
                 >
                   + Add persona
                 </button>
               </div>
               {structuredPersonas.map((p, i) => (
-                <div key={i} className="border border-gray-200 rounded-xl p-4 space-y-3">
+                <div key={i} className="border border-[var(--sf-border)] rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-700">Persona {i + 1}</p>
+                    <p className="text-sm font-medium text-[var(--sf-text-primary)]">Persona {i + 1}</p>
                     <button type="button" onClick={() => removePersona(i)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Name</label>
-                      <input type="text" value={p.name} onChange={(e) => updatePersona(i, { name: e.target.value })} placeholder="e.g. Sarah" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black" />
+                      <label className="block text-xs text-[var(--sf-text-secondary)] mb-1">Name</label>
+                      <input type="text" value={p.name} onChange={(e) => updatePersona(i, { name: e.target.value })} placeholder="e.g. Sarah" className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]" />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">Age range</label>
-                      <input type="text" value={p.ageRange} onChange={(e) => updatePersona(i, { ageRange: e.target.value })} placeholder="e.g. 28-40" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black" />
+                      <label className="block text-xs text-[var(--sf-text-secondary)] mb-1">Age range</label>
+                      <input type="text" value={p.ageRange} onChange={(e) => updatePersona(i, { ageRange: e.target.value })} placeholder="e.g. 28-40" className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]" />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Description</label>
-                    <textarea value={p.description} onChange={(e) => updatePersona(i, { description: e.target.value })} rows={2} placeholder="Who is this person? Lifestyle, habits, values…" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black resize-none" />
+                    <label className="block text-xs text-[var(--sf-text-secondary)] mb-1">Description</label>
+                    <textarea value={p.description} onChange={(e) => updatePersona(i, { description: e.target.value })} rows={2} placeholder="Who is this person? Lifestyle, habits, values…" className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)] resize-none" />
                   </div>
                   <TagInput label="Pain points" tags={p.painPoints} onChange={(tags) => updatePersona(i, { painPoints: tags })} placeholder="e.g. feels invisible, dry skin…" />
                   <TagInput label="Aspirations" tags={p.aspirations} onChange={(tags) => updatePersona(i, { aspirations: tags })} placeholder="e.g. feel confident, look effortless…" />
@@ -906,7 +906,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
                   className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
                     assetType === t
                       ? "bg-black text-white border-black"
-                      : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                      : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)] hover:border-[var(--sf-border)]"
                   }`}
                 >
                   {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -917,14 +917,14 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) uploadFile(f); }}
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-gray-400 transition-colors"
+              className="border-2 border-dashed border-[var(--sf-border)] rounded-xl p-8 text-center cursor-pointer hover:border-[var(--sf-border)] transition-colors"
             >
               {uploadingAsset ? (
-                <p className="text-sm text-gray-500">Uploading…</p>
+                <p className="text-sm text-[var(--sf-text-secondary)]">Uploading…</p>
               ) : (
                 <>
-                  <p className="text-sm text-gray-500">Drag & drop or <span className="underline font-medium">click to upload</span></p>
-                  <p className="text-xs text-gray-400 mt-1">PNG, JPEG, WebP — max 10 MB</p>
+                  <p className="text-sm text-[var(--sf-text-secondary)]">Drag & drop or <span className="underline font-medium">click to upload</span></p>
+                  <p className="text-xs text-[var(--sf-text-muted)] mt-1">PNG, JPEG, WebP — max 10 MB</p>
                 </>
               )}
             </div>
@@ -939,7 +939,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
             {assets.length > 0 && (
               <div className="grid grid-cols-4 gap-3 pt-2">
                 {assets.map((a) => (
-                  <div key={a.id} className="relative group rounded-xl overflow-hidden border border-gray-200 aspect-square bg-gray-50">
+                  <div key={a.id} className="relative group rounded-xl overflow-hidden border border-[var(--sf-border)] aspect-square bg-[var(--sf-bg-primary)]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={a.url} alt={a.fileName} className="w-full h-full object-cover" />
                     <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-1 text-center truncate">{a.type}</div>
@@ -953,8 +953,8 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
       </div>
 
       {/* Bottom save bar */}
-      <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
-        <p className="text-sm text-gray-500">
+      <div className="flex items-center justify-between mt-8 pt-6 border-t border-[var(--sf-border)]">
+        <p className="text-sm text-[var(--sf-text-secondary)]">
           All changes are applied to future creatives for this brand.
         </p>
         <SaveButton />

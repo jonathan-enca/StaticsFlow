@@ -13,23 +13,36 @@ export default async function AdminLayout({
   await requireAdmin();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
       {/* Admin navbar */}
-      <nav className="bg-black text-white px-6 py-3 flex items-center gap-6 text-sm">
-        <Link href="/admin/bdd" className="font-bold text-white">
-          StaticsFlow Admin
-        </Link>
-        <span className="text-gray-500">|</span>
+      <nav
+        style={{
+          background: "var(--sf-bg-secondary)",
+          borderBottom: "1px solid var(--sf-border)",
+          color: "var(--sf-text-primary)",
+        }}
+        className="px-6 py-3 flex items-center gap-6 text-sm"
+      >
         <Link
           href="/admin/bdd"
-          className="text-gray-300 hover:text-white transition-colors"
+          style={{ color: "var(--sf-text-primary)" }}
+          className="font-bold"
+        >
+          StaticsFlow Admin
+        </Link>
+        <span style={{ color: "var(--sf-border)" }}>|</span>
+        <Link
+          href="/admin/bdd"
+          style={{ color: "var(--sf-text-secondary)" }}
+          className="hover:opacity-80 transition-opacity"
         >
           BDD Manager
         </Link>
         <span className="ml-auto">
           <Link
             href="/dashboard"
-            className="text-gray-400 hover:text-white transition-colors"
+            style={{ color: "var(--sf-text-muted)" }}
+            className="hover:opacity-80 transition-opacity"
           >
             ← Back to app
           </Link>

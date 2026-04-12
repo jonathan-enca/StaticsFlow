@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import GenerateClient from "./GenerateClient";
+import AppNavbar from "@/components/AppNavbar";
 
 interface PageProps {
   params: Promise<{ brandId: string }>;
@@ -34,27 +35,8 @@ export default async function GeneratePage({ params }: PageProps) {
   if (!brand) notFound();
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      {/* Navbar */}
-      <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
-            <span className="text-white font-bold text-sm">S</span>
-          </div>
-          <span className="text-lg font-bold text-gray-900">StaticsFlow</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">{session.user?.email}</span>
-          <form action="/api/auth/signout" method="post">
-            <button
-              type="submit"
-              className="text-sm text-gray-600 hover:text-gray-900 font-medium"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
-      </nav>
+    <main className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
+      <AppNavbar email={session.user?.email} />
 
       <GenerateClient
         brandId={brand.id}

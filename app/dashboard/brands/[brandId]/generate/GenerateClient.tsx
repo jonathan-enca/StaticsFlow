@@ -62,7 +62,7 @@ interface BatchStatus {
 function CreativeThumbnail({ c, brandName }: { c: ExistingCreative; brandName: string }) {
   return (
     <div className="space-y-2">
-      <div className="rounded-xl overflow-hidden border border-gray-200 aspect-square bg-gray-50 flex items-center justify-center relative group">
+      <div className="rounded-xl overflow-hidden border border-[var(--sf-border)] aspect-square bg-[var(--sf-bg-primary)] flex items-center justify-center relative group">
         {c.imageUrl && !c.imageUrl.startsWith("data:image/png;base64,data") ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -86,17 +86,17 @@ function CreativeThumbnail({ c, brandName }: { c: ExistingCreative; brandName: s
             </a>
           </>
         ) : (
-          <span className="text-xs text-gray-400 text-center px-2">
+          <span className="text-xs text-[var(--sf-text-muted)] text-center px-2">
             {c.status === "GENERATING" ? "Generating…" : "No preview"}
           </span>
         )}
       </div>
-      <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
+      <div className="text-xs text-[var(--sf-text-secondary)] flex items-center gap-1 flex-wrap">
         <span className={`inline-block px-2 py-0.5 rounded-full ${
           c.status === "APPROVED" ? "bg-green-50 text-green-700"
           : c.status === "REJECTED" ? "bg-red-50 text-red-700"
           : c.status === "GENERATING" ? "bg-blue-50 text-blue-600"
-          : "bg-gray-100 text-gray-600"
+          : "bg-[var(--sf-bg-elevated)] text-[var(--sf-text-secondary)]"
         }`}>
           {c.status === "GENERATING" ? "…" : c.status}
         </span>
@@ -240,14 +240,14 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
     <div className="max-w-6xl mx-auto px-6 py-10">
       {/* Header */}
       <div className="mb-8">
-        <p className="text-sm text-gray-500 mb-1">
+        <p className="text-sm text-[var(--sf-text-secondary)] mb-1">
           <a href="/dashboard" className="hover:underline">Dashboard</a>
           {" / "}
           <a href={`/dashboard/brands/${brandId}`} className="hover:underline">Brand DNA</a>
           {" / "}Generate
         </p>
-        <h1 className="text-2xl font-bold text-gray-900">{brandName} — Generate Creative</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-[var(--sf-text-primary)]">{brandName} — Generate Creative</h1>
+        <p className="text-sm text-[var(--sf-text-secondary)] mt-1">
           Claude writes the brief · Gemini generates the image · Claude QA reviews
         </p>
       </div>
@@ -256,8 +256,8 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         {/* Left: Controls */}
         <div className="lg:col-span-1 space-y-6">
           {/* Batch size selector */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-900">Batch Size</h2>
+          <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-4">
+            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Batch Size</h2>
             <div className="grid grid-cols-4 gap-2">
               {BATCH_SIZES.map((b) => (
                 <button
@@ -270,7 +270,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                   className={`py-2 rounded-xl border text-sm font-medium transition-colors ${
                     batchSize === b.value
                       ? "border-black bg-black text-white"
-                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"
+                      : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
                   }`}
                 >
                   {b.label}
@@ -282,8 +282,8 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             {batchSize === 1 && (
               <label className="flex items-center justify-between cursor-pointer pt-1">
                 <div>
-                  <span className="text-sm font-medium text-gray-900">Generate variants</span>
-                  <p className="text-xs text-gray-500">3 hooks: A · B · Social Proof</p>
+                  <span className="text-sm font-medium text-[var(--sf-text-primary)]">Generate variants</span>
+                  <p className="text-xs text-[var(--sf-text-secondary)]">3 hooks: A · B · Social Proof</p>
                 </div>
                 <button
                   type="button"
@@ -291,11 +291,11 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                   aria-checked={variantsMode}
                   onClick={() => setVariantsMode((v) => !v)}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    variantsMode ? "bg-black" : "bg-gray-200"
+                    variantsMode ? "bg-black" : "bg-[var(--sf-bg-elevated)]"
                   }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    className={`inline-block h-4 w-4 transform rounded-full bg-[var(--sf-bg-secondary)] transition-transform ${
                       variantsMode ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
@@ -305,8 +305,8 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
           </div>
 
           {/* Format picker */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-900">Ad Format</h2>
+          <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-4">
+            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Ad Format</h2>
             <div className="space-y-2">
               {FORMAT_OPTIONS.map((f) => (
                 <button
@@ -316,11 +316,11 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
                     format === f.value
                       ? "border-black bg-black text-white"
-                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"
+                      : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
                   }`}
                 >
                   <span className="font-medium">{f.label}</span>
-                  <span className={format === f.value ? "text-gray-300" : "text-gray-400"}>{f.desc}</span>
+                  <span className={format === f.value ? "text-[var(--sf-text-muted)]" : "text-[var(--sf-text-muted)]"}>{f.desc}</span>
                 </button>
               ))}
             </div>
@@ -328,8 +328,8 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
 
           {/* Angle picker (hidden in batch mode — angles are auto-distributed) */}
           {!isBatchMode && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
-              <h2 className="text-sm font-semibold text-gray-900">Creative Angle</h2>
+            <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-4">
+              <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Creative Angle</h2>
               <div className="space-y-2">
                 {ANGLE_OPTIONS.map((a) => (
                   <button
@@ -339,11 +339,11 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                     className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
                       angle === a.value
                         ? "border-black bg-black text-white"
-                        : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"
+                        : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
                     }`}
                   >
                     <span className="font-medium">{a.label}</span>
-                    <span className={angle === a.value ? "text-gray-300" : "text-gray-400 text-xs"}>{a.desc}</span>
+                    <span className={angle === a.value ? "text-[var(--sf-text-muted)]" : "text-[var(--sf-text-muted)] text-xs"}>{a.desc}</span>
                   </button>
                 ))}
               </div>
@@ -351,7 +351,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
           )}
 
           {isBatchMode && (
-            <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-500">
+            <div className="px-4 py-3 bg-[var(--sf-bg-primary)] border border-[var(--sf-border)] rounded-xl text-xs text-[var(--sf-text-secondary)]">
               Angles are auto-distributed across Benefit, Pain, Social Proof, and Curiosity.
             </div>
           )}
@@ -375,7 +375,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
           </button>
 
           {generating && !isBatchMode && (
-            <div className="text-xs text-gray-500 text-center space-y-1">
+            <div className="text-xs text-[var(--sf-text-secondary)] text-center space-y-1">
               <p>Claude is writing the creative brief…</p>
               <p>Gemini is generating the image…</p>
               <p>Claude QA is reviewing the result…</p>
@@ -393,11 +393,11 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         <div className="lg:col-span-2 space-y-6">
           {/* Batch progress */}
           {batchData && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+            <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-900">Batch Progress</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Batch Progress</h2>
+                  <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
                     {batchData.completedCount} / {batchData.totalCount} generated
                     {" · "}
                     <span className={
@@ -424,7 +424,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
               </div>
 
               {/* Progress bar */}
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
                     batchData.status === "FAILED" ? "bg-red-400" : "bg-black"
@@ -446,18 +446,18 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
 
           {/* Variants result */}
           {variantResults && variantResults.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100">
-                <h2 className="text-sm font-semibold text-gray-900">3 Variants Generated</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Variant A · Variant B · Social Proof</p>
+            <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[var(--sf-border)]">
+                <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">3 Variants Generated</h2>
+                <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Variant A · Variant B · Social Proof</p>
               </div>
               <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {variantResults.map((v, idx) => (
                   <div key={v.creative.id} className="space-y-2">
-                    <div className="text-xs font-medium text-gray-500 mb-1">
+                    <div className="text-xs font-medium text-[var(--sf-text-secondary)] mb-1">
                       Variant {["A", "B", "C"][idx]} — {v.creative.angle}
                     </div>
-                    <div className="rounded-xl overflow-hidden border border-gray-200 aspect-square bg-gray-50 flex items-center justify-center relative group">
+                    <div className="rounded-xl overflow-hidden border border-[var(--sf-border)] aspect-square bg-[var(--sf-bg-primary)] flex items-center justify-center relative group">
                       {v.creative.imageUrl ? (
                         <>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -477,10 +477,10 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                           </a>
                         </>
                       ) : (
-                        <span className="text-xs text-gray-400">No preview</span>
+                        <span className="text-xs text-[var(--sf-text-muted)]">No preview</span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-[var(--sf-text-secondary)]">
                       Score: {v.qaResult.score != null ? Math.round(v.qaResult.score * 100) : "—"}%
                       {" · "}
                       <span className={v.qaResult.approved ? "text-green-600" : "text-amber-600"}>
@@ -495,11 +495,11 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
 
           {/* Single result */}
           {singleResult && (
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[var(--sf-border)] flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-900">Generated Creative</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Generated Creative</h2>
+                  <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
                     {singleResult.qaResult.iterations} QA iteration{singleResult.qaResult.iterations !== 1 ? "s" : ""}
                     {" · "}Score: {Math.round(singleResult.qaResult.score * 100)}%
                     {" · "}
@@ -520,7 +520,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
               </div>
 
               {singleResult.creative.imageUrl ? (
-                <div className="p-4 bg-gray-50 flex items-center justify-center min-h-64">
+                <div className="p-4 bg-[var(--sf-bg-primary)] flex items-center justify-center min-h-64">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={singleResult.creative.imageUrl}
@@ -529,13 +529,13 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                   />
                 </div>
               ) : (
-                <div className="p-8 text-center text-sm text-gray-400">Image not available</div>
+                <div className="p-8 text-center text-sm text-[var(--sf-text-muted)]">Image not available</div>
               )}
 
               {singleResult.qaResult.feedback && (
-                <div className="px-6 py-4 border-t border-gray-100">
-                  <p className="text-xs text-gray-500 font-medium mb-1">QA Feedback</p>
-                  <p className="text-sm text-gray-700">{singleResult.qaResult.feedback}</p>
+                <div className="px-6 py-4 border-t border-[var(--sf-border)]">
+                  <p className="text-xs text-[var(--sf-text-secondary)] font-medium mb-1">QA Feedback</p>
+                  <p className="text-sm text-[var(--sf-text-primary)]">{singleResult.qaResult.feedback}</p>
                 </div>
               )}
             </div>
@@ -543,8 +543,8 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
 
           {/* Previous creatives gallery */}
           {creatives.length > 0 && !batchData && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-              <h2 className="text-sm font-semibold text-gray-900 mb-4">
+            <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6">
+              <h2 className="text-sm font-semibold text-[var(--sf-text-primary)] mb-4">
                 Previous Creatives ({creatives.length})
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -556,12 +556,12 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
           )}
 
           {creatives.length === 0 && !singleResult && !variantResults && !batchData && (
-            <div className="bg-white rounded-lg border-2 border-dashed border-gray-200 p-16 text-center">
+            <div className="bg-[var(--sf-bg-secondary)] rounded-lg border-2 border-dashed border-[var(--sf-border)] p-16 text-center">
               <div className="w-12 h-12 rounded-md flex items-center justify-center mx-auto mb-4" style={{ background: "var(--sf-accent-muted)" }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--sf-accent)" }}><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
               </div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-2">No creatives yet</h2>
-              <p className="text-sm text-gray-500">
+              <h2 className="text-lg font-semibold text-[var(--sf-text-primary)] mb-2">No creatives yet</h2>
+              <p className="text-sm text-[var(--sf-text-secondary)]">
                 Pick a format and angle, then hit Generate.
               </p>
             </div>

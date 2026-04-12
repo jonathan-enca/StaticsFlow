@@ -86,7 +86,7 @@ function HeartButton({
       className={`absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm ${
         favorited
           ? "bg-red-500 text-white"
-          : "bg-white/80 backdrop-blur text-gray-400 hover:text-red-400"
+          : "bg-[var(--sf-bg-secondary)]/80 backdrop-blur text-[var(--sf-text-muted)] hover:text-red-400"
       }`}
       aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
     >
@@ -118,10 +118,10 @@ function TemplateCardUI({
   return (
     <div
       onClick={() => onClick(template)}
-      className="relative group cursor-pointer rounded-2xl overflow-hidden border border-gray-200 bg-gray-50 hover:border-gray-400 hover:shadow-md transition-all"
+      className="relative group cursor-pointer rounded-2xl overflow-hidden border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] hover:border-[var(--sf-border)] hover:shadow-md transition-all"
     >
       {/* Image */}
-      <div className="aspect-square overflow-hidden bg-gray-100">
+      <div className="aspect-square overflow-hidden bg-[var(--sf-bg-elevated)]">
         {imgSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -131,7 +131,7 @@ function TemplateCardUI({
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-300">
+          <div className="w-full h-full flex items-center justify-center text-[var(--sf-text-muted)]">
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
           </div>
         )}
@@ -144,10 +144,10 @@ function TemplateCardUI({
         </span>
       </div>
       <div className="absolute bottom-2 left-2 right-10 flex gap-1 flex-wrap">
-        <span className="px-2 py-0.5 bg-white/80 backdrop-blur text-gray-700 text-xs rounded-full">
+        <span className="px-2 py-0.5 bg-[var(--sf-bg-secondary)]/80 backdrop-blur text-[var(--sf-text-primary)] text-xs rounded-full">
           {labelOf(template.hookType)}
         </span>
-        <span className="text-xs px-1.5 py-0.5 bg-white/80 backdrop-blur rounded-full">
+        <span className="text-xs px-1.5 py-0.5 bg-[var(--sf-bg-secondary)]/80 backdrop-blur rounded-full">
           {LANGUAGE_FLAGS[template.language] ?? "🌐"}
         </span>
       </div>
@@ -185,11 +185,11 @@ function DetailModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+        className="bg-[var(--sf-bg-secondary)] rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Image */}
-        <div className="relative rounded-t-3xl overflow-hidden bg-gray-100 max-h-[55vh]">
+        <div className="relative rounded-t-3xl overflow-hidden bg-[var(--sf-bg-elevated)] max-h-[55vh]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={template.sourceImageUrl}
@@ -209,12 +209,12 @@ function DetailModal({
           {/* Color palette */}
           {template.palette.length > 0 && (
             <div className="flex gap-2 items-center">
-              <span className="text-xs text-gray-400">Palette</span>
+              <span className="text-xs text-[var(--sf-text-muted)]">Palette</span>
               {template.palette.map((hex, i) => (
                 <div
                   key={i}
                   title={hex}
-                  className="w-6 h-6 rounded-full border border-gray-200"
+                  className="w-6 h-6 rounded-full border border-[var(--sf-border)]"
                   style={{ backgroundColor: hex }}
                 />
               ))}
@@ -230,9 +230,9 @@ function DetailModal({
               { label: "Layout", value: template.layout },
               { label: "Language", value: template.language },
             ].map(({ label, value }) => (
-              <div key={label} className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 rounded-full border border-gray-200">
-                <span className="text-xs text-gray-400">{label}:</span>
-                <span className="text-xs font-medium text-gray-700">{labelOf(value)}</span>
+              <div key={label} className="flex items-center gap-1 px-3 py-1.5 bg-[var(--sf-bg-primary)] rounded-full border border-[var(--sf-border)]">
+                <span className="text-xs text-[var(--sf-text-muted)]">{label}:</span>
+                <span className="text-xs font-medium text-[var(--sf-text-primary)]">{labelOf(value)}</span>
               </div>
             ))}
           </div>
@@ -244,7 +244,7 @@ function DetailModal({
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 template.isFavorited
                   ? "bg-red-50 text-red-600 hover:bg-red-100"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  : "bg-[var(--sf-bg-elevated)] text-[var(--sf-text-primary)] hover:bg-[var(--sf-bg-elevated)]"
               }`}
             >
               {template.isFavorited ? "♥ Favorited" : "♡ Add to favorites"}
@@ -294,7 +294,7 @@ function FilterSidebar({
           className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
             favoritesOnly
               ? "bg-red-50 text-red-600 border-red-200"
-              : "bg-white text-gray-700 border-gray-200 hover:border-gray-300"
+              : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] border-[var(--sf-border)] hover:border-[var(--sf-border)]"
           }`}
         >
           <span>♥ My Favorites</span>
@@ -309,7 +309,7 @@ function FilterSidebar({
       {/* Filter groups */}
       {groups.map(({ key, label, options }) => (
         <div key={key} className="space-y-1.5">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">
+          <p className="text-xs font-semibold text-[var(--sf-text-muted)] uppercase tracking-wide px-1">
             {label}
           </p>
           {options.map((opt) => (
@@ -320,7 +320,7 @@ function FilterSidebar({
               className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                 active[key] === opt
                   ? "bg-black text-white"
-                  : "text-gray-700 hover:bg-gray-100"
+                  : "text-[var(--sf-text-primary)] hover:bg-[var(--sf-bg-elevated)]"
               }`}
             >
               {labelOf(opt)}
@@ -333,7 +333,7 @@ function FilterSidebar({
         <button
           type="button"
           onClick={onReset}
-          className="w-full px-3 py-2 text-sm text-gray-500 hover:text-gray-800 border border-dashed border-gray-300 rounded-xl transition-colors"
+          className="w-full px-3 py-2 text-sm text-[var(--sf-text-secondary)] hover:text-[var(--sf-text-primary)] border border-dashed border-[var(--sf-border)] rounded-xl transition-colors"
         >
           Reset filters
         </button>
@@ -481,7 +481,7 @@ export default function LibraryClient({
         <div className="flex-1 min-w-0">
           {/* Stats bar */}
           <div className="flex items-center justify-between mb-5">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-[var(--sf-text-secondary)]">
               {loading
                 ? "Loading…"
                 : pagination
@@ -489,7 +489,7 @@ export default function LibraryClient({
                 : ""}
             </p>
             {pagination && pagination.pages > 1 && (
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-[var(--sf-text-muted)]">
                 Page {pagination.page} / {pagination.pages}
               </p>
             )}
@@ -507,17 +507,17 @@ export default function LibraryClient({
               {Array.from({ length: 12 }).map((_, i) => (
                 <div
                   key={i}
-                  className="aspect-square bg-gray-100 rounded-2xl animate-pulse"
+                  className="aspect-square bg-[var(--sf-bg-elevated)] rounded-2xl animate-pulse"
                 />
               ))}
             </div>
           ) : templates.length === 0 ? (
             <div className="py-24 text-center">
-              <Palette className="w-10 h-10 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-semibold text-gray-900 mb-2">
+              <Palette className="w-10 h-10 mx-auto mb-4 text-[var(--sf-text-muted)]" />
+              <p className="text-lg font-semibold text-[var(--sf-text-primary)] mb-2">
                 {favoritesOnly ? "No favorites yet" : "No inspirations found"}
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-[var(--sf-text-secondary)]">
                 {favoritesOnly
                   ? "Heart any creative to save it here."
                   : "Try removing some filters or upload more creatives in the BDD Manager."}
@@ -543,18 +543,18 @@ export default function LibraryClient({
                 type="button"
                 onClick={() => setPage(pagination.page - 1)}
                 disabled={pagination.page <= 1}
-                className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:border-gray-400 disabled:opacity-40 transition-colors"
+                className="px-4 py-2 text-sm font-medium border border-[var(--sf-border)] rounded-lg hover:border-[var(--sf-border)] disabled:opacity-40 transition-colors"
               >
                 ← Prev
               </button>
-              <span className="text-sm text-gray-500 px-3">
+              <span className="text-sm text-[var(--sf-text-secondary)] px-3">
                 {pagination.page} / {pagination.pages}
               </span>
               <button
                 type="button"
                 onClick={() => setPage(pagination.page + 1)}
                 disabled={pagination.page >= pagination.pages}
-                className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:border-gray-400 disabled:opacity-40 transition-colors"
+                className="px-4 py-2 text-sm font-medium border border-[var(--sf-border)] rounded-lg hover:border-[var(--sf-border)] disabled:opacity-40 transition-colors"
               >
                 Next →
               </button>

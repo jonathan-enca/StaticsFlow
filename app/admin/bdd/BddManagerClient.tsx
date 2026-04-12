@@ -74,7 +74,7 @@ const BADGE_COLORS: Record<string, string> = {
   beauty: "bg-rose-100 text-rose-700",
   health: "bg-teal-100 text-teal-700",
   pet: "bg-amber-100 text-amber-700",
-  other: "bg-gray-100 text-gray-600",
+  other: "bg-[var(--sf-bg-elevated)] text-[var(--sf-text-secondary)]",
   pain: "bg-red-100 text-red-700",
   curiosite: "bg-indigo-100 text-indigo-700",
   social_proof: "bg-emerald-100 text-emerald-700",
@@ -85,7 +85,7 @@ const BADGE_COLORS: Record<string, string> = {
 };
 
 function badge(value: string) {
-  const color = BADGE_COLORS[value] ?? "bg-gray-100 text-gray-600";
+  const color = BADGE_COLORS[value] ?? "bg-[var(--sf-bg-elevated)] text-[var(--sf-text-secondary)]";
   return (
     <span
       key={value}
@@ -395,8 +395,8 @@ export function BddManagerClient() {
     <div className="max-w-7xl mx-auto px-6 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">BDD Manager</h1>
-        <p className="text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-[var(--sf-text-primary)]">BDD Manager</h1>
+        <p className="text-[var(--sf-text-secondary)] mt-1">
           Upload ad creatives in bulk. Claude analyses each one automatically.
         </p>
       </div>
@@ -409,8 +409,8 @@ export function BddManagerClient() {
         onClick={() => fileInputRef.current?.click()}
         className={`relative rounded-2xl border-2 border-dashed p-12 text-center cursor-pointer transition-colors ${
           isDragging
-            ? "border-black bg-gray-100"
-            : "border-gray-300 hover:border-gray-400 bg-white"
+            ? "border-black bg-[var(--sf-bg-elevated)]"
+            : "border-[var(--sf-border)] hover:border-[var(--sf-border)] bg-[var(--sf-bg-secondary)]"
         }`}
       >
         <input
@@ -421,17 +421,17 @@ export function BddManagerClient() {
           className="hidden"
           onChange={onFileInputChange}
         />
-        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
-          <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="w-12 h-12 rounded-xl bg-[var(--sf-bg-elevated)] flex items-center justify-center mx-auto mb-4">
+          <svg className="w-6 h-6 text-[var(--sf-text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 16v-8m0 0-3 3m3-3 3 3M6.5 19h11a2 2 0 002-2v-5l-3-3H6.5A1.5 1.5 0 005 10.5v6.5A1.5 1.5 0 006.5 19z" />
           </svg>
         </div>
-        <p className="text-sm font-medium text-gray-700">
+        <p className="text-sm font-medium text-[var(--sf-text-primary)]">
           {isDragging
             ? "Drop images here"
             : "Drag & drop images here, or click to browse"}
         </p>
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-[var(--sf-text-muted)] mt-1">
           JPG, PNG, WebP, GIF — up to 20 MB each — multiple files supported
         </p>
       </div>
@@ -449,14 +449,14 @@ export function BddManagerClient() {
         <button
           onClick={() => folderInputRef.current?.click()}
           disabled={!!folderProgress}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-[var(--sf-border)] rounded-lg bg-[var(--sf-bg-secondary)] hover:bg-[var(--sf-bg-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-4 h-4 text-[var(--sf-text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
           </svg>
           Import folder
         </button>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-[var(--sf-text-muted)]">
           Select a folder to import thousands of images at once
         </p>
       </div>
@@ -473,7 +473,7 @@ export function BddManagerClient() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setFolderConfirm(null)}
-              className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg bg-white hover:bg-gray-50"
+              className="px-3 py-1.5 text-xs font-medium text-[var(--sf-text-secondary)] border border-[var(--sf-border)] rounded-lg bg-[var(--sf-bg-secondary)] hover:bg-[var(--sf-bg-primary)]"
             >
               Cancel
             </button>
@@ -489,16 +489,16 @@ export function BddManagerClient() {
 
       {/* Overall folder import progress */}
       {folderProgress && (
-        <div className="mb-6 rounded-xl border border-gray-200 bg-white px-5 py-4">
+        <div className="mb-6 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] px-5 py-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold text-gray-700">
+            <span className="text-sm font-semibold text-[var(--sf-text-primary)]">
               Importing folder…
             </span>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-[var(--sf-text-secondary)]">
               {folderProgress.done.toLocaleString()} / {folderProgress.total.toLocaleString()}
             </span>
           </div>
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-2 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
             <div
               className="h-full bg-black rounded-full transition-all duration-300"
               style={{ width: `${Math.round((folderProgress.done / folderProgress.total) * 100)}%` }}
@@ -512,9 +512,9 @@ export function BddManagerClient() {
 
       {/* Upload queue */}
       {uploads.length > 0 && (
-        <div className="mb-8 bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-700">
+        <div className="mb-8 bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--sf-border)] flex items-center justify-between">
+            <span className="text-sm font-semibold text-[var(--sf-text-primary)]">
               Upload queue ({uploads.length} files)
             </span>
             <button
@@ -523,7 +523,7 @@ export function BddManagerClient() {
                   prev.filter((u) => u.status !== "done" && u.status !== "error")
                 )
               }
-              className="text-xs text-gray-400 hover:text-gray-600"
+              className="text-xs text-[var(--sf-text-muted)] hover:text-[var(--sf-text-secondary)]"
             >
               Clear completed
             </button>
@@ -539,15 +539,15 @@ export function BddManagerClient() {
                     className="w-10 h-10 rounded object-cover flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded bg-gray-100 flex-shrink-0" />
+                  <div className="w-10 h-10 rounded bg-[var(--sf-bg-elevated)] flex-shrink-0" />
                 )}
 
                 {/* Name + progress */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">
+                  <p className="text-sm font-medium text-[var(--sf-text-primary)] truncate">
                     {item.file.name}
                   </p>
-                  <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="mt-1 h-1.5 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
                         item.status === "error"
@@ -564,7 +564,7 @@ export function BddManagerClient() {
                 {/* Status badge */}
                 <div className="flex-shrink-0 text-xs font-medium">
                   {item.status === "uploading" && (
-                    <span className="text-gray-500">Uploading…</span>
+                    <span className="text-[var(--sf-text-secondary)]">Uploading…</span>
                   )}
                   {item.status === "analyzing" && (
                     <span className="text-blue-600">Analysing…</span>
@@ -589,7 +589,7 @@ export function BddManagerClient() {
         <select
           value={filterCategory}
           onChange={(e) => setFilterCategory(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-black"
+          className="text-sm border border-[var(--sf-border)] rounded-lg px-3 py-1.5 bg-[var(--sf-bg-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
         >
           {CATEGORY_OPTIONS.map((c) => (
             <option key={c} value={c}>
@@ -601,7 +601,7 @@ export function BddManagerClient() {
         <select
           value={filterType}
           onChange={(e) => setFilterType(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-black"
+          className="text-sm border border-[var(--sf-border)] rounded-lg px-3 py-1.5 bg-[var(--sf-bg-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
         >
           {TYPE_OPTIONS.map((t) => (
             <option key={t} value={t}>
@@ -613,7 +613,7 @@ export function BddManagerClient() {
         <select
           value={filterHook}
           onChange={(e) => setFilterHook(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-black"
+          className="text-sm border border-[var(--sf-border)] rounded-lg px-3 py-1.5 bg-[var(--sf-bg-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
         >
           {HOOK_OPTIONS.map((h) => (
             <option key={h} value={h}>
@@ -625,7 +625,7 @@ export function BddManagerClient() {
         <select
           value={filterAnalyzed}
           onChange={(e) => setFilterAnalyzed(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-black"
+          className="text-sm border border-[var(--sf-border)] rounded-lg px-3 py-1.5 bg-[var(--sf-bg-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
         >
           <option value="all">All statuses</option>
           <option value="true">Analysed</option>
@@ -639,7 +639,7 @@ export function BddManagerClient() {
           Refresh
         </button>
 
-        <span className="ml-auto text-sm text-gray-400 self-center">
+        <span className="ml-auto text-sm text-[var(--sf-text-muted)] self-center">
           {pagination.total} creative{pagination.total !== 1 ? "s" : ""}
         </span>
       </div>
@@ -650,13 +650,13 @@ export function BddManagerClient() {
           {Array.from({ length: 10 }).map((_, i) => (
             <div
               key={i}
-              className="aspect-square bg-gray-100 rounded-xl animate-pulse"
+              className="aspect-square bg-[var(--sf-bg-elevated)] rounded-xl animate-pulse"
             />
           ))}
         </div>
       ) : templates.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-gray-200 p-16 text-center">
-          <p className="text-gray-500 text-sm">
+        <div className="rounded-2xl border-2 border-dashed border-[var(--sf-border)] p-16 text-center">
+          <p className="text-[var(--sf-text-secondary)] text-sm">
             No creatives yet. Upload your first batch above.
           </p>
         </div>
@@ -666,10 +666,10 @@ export function BddManagerClient() {
             {templates.map((t) => (
               <div
                 key={t.id}
-                className="group relative bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-gray-300 transition-colors"
+                className="group relative bg-[var(--sf-bg-secondary)] rounded-xl overflow-hidden border border-[var(--sf-border)] hover:border-[var(--sf-border)] transition-colors"
               >
                 {/* Image */}
-                <div className="aspect-square bg-gray-50 overflow-hidden">
+                <div className="aspect-square bg-[var(--sf-bg-primary)] overflow-hidden">
                   <img
                     src={t.thumbnailUrl ?? t.sourceImageUrl}
                     alt={`${t.category} — ${t.type}`}
@@ -684,7 +684,7 @@ export function BddManagerClient() {
                     {badge(t.category)}
                     {badge(t.hookType)}
                   </div>
-                  <p className="text-xs text-gray-500 truncate">{t.type}</p>
+                  <p className="text-xs text-[var(--sf-text-secondary)] truncate">{t.type}</p>
                   {/* Palette swatches */}
                   {t.palette.length > 0 && (
                     <div className="flex gap-1">
@@ -721,17 +721,17 @@ export function BddManagerClient() {
               <button
                 disabled={pagination.page <= 1}
                 onClick={() => fetchLibrary(pagination.page - 1)}
-                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50"
+                className="px-3 py-1.5 text-sm border border-[var(--sf-border)] rounded-lg disabled:opacity-40 hover:bg-[var(--sf-bg-primary)]"
               >
                 ← Prev
               </button>
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-[var(--sf-text-secondary)]">
                 Page {pagination.page} of {pagination.pages}
               </span>
               <button
                 disabled={pagination.page >= pagination.pages}
                 onClick={() => fetchLibrary(pagination.page + 1)}
-                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50"
+                className="px-3 py-1.5 text-sm border border-[var(--sf-border)] rounded-lg disabled:opacity-40 hover:bg-[var(--sf-bg-primary)]"
               >
                 Next →
               </button>
