@@ -6,11 +6,13 @@
 //   2. Per-file progress indicator + status (uploading / analyzing / done / error)
 //   3. Library grid showing all templates with their analysis tags
 //   4. Filter bar: category, type, hook_type
+//   5. Click-to-edit modal: view + correct analysis fields for any template
 //
 // Data flow:
 //   Upload: POST /api/admin/bdd/upload (multipart) → triggers background Claude analysis
 //   Library: GET /api/admin/bdd/creatives?... (paginated, filterable)
 //   Re-analyze: POST /api/admin/bdd/analyze { templateId }
+//   Edit: PATCH /api/admin/bdd/creatives/[templateId] { category, type, … }
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -97,6 +99,180 @@ function badge(value: string) {
 }
 
 // ──────────────────────────────────────────────────────────────
+// Edit modal
+// ──────────────────────────────────────────────────────────────
+
+const LANG_LABELS: Record<string, string> = { fr: "🇫🇷 FR", en: "🇬🇧 EN", de: "🇩🇪 DE", other: "🌐 Other" };
+
+interface EditModalProps {
+  template: Template;
+  onClose: () => void;
+  onSaved: (updated: Template) => void;
+}
+
+function EditModal({ template, onClose, onSaved }: EditModalProps) {
+  const [form, setForm] = useState({
+    category: template.category,
+    type:     template.type,
+    layout:   template.layout,
+    hookType: template.hookType,
+    language: template.language,
+    palette:  template.palette,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState<string | null>(null);
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/bdd/creatives/${template.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error ?? `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      onSaved(data.template as Template);
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const field = (
+    label: string,
+    key: keyof typeof form,
+    options: string[]
+  ) => (
+    <div key={key}>
+      <label className="block text-xs font-medium text-[var(--sf-text-muted)] uppercase tracking-wide mb-1">
+        {label}
+      </label>
+      <select
+        value={form[key] as string}
+        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+        className="w-full text-sm border border-[var(--sf-border)] rounded-lg px-3 py-2 bg-[var(--sf-bg-primary)] focus:outline-none focus:ring-2 focus:ring-black"
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {key === "language" ? (LANG_LABELS[o] ?? o) : o}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-[var(--sf-bg-secondary)] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Image */}
+        <div className="relative bg-[var(--sf-bg-elevated)] rounded-t-2xl overflow-hidden max-h-72">
+          <img
+            src={template.thumbnailUrl ?? template.sourceImageUrl}
+            alt="creative"
+            className="w-full h-full object-contain"
+          />
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 w-8 h-8 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center text-lg leading-none"
+          >
+            ×
+          </button>
+          {template.analyzedAt && (
+            <span className="absolute top-3 left-3 px-2 py-0.5 text-xs bg-green-600 text-white rounded-full font-medium">
+              Analysed
+            </span>
+          )}
+        </div>
+
+        {/* Fields */}
+        <div className="p-6 space-y-4">
+          <h2 className="text-base font-semibold text-[var(--sf-text-primary)]">
+            Edit analysis
+          </h2>
+
+          <div className="grid grid-cols-2 gap-4">
+            {field("Category", "category", [
+              "skincare","food","fashion","tech","fitness","home","beauty","health","pet","other",
+            ])}
+            {field("Type", "type", [
+              "product_hero","before_after","comparatif","testimonial","promo",
+              "ugc_screenshot","lifestyle","data_stats","listicle","press_mention",
+            ])}
+            {field("Layout", "layout", ["grid","split","centered","overlay","other"])}
+            {field("Hook", "hookType", [
+              "pain","curiosite","social_proof","fomo","benefice_direct","autorite","urgence",
+            ])}
+            {field("Language", "language", ["fr","en","de","other"])}
+          </div>
+
+          {/* Palette swatches (read-only display, updated by re-analysis) */}
+          {form.palette.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-[var(--sf-text-muted)] uppercase tracking-wide mb-1">
+                Palette (re-analyse to update)
+              </p>
+              <div className="flex gap-2">
+                {form.palette.map((hex) => (
+                  <div key={hex} className="flex items-center gap-1.5">
+                    <span
+                      className="w-6 h-6 rounded-full border border-[var(--sf-border)]"
+                      style={{ backgroundColor: hex }}
+                    />
+                    <span className="text-xs text-[var(--sf-text-secondary)] font-mono">{hex}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex-1 py-2.5 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+            <button
+              onClick={onClose}
+              className="px-5 py-2.5 text-sm font-medium border border-[var(--sf-border)] rounded-xl hover:bg-[var(--sf-bg-elevated)] transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
 // Main component
 // ──────────────────────────────────────────────────────────────
 interface FolderConfirm {
@@ -125,6 +301,9 @@ export function BddManagerClient() {
   const [filterType, setFilterType] = useState("all");
   const [filterHook, setFilterHook] = useState("all");
   const [filterAnalyzed, setFilterAnalyzed] = useState("all");
+
+  // Edit modal
+  const [editTemplate, setEditTemplate] = useState<Template | null>(null);
 
   // ──────────────────────────────────────────────────────────
   // Library fetch
@@ -388,11 +567,25 @@ export function BddManagerClient() {
     fetchLibrary(pagination.page);
   };
 
+  // Update a template in-place after edit save
+  const handleTemplateSaved = useCallback((updated: Template) => {
+    setTemplates((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+  }, []);
+
   // ──────────────────────────────────────────────────────────
   // Render
   // ──────────────────────────────────────────────────────────
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
+      {/* Edit modal */}
+      {editTemplate && (
+        <EditModal
+          template={editTemplate}
+          onClose={() => setEditTemplate(null)}
+          onSaved={handleTemplateSaved}
+        />
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[var(--sf-text-primary)]">BDD Manager</h1>
@@ -666,7 +859,8 @@ export function BddManagerClient() {
             {templates.map((t) => (
               <div
                 key={t.id}
-                className="group relative bg-[var(--sf-bg-secondary)] rounded-xl overflow-hidden border border-[var(--sf-border)] hover:border-[var(--sf-border)] transition-colors"
+                onClick={() => setEditTemplate(t)}
+                className="group relative bg-[var(--sf-bg-secondary)] rounded-xl overflow-hidden border border-[var(--sf-border)] hover:border-black cursor-pointer transition-colors"
               >
                 {/* Image */}
                 <div className="aspect-square bg-[var(--sf-bg-primary)] overflow-hidden">
@@ -676,6 +870,13 @@ export function BddManagerClient() {
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />
+                </div>
+
+                {/* Hover overlay hint */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-xs font-medium px-2 py-1 rounded-lg">
+                    Edit
+                  </span>
                 </div>
 
                 {/* Tags */}
@@ -703,7 +904,7 @@ export function BddManagerClient() {
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-amber-600">Pending…</span>
                       <button
-                        onClick={() => reAnalyze(t.id)}
+                        onClick={(e) => { e.stopPropagation(); reAnalyze(t.id); }}
                         className="text-xs text-blue-600 hover:underline"
                       >
                         Re-analyse
