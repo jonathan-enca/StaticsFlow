@@ -34,7 +34,8 @@ async function generateOne(
   brandId: string,
   anthropicApiKey?: string,
   geminiApiKey?: string,
-  imageQuality?: ImageQuality
+  imageQuality?: ImageQuality,
+  creativeBrief?: string
 ) {
   const creative = await prisma.creative.create({
     data: { brandId, format, angle, status: "GENERATING", briefJson: {} },
@@ -49,7 +50,7 @@ async function generateOne(
       userId,
       brandId,
       creative.id,
-      { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality }
+      { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief }
     );
     const qaResult = await qaReviewCreative(
       generated,
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let brandId: string, format: AdFormat, angle: CreativeAngle, variants: boolean, imageQuality: ImageQuality;
+  let brandId: string, format: AdFormat, angle: CreativeAngle, variants: boolean, imageQuality: ImageQuality, creativeBrief: string | undefined;
   try {
     ({
       brandId,
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
       angle = "benefit",
       variants = false,
       imageQuality = "flash",
+      creativeBrief = undefined,
     } = await req.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -149,7 +151,8 @@ export async function POST(req: NextRequest) {
         brandId,
         anthropicKey,
         geminiKey,
-        imageQuality
+        imageQuality,
+        creativeBrief
       );
       return NextResponse.json(result, { status: 201 });
     } catch (err) {
@@ -176,7 +179,7 @@ export async function POST(req: NextRequest) {
   const userId = session.user.id as string;
   const results = await Promise.allSettled(
     variantAngles.map((a) =>
-      generateOne(brandDna, format, a, userId, brandId, anthropicKey, geminiKey, imageQuality)
+      generateOne(brandDna, format, a, userId, brandId, anthropicKey, geminiKey, imageQuality, creativeBrief)
     )
   );
 

@@ -47,9 +47,10 @@ export async function generateCreative(
     geminiApiKey?: string;
     inspirationTemplates?: Template[];
     imageQuality?: ImageQuality;
+    creativeBrief?: string; // Optional user guidance injected into Claude's briefing prompt
   }
 ): Promise<GeneratedCreative> {
-  const { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality } = options ?? {};
+  const { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief } = options ?? {};
 
   // Step 1: Generate the creative brief via Claude
   const brief = await generateCreativeBrief(
@@ -57,7 +58,8 @@ export async function generateCreative(
     format,
     angle,
     anthropicApiKey,
-    inspirationTemplates
+    inspirationTemplates,
+    creativeBrief
   );
 
   // Step 2: Generate the image via Gemini
@@ -127,7 +129,8 @@ async function generateCreativeBrief(
   format: AdFormat,
   angle: CreativeAngle,
   apiKey?: string,
-  inspirationTemplates?: Template[]
+  inspirationTemplates?: Template[],
+  creativeBrief?: string
 ): Promise<CreativeBrief> {
   const client = createClaudeClient(apiKey);
 
@@ -188,7 +191,11 @@ ${inspirationTemplates
 Use these as creative direction — not to copy, but to understand what structures and visual approaches work for this angle and category. Create a unique brief that achieves the same strategic effect for this brand.\n`
       : "";
 
-  const prompt = `You are a senior creative director at a top DTC advertising agency. Create a detailed creative brief for a static Meta Ad that is unmistakably "on brand" for this brand.${inspirationSection}
+  const userBriefSection = creativeBrief
+    ? `\n\nUSER BRIEF (mandatory — these instructions OVERRIDE defaults and must be reflected in every field below):\n${creativeBrief}\n`
+    : "";
+
+  const prompt = `You are a senior creative director at a top DTC advertising agency. Create a detailed creative brief for a static Meta Ad that is unmistakably "on brand" for this brand.${inspirationSection}${userBriefSection}
 
 BRAND DNA:
 - Brand: ${brandDna.name}
@@ -226,7 +233,7 @@ Return ONLY a valid JSON object with this exact structure:
 
   const response = await client.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 1500,
+    max_tokens: 4096, // imagePrompt can be 400-600 tokens alone — 1500 caused truncation
     messages: [{ role: "user", content: prompt }],
   });
 

@@ -10,8 +10,10 @@ import { qaReviewCreative } from "@/lib/qa-reviewer";
 import { findMatchingTemplates } from "@/lib/template-matcher";
 import type { AdFormat, CreativeAngle, ImageQuality } from "@/types/index";
 
-const VALID_COUNTS = [1, 5, 10, 20] as const;
-type BatchCount = (typeof VALID_COUNTS)[number];
+const BATCH_COUNT_MIN = 1;
+const BATCH_COUNT_MAX = 50;
+// Keep the type loose for the parsed JSON
+type BatchCount = number;
 
 const ALL_ANGLES: CreativeAngle[] = [
   "benefit",
@@ -42,7 +44,8 @@ async function runBatchAsync(
   formats: AdFormat[],
   anthropicApiKey?: string,
   geminiApiKey?: string,
-  imageQuality?: ImageQuality
+  imageQuality?: ImageQuality,
+  creativeBrief?: string
 ) {
   const CONCURRENCY = 3;
 
@@ -88,7 +91,7 @@ async function runBatchAsync(
               userId,
               brandId,
               creative.id,
-              { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality }
+              { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief }
             );
 
             const qaResult = await qaReviewCreative(
@@ -154,7 +157,8 @@ export async function POST(req: NextRequest) {
     formats: string[],
     angles: string[],
     language: string,
-    imageQuality: ImageQuality;
+    imageQuality: ImageQuality,
+    creativeBrief: string | undefined;
   try {
     ({
       brandId,
@@ -163,6 +167,7 @@ export async function POST(req: NextRequest) {
       angles = ["benefit", "pain", "social_proof", "curiosity"],
       language = "fr",
       imageQuality = "flash",
+      creativeBrief = undefined,
     } = await req.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -171,12 +176,14 @@ export async function POST(req: NextRequest) {
   if (!brandId) {
     return NextResponse.json({ error: "brandId is required" }, { status: 400 });
   }
-  if (!VALID_COUNTS.includes(count as BatchCount)) {
+  const parsedCount = Number(count);
+  if (!Number.isInteger(parsedCount) || parsedCount < BATCH_COUNT_MIN || parsedCount > BATCH_COUNT_MAX) {
     return NextResponse.json(
-      { error: "count must be 1, 5, 10, or 20" },
+      { error: `count must be an integer between ${BATCH_COUNT_MIN} and ${BATCH_COUNT_MAX}` },
       { status: 400 }
     );
   }
+  const validCount = parsedCount as number;
 
   const brand = await prisma.brand.findFirst({
     where: { id: brandId, userId: session.user.id },
@@ -197,7 +204,7 @@ export async function POST(req: NextRequest) {
   const effectiveAngles =
     resolvedAngles.length > 0 ? resolvedAngles : ALL_ANGLES;
 
-  const distributedAngles = distributeAngles(count, effectiveAngles);
+  const distributedAngles = distributeAngles(validCount, effectiveAngles);
   const effectiveFormats = (formats as AdFormat[]).filter((f) =>
     ["1080x1080", "1080x1350", "1200x628"].includes(f)
   );
@@ -208,7 +215,7 @@ export async function POST(req: NextRequest) {
     data: {
       brandId,
       userId: session.user.id,
-      totalCount: count,
+      totalCount: validCount,
       completedCount: 0,
       status: "PENDING",
     },
@@ -227,7 +234,8 @@ export async function POST(req: NextRequest) {
       resolvedFormats,
       user?.anthropicApiKey ?? undefined,
       user?.geminiApiKey ?? undefined,
-      imageQuality
+      imageQuality,
+      creativeBrief
     ).catch((err) => console.error("[batch-generate] runBatchAsync threw:", err));
   });
 

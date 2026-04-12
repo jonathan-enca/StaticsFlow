@@ -1,7 +1,7 @@
 "use client";
 
 // Creative generation UI
-// Supports: single creative, 3-variant mode, and batch generation (5/10/20)
+// Supports: single creative (with progress bar), 3-variant mode, and batch generation
 // Batch mode: polls progress and shows gallery + Download All ZIP
 
 import { useState, useEffect, useRef } from "react";
@@ -39,29 +39,28 @@ const ANGLE_OPTIONS: { value: CreativeAngle; label: string; desc: string }[] = [
   { value: "urgency", label: "Urgency", desc: "Time-sensitive offer" },
 ];
 
-const BATCH_SIZES = [
-  { value: 1, label: "Single" },
-  { value: 5, label: "5" },
-  { value: 10, label: "10" },
-  { value: 20, label: "20" },
-] as const;
+// Batch count range
+const BATCH_MIN = 1;
+const BATCH_MAX = 50;
 
 type ImageQuality = "flash" | "pro";
 
-const QUALITY_OPTIONS: { value: ImageQuality; label: string; model: string; desc: string; badge: string }[] = [
+const QUALITY_OPTIONS: { value: ImageQuality; label: string; model: string; desc: string; badge: string; badgeColor: string }[] = [
   {
     value: "flash",
-    label: "Flash",
+    label: "Flash 3.1",
     model: "Gemini 3.1 Flash",
-    desc: "Fast generation, cost-effective. Ideal for bulk batches and A/B testing.",
-    badge: "Recommended",
+    desc: "Best image quality, highest brand accuracy. Most powerful model — ideal for hero creatives.",
+    badge: "Best quality",
+    badgeColor: "amber",
   },
   {
     value: "pro",
     label: "Pro",
     model: "Gemini 3 Pro",
-    desc: "Highest image quality, best brand accuracy. Best for hero creatives.",
-    badge: "Premium",
+    desc: "Good quality at lower cost. Ideal for bulk batches and A/B testing.",
+    badge: "Cost-effective",
+    badgeColor: "green",
   },
 ];
 
@@ -126,14 +125,27 @@ function CreativeThumbnail({ c, brandName }: { c: ExistingCreative; brandName: s
   );
 }
 
+// Step labels for the single-generation progress bar
+const SINGLE_STEPS = [
+  { label: "Claude is writing the creative brief…", pct: 20 },
+  { label: "Gemini is generating the image…", pct: 65 },
+  { label: "Claude QA is reviewing the result…", pct: 90 },
+];
+
 export default function GenerateClient({ brandId, brandName, existingCreatives }: Props) {
   const [format, setFormat] = useState<AdFormat>("1080x1080");
   const [angle, setAngle] = useState<CreativeAngle>("benefit");
   const [imageQuality, setImageQuality] = useState<ImageQuality>("flash");
   const [batchSize, setBatchSize] = useState<number>(1);
+  const [batchSizeInput, setBatchSizeInput] = useState<string>("1");
+  const [creativeBrief, setCreativeBrief] = useState<string>("");
   const [variantsMode, setVariantsMode] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Single-generation step progress
+  const [stepIndex, setStepIndex] = useState<number>(-1);
+  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Single / variants result
   const [singleResult, setSingleResult] = useState<SingleResult | null>(null);
@@ -182,6 +194,27 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
     };
   }, [batchId]);
 
+  /** Animate through SINGLE_STEPS while generation is running. */
+  const startStepProgress = () => {
+    setStepIndex(0);
+    let current = 0;
+    const advance = () => {
+      current++;
+      if (current < SINGLE_STEPS.length) {
+        setStepIndex(current);
+        // Time each step roughly proportional to its real work
+        const delays = [10000, 30000]; // brief→image ~10s, image→QA ~30s
+        stepTimerRef.current = setTimeout(advance, delays[current - 1] ?? 15000);
+      }
+    };
+    stepTimerRef.current = setTimeout(advance, 8000);
+  };
+
+  const stopStepProgress = () => {
+    if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
+    setStepIndex(-1);
+  };
+
   const generate = async () => {
     setGenerating(true);
     setError(null);
@@ -189,6 +222,8 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
     setVariantResults(null);
     setBatchId(null);
     setBatchData(null);
+
+    const briefPayload = creativeBrief.trim() || undefined;
 
     try {
       if (batchSize > 1) {
@@ -202,6 +237,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             formats: [format],
             angles: ["benefit", "pain", "social_proof", "curiosity"],
             imageQuality,
+            creativeBrief: briefPayload,
           }),
         });
         const data = await res.json();
@@ -210,11 +246,13 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         // setGenerating stays true — cleared by poller when done
       } else if (variantsMode) {
         // Variants mode (3 hooks)
+        startStepProgress();
         const res = await fetch("/api/creatives/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, format, angle, variants: true, imageQuality }),
+          body: JSON.stringify({ brandId, format, angle, variants: true, imageQuality, creativeBrief: briefPayload }),
         });
+        stopStepProgress();
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Generation failed");
         setVariantResults(data.variants as SingleResult[]);
@@ -225,11 +263,13 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         setGenerating(false);
       } else {
         // Single creative
+        startStepProgress();
         const res = await fetch("/api/creatives/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, format, angle, imageQuality }),
+          body: JSON.stringify({ brandId, format, angle, imageQuality, creativeBrief: briefPayload }),
         });
+        stopStepProgress();
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Generation failed");
         setSingleResult({ creative: data.creative, qaResult: data.qaResult });
@@ -237,6 +277,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         setGenerating(false);
       }
     } catch (err) {
+      stopStepProgress();
       setError((err as Error).message);
       setGenerating(false);
     }
@@ -276,28 +317,35 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left: Controls */}
         <div className="lg:col-span-1 space-y-6">
-          {/* Batch size selector */}
+          {/* Batch size + variants */}
           <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-4">
-            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Batch Size</h2>
-            <div className="grid grid-cols-4 gap-2">
-              {BATCH_SIZES.map((b) => (
-                <button
-                  key={b.value}
-                  type="button"
-                  onClick={() => {
-                    setBatchSize(b.value);
-                    if (b.value > 1) setVariantsMode(false);
-                  }}
-                  className={`py-2 rounded-xl border text-sm font-medium transition-colors ${
-                    batchSize === b.value
-                      ? "border-black bg-black text-white"
-                      : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
-                  }`}
-                >
-                  {b.label}
-                </button>
-              ))}
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Number of Creatives</h2>
+              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Enter any number from 1 to {BATCH_MAX}</p>
             </div>
+            <input
+              type="number"
+              min={BATCH_MIN}
+              max={BATCH_MAX}
+              value={batchSizeInput}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setBatchSizeInput(raw);
+                const n = parseInt(raw, 10);
+                if (!isNaN(n) && n >= BATCH_MIN && n <= BATCH_MAX) {
+                  setBatchSize(n);
+                  if (n > 1) setVariantsMode(false);
+                }
+              }}
+              onBlur={() => {
+                // Clamp and normalise on blur
+                const n = Math.min(BATCH_MAX, Math.max(BATCH_MIN, parseInt(batchSizeInput, 10) || 1));
+                setBatchSize(n);
+                setBatchSizeInput(String(n));
+                if (n > 1) setVariantsMode(false);
+              }}
+              className="w-full px-4 py-3 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm focus:outline-none focus:border-black transition-colors"
+            />
 
             {/* Variants toggle — only in single mode */}
             {batchSize === 1 && (
@@ -325,6 +373,23 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             )}
           </div>
 
+          {/* Creative brief (optional guidance) */}
+          <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Creative Brief <span className="text-[var(--sf-text-muted)] font-normal">(optional)</span></h2>
+              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
+                Give Claude specific guidance: product to feature, seasonal theme, promo, target audience…
+              </p>
+            </div>
+            <textarea
+              rows={3}
+              placeholder="e.g. Focus on our new summer collection, highlight the 30% off promo, target women 25-35…"
+              value={creativeBrief}
+              onChange={(e) => setCreativeBrief(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-black transition-colors resize-none"
+            />
+          </div>
+
           {/* Image quality picker */}
           <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-3">
             <div>
@@ -350,7 +415,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                       imageQuality === q.value
                         ? "bg-white/20 text-white"
-                        : q.value === "pro"
+                        : q.badgeColor === "amber"
                           ? "bg-amber-50 text-amber-700"
                           : "bg-green-50 text-green-700"
                     }`}>
@@ -437,11 +502,29 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             ) : buttonLabel}
           </button>
 
-          {generating && !isBatchMode && (
-            <div className="text-xs text-[var(--sf-text-secondary)] text-center space-y-1">
-              <p>Claude is writing the creative brief…</p>
-              <p>Gemini is generating the image…</p>
-              <p>Claude QA is reviewing the result…</p>
+          {/* Step progress bar — single / variants mode only */}
+          {generating && !isBatchMode && stepIndex >= 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-[var(--sf-text-secondary)]">
+                <span>{SINGLE_STEPS[stepIndex]?.label}</span>
+                <span>{SINGLE_STEPS[stepIndex]?.pct ?? 0}%</span>
+              </div>
+              <div className="h-1.5 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-black rounded-full transition-all duration-[2000ms] ease-out"
+                  style={{ width: `${SINGLE_STEPS[stepIndex]?.pct ?? 0}%` }}
+                />
+              </div>
+              <div className="flex gap-1 pt-0.5">
+                {SINGLE_STEPS.map((s, i) => (
+                  <div
+                    key={i}
+                    className={`h-1 flex-1 rounded-full transition-colors duration-500 ${
+                      i <= stepIndex ? "bg-black" : "bg-[var(--sf-bg-elevated)]"
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
