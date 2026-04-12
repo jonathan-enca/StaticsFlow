@@ -216,7 +216,7 @@ AD PARAMETERS:
 - Hook angle: ${angle}
 - Language: ${brandDna.language}
 
-Return ONLY a valid JSON object with this exact structure:
+Return ONLY a valid JSON object with this exact structure. CRITICAL: do not use literal newlines or tab characters inside string values — the output must be parseable by JSON.parse() without any repair.
 
 {
   "headline": "The main headline (max 6 words, punchy, uses the ${angle} angle)",
@@ -228,7 +228,7 @@ Return ONLY a valid JSON object with this exact structure:
   "layout": "Describe the visual layout: e.g., 'Product hero center, headline top-left, CTA bottom-right'",
   "colorGuidance": "Exact color usage: primary ${brandDna.colors.primary} for background, accent ${brandDna.colors.accent} for CTA button",
   "fontGuidance": "Font hierarchy: ${brandDna.fonts?.[0] ?? "sans-serif"} for headline bold, same regular for body",
-  "imagePrompt": "A detailed image generation prompt for Gemini that describes EXACTLY what the ad should look like visually. Include: exact layout, product placement, background color (${brandDna.colors.primary}), text positions, visual style. The ad must look like it was made by the brand's in-house design team, not a generic AI tool. Make it specific to ${brandDna.productCategory}. Format: ${format}. Style: photorealistic, professional ad quality, no watermarks, no generic stock photo feel."
+  "imagePrompt": "A detailed image generation prompt for Gemini. Keep this as a single continuous string — no line breaks. Include: exact layout, product placement, background color (${brandDna.colors.primary}), text positions, visual style. The ad must look like it was made by the brand's in-house design team. Make it specific to ${brandDna.productCategory}. Format: ${format}. Style: photorealistic, professional ad quality, no watermarks."
 }`;
 
   const response = await client.messages.create({
@@ -244,7 +244,28 @@ Return ONLY a valid JSON object with this exact structure:
     .replace(/\n?```$/m, "")
     .trim();
 
-  const parsed = JSON.parse(cleaned) as Omit<CreativeBrief, "brandDnaRef" | "inspirationTemplateIds">;
+  // Robust parse: Claude occasionally emits literal newlines/tabs inside JSON string
+  // values, which makes JSON.parse throw "Unterminated string". Repair by escaping
+  // any unescaped control characters that appear inside quoted string tokens.
+  function parseWithRepair(raw: string): Record<string, unknown> {
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      // Escape literal newlines/CRs/tabs inside JSON string values only
+      // Use [\s\S] instead of . with /s flag for broader TS target compat
+      const repaired = raw.replace(
+        /"(?:[^"\\]|\\.)*"/g,
+        (match) =>
+          match
+            .replace(/\n/g, "\\n")
+            .replace(/\r/g, "\\r")
+            .replace(/\t/g, "\\t")
+      );
+      return JSON.parse(repaired) as Record<string, unknown>;
+    }
+  }
+
+  const parsed = parseWithRepair(cleaned) as Omit<CreativeBrief, "brandDnaRef" | "inspirationTemplateIds">;
   return {
     ...parsed,
     brandDnaRef: brandDna,

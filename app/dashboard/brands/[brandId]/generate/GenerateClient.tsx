@@ -5,7 +5,7 @@
 // Batch mode: polls progress and shows gallery + Download All ZIP
 
 import { useState, useEffect, useRef } from "react";
-import type { AdFormat, CreativeAngle } from "@/types/index";
+import type { AdFormat } from "@/types/index";
 
 interface ExistingCreative {
   id: string;
@@ -27,16 +27,6 @@ const FORMAT_OPTIONS: { value: AdFormat; label: string; desc: string }[] = [
   { value: "1080x1080", label: "Square", desc: "1080×1080 — Feed" },
   { value: "1080x1350", label: "Portrait", desc: "1080×1350 — Stories" },
   { value: "1200x628", label: "Landscape", desc: "1200×628 — Banner" },
-];
-
-const ANGLE_OPTIONS: { value: CreativeAngle; label: string; desc: string }[] = [
-  { value: "benefit", label: "Benefit", desc: "Lead with the product's core value" },
-  { value: "pain", label: "Pain", desc: "Address the customer's problem" },
-  { value: "social_proof", label: "Social Proof", desc: "Leverage customer love" },
-  { value: "curiosity", label: "Curiosity", desc: "Create intrigue" },
-  { value: "fomo", label: "FOMO", desc: "Fear of missing out" },
-  { value: "authority", label: "Authority", desc: "Expert credibility" },
-  { value: "urgency", label: "Urgency", desc: "Time-sensitive offer" },
 ];
 
 // Batch count range
@@ -134,7 +124,8 @@ const SINGLE_STEPS = [
 
 export default function GenerateClient({ brandId, brandName, existingCreatives }: Props) {
   const [format, setFormat] = useState<AdFormat>("1080x1080");
-  const [angle, setAngle] = useState<CreativeAngle>("benefit");
+  // angle is no longer user-selectable — defaults to "benefit" for single, auto-distributed for batch
+  const angle = "benefit";
   const [imageQuality, setImageQuality] = useState<ImageQuality>("flash");
   const [batchSize, setBatchSize] = useState<number>(1);
   const [batchSizeInput, setBatchSizeInput] = useState<string>("1");
@@ -454,35 +445,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             </div>
           </div>
 
-          {/* Angle picker (hidden in batch mode — angles are auto-distributed) */}
-          {!isBatchMode && (
-            <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-4">
-              <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Creative Angle</h2>
-              <div className="space-y-2">
-                {ANGLE_OPTIONS.map((a) => (
-                  <button
-                    key={a.value}
-                    type="button"
-                    onClick={() => setAngle(a.value)}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
-                      angle === a.value
-                        ? "border-black bg-black text-white"
-                        : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
-                    }`}
-                  >
-                    <span className="font-medium">{a.label}</span>
-                    <span className={angle === a.value ? "text-[var(--sf-text-muted)]" : "text-[var(--sf-text-muted)] text-xs"}>{a.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {isBatchMode && (
-            <div className="px-4 py-3 bg-[var(--sf-bg-primary)] border border-[var(--sf-border)] rounded-xl text-xs text-[var(--sf-text-secondary)]">
-              Angles are auto-distributed across Benefit, Pain, Social Proof, and Curiosity.
-            </div>
-          )}
+          {/* Angle is auto-selected: single/variants use "benefit", batch auto-distributes */}
 
           {/* Generate button */}
           <button
