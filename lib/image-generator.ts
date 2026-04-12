@@ -102,9 +102,17 @@ export async function generateCreative(
     inspirationTemplates?: Template[];
     imageQuality?: ImageQuality;
     creativeBrief?: string; // Optional user guidance injected into Claude's briefing prompt
+    referenceImageUrl?: string; // "From example" mode: single reference image URL (skips BDD templates)
   }
 ): Promise<GeneratedCreative> {
-  const { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief } = options ?? {};
+  const { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief, referenceImageUrl } = options ?? {};
+
+  // "From example" mode: fetch the user-provided reference image, skip BDD template matching
+  let preloadedImages: FetchedImage[] | undefined;
+  if (referenceImageUrl) {
+    const img = await fetchImageBase64(referenceImageUrl);
+    if (img) preloadedImages = [img];
+  }
 
   // Step 1: Generate the creative brief via Claude (also fetches BDD template images for vision)
   const { brief, templateImages } = await generateCreativeBrief(
@@ -112,8 +120,10 @@ export async function generateCreative(
     format,
     angle,
     anthropicApiKey,
-    inspirationTemplates,
-    creativeBrief
+    // In "from example" mode, skip BDD templates — use the single reference image instead
+    preloadedImages ? undefined : inspirationTemplates,
+    creativeBrief,
+    preloadedImages
   );
 
   // Step 2: Generate the image via Gemini (pass template images so Gemini can replicate their style)
@@ -186,7 +196,8 @@ async function generateCreativeBrief(
   angle: CreativeAngle,
   apiKey?: string,
   inspirationTemplates?: Template[],
-  creativeBrief?: string
+  creativeBrief?: string,
+  preloadedImages?: FetchedImage[] // "From example" mode: bypass BDD fetch with a pre-fetched image
 ): Promise<{ brief: CreativeBrief; templateImages: FetchedImage[] }> {
   const client = createClaudeClient(apiKey);
 
@@ -241,8 +252,13 @@ CUSTOMER VOCABULARY (real words your customers use — mirror this language in c
   }
 
   // Fetch template images for Claude vision (top 3, using thumbnail when available)
+  // "From example" mode: use preloadedImages directly and skip BDD template fetching
   const templateImages: { data: string; mimeType: string; label: string }[] = [];
-  if (inspirationTemplates && inspirationTemplates.length > 0) {
+  if (preloadedImages && preloadedImages.length > 0) {
+    for (const img of preloadedImages) {
+      templateImages.push({ ...img, label: "Reference ad" });
+    }
+  } else if (inspirationTemplates && inspirationTemplates.length > 0) {
     const toFetch = inspirationTemplates.slice(0, 3);
     const fetched = await Promise.all(
       toFetch.map(async (t, i) => {
@@ -256,10 +272,14 @@ CUSTOMER VOCABULARY (real words your customers use — mirror this language in c
     }
   }
 
-  // Build BDD inspiration section (STA-58)
-  const inspirationSection =
-    inspirationTemplates && inspirationTemplates.length > 0
-      ? `\nBDD INSPIRATION — You have been shown ${templateImages.length > 0 ? `${templateImages.length} actual winning ad images above` : "the following winning ad metadata"}. These are high-performing creatives for this angle and category. Study them carefully: understand the visual composition, copywriting style, layout structure, and why they win. Then create a brief that adapts these winning principles to ${brandDna.name}'s brand DNA.
+  // Build inspiration context section for Claude
+  let inspirationSection = "";
+  if (preloadedImages && preloadedImages.length > 0) {
+    // "From example" mode: single user-provided reference image
+    inspirationSection = `\nREFERENCE AD — The client has provided a specific ad image above as a reference. Study it carefully: understand the visual composition, copywriting style, hook execution, layout, and product placement. Your job is to create a brief that replicates the same structural approach and creative quality, but adapted entirely to ${brandDna.name}'s brand DNA, colors, tone, and product.\n\nDo NOT copy the reference ad. Adapt its winning structure to ${brandDna.name}'s brand.\n`;
+  } else if (inspirationTemplates && inspirationTemplates.length > 0) {
+    // "From database" mode: BDD curated templates
+    inspirationSection = `\nBDD INSPIRATION — You have been shown ${templateImages.length > 0 ? `${templateImages.length} actual winning ad images above` : "the following winning ad metadata"}. These are high-performing creatives for this angle and category. Study them carefully: understand the visual composition, copywriting style, layout structure, and why they win. Then create a brief that adapts these winning principles to ${brandDna.name}'s brand DNA.
 ${inspirationTemplates
   .map((t, i) => {
     const analysis = t.analysisJson as Record<string, unknown>;
@@ -269,8 +289,8 @@ ${inspirationTemplates
   })
   .join("\n")}
 
-Do NOT copy these ads. Adapt their winning structure and visual DNA to ${brandDna.name}'s brand.\n`
-      : "";
+Do NOT copy these ads. Adapt their winning structure and visual DNA to ${brandDna.name}'s brand.\n`;
+  }
 
   const userBriefSection = creativeBrief
     ? `\n\nUSER BRIEF (mandatory — these instructions OVERRIDE defaults and must be reflected in every field below):\n${creativeBrief}\n`

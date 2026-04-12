@@ -45,7 +45,8 @@ async function runBatchAsync(
   anthropicApiKey?: string,
   geminiApiKey?: string,
   imageQuality?: ImageQuality,
-  creativeBrief?: string
+  creativeBrief?: string,
+  referenceImageUrl?: string // "From example" mode
 ) {
   const CONCURRENCY = 3;
 
@@ -78,11 +79,14 @@ async function runBatchAsync(
       await Promise.all(
         chunk.map(async (creative) => {
           try {
-            const inspirationTemplates = await findMatchingTemplates(
-              brandDna,
-              creative.angle as CreativeAngle,
-              creative.format as AdFormat
-            );
+            // In "from example" mode, skip BDD matching — reference image is used directly
+            const inspirationTemplates = referenceImageUrl
+              ? undefined
+              : await findMatchingTemplates(
+                  brandDna,
+                  creative.angle as CreativeAngle,
+                  creative.format as AdFormat
+                );
 
             const generated = await generateCreative(
               brandDna,
@@ -91,7 +95,7 @@ async function runBatchAsync(
               userId,
               brandId,
               creative.id,
-              { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief }
+              { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief, referenceImageUrl }
             );
 
             const qaResult = await qaReviewCreative(
@@ -158,7 +162,8 @@ export async function POST(req: NextRequest) {
     angles: string[],
     language: string,
     imageQuality: ImageQuality,
-    creativeBrief: string | undefined;
+    creativeBrief: string | undefined,
+    referenceImageUrl: string | undefined;
   try {
     ({
       brandId,
@@ -168,6 +173,7 @@ export async function POST(req: NextRequest) {
       language = "fr",
       imageQuality = "flash",
       creativeBrief = undefined,
+      referenceImageUrl = undefined,
     } = await req.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -235,7 +241,8 @@ export async function POST(req: NextRequest) {
       user?.anthropicApiKey ?? undefined,
       user?.geminiApiKey ?? undefined,
       imageQuality,
-      creativeBrief
+      creativeBrief,
+      referenceImageUrl
     ).catch((err) => console.error("[batch-generate] runBatchAsync threw:", err));
   });
 

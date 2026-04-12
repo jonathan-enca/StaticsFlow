@@ -122,6 +122,8 @@ const SINGLE_STEPS = [
   { label: "Claude QA is reviewing the result…", pct: 90 },
 ];
 
+type GenerationMode = "database" | "example";
+
 export default function GenerateClient({ brandId, brandName, existingCreatives }: Props) {
   const [format, setFormat] = useState<AdFormat>("1080x1080");
   // angle is no longer user-selectable — defaults to "benefit" for single, auto-distributed for batch
@@ -131,6 +133,9 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
   const [batchSizeInput, setBatchSizeInput] = useState<string>("1");
   const [creativeBrief, setCreativeBrief] = useState<string>("");
   const [variantsMode, setVariantsMode] = useState(false);
+  // Generation mode: "database" uses BDD curated templates, "example" uses a single user-provided URL
+  const [generationMode, setGenerationMode] = useState<GenerationMode>("database");
+  const [referenceImageUrl, setReferenceImageUrl] = useState<string>("");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -215,6 +220,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
     setBatchData(null);
 
     const briefPayload = creativeBrief.trim() || undefined;
+    const refUrl = generationMode === "example" ? (referenceImageUrl.trim() || undefined) : undefined;
 
     try {
       if (batchSize > 1) {
@@ -229,6 +235,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             angles: ["benefit", "pain", "social_proof", "curiosity"],
             imageQuality,
             creativeBrief: briefPayload,
+            referenceImageUrl: refUrl,
           }),
         });
         const data = await res.json();
@@ -241,7 +248,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         const res = await fetch("/api/creatives/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, format, angle, variants: true, imageQuality, creativeBrief: briefPayload }),
+          body: JSON.stringify({ brandId, format, angle, variants: true, imageQuality, creativeBrief: briefPayload, referenceImageUrl: refUrl }),
         });
         stopStepProgress();
         const data = await res.json();
@@ -258,7 +265,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         const res = await fetch("/api/creatives/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, format, angle, imageQuality, creativeBrief: briefPayload }),
+          body: JSON.stringify({ brandId, format, angle, imageQuality, creativeBrief: briefPayload, referenceImageUrl: refUrl }),
         });
         stopStepProgress();
         const data = await res.json();
@@ -303,6 +310,56 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         <p className="text-sm text-[var(--sf-text-secondary)] mt-1">
           Claude writes the brief · Gemini generates the image · Claude QA reviews
         </p>
+      </div>
+
+      {/* Generation Mode selector — full width above the controls grid */}
+      <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5">
+        <h2 className="text-sm font-semibold text-[var(--sf-text-primary)] mb-3">Inspiration Source</h2>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setGenerationMode("database")}
+            className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-colors text-left ${
+              generationMode === "database"
+                ? "border-black bg-black text-white"
+                : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] hover:border-gray-400"
+            }`}
+          >
+            <div className="font-semibold mb-0.5">From our database</div>
+            <div className={`text-xs font-normal leading-snug ${generationMode === "database" ? "text-white/70" : "text-[var(--sf-text-secondary)]"}`}>
+              Uses our curated BDD of top-performing Meta Ads as visual reference for Claude &amp; Gemini
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setGenerationMode("example")}
+            className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-colors text-left ${
+              generationMode === "example"
+                ? "border-black bg-black text-white"
+                : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] hover:border-gray-400"
+            }`}
+          >
+            <div className="font-semibold mb-0.5">From a specific example</div>
+            <div className={`text-xs font-normal leading-snug ${generationMode === "example" ? "text-white/70" : "text-[var(--sf-text-secondary)]"}`}>
+              Paste a URL to an ad you want Claude &amp; Gemini to adapt for this brand
+            </div>
+          </button>
+        </div>
+        {/* URL input — only shown in "example" mode */}
+        {generationMode === "example" && (
+          <div className="mt-3">
+            <input
+              type="url"
+              placeholder="https://example.com/reference-ad.jpg"
+              value={referenceImageUrl}
+              onChange={(e) => setReferenceImageUrl(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-black transition-colors"
+            />
+            <p className="text-xs text-[var(--sf-text-secondary)] mt-1.5">
+              Must be a direct image URL (jpg, png, webp). Claude and Gemini will both see this ad as visual reference.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Controls — horizontal grid so everything is visible at a glance */}

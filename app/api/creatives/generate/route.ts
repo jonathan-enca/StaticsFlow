@@ -35,14 +35,19 @@ async function generateOne(
   anthropicApiKey?: string,
   geminiApiKey?: string,
   imageQuality?: ImageQuality,
-  creativeBrief?: string
+  creativeBrief?: string,
+  referenceImageUrl?: string // "From example" mode — skips BDD template lookup
 ) {
   const creative = await prisma.creative.create({
     data: { brandId, format, angle, status: "GENERATING", briefJson: {} },
   });
 
   try {
-    const inspirationTemplates = await findMatchingTemplates(brandDna, angle, format);
+    // In "from example" mode, skip BDD matching entirely — reference image is passed directly
+    const inspirationTemplates = referenceImageUrl
+      ? undefined
+      : await findMatchingTemplates(brandDna, angle, format);
+
     const generated = await generateCreative(
       brandDna,
       format,
@@ -50,7 +55,7 @@ async function generateOne(
       userId,
       brandId,
       creative.id,
-      { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief }
+      { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief, referenceImageUrl }
     );
     const qaResult = await qaReviewCreative(
       generated,
@@ -88,7 +93,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let brandId: string, format: AdFormat, angle: CreativeAngle, variants: boolean, imageQuality: ImageQuality, creativeBrief: string | undefined;
+  let brandId: string, format: AdFormat, angle: CreativeAngle, variants: boolean, imageQuality: ImageQuality, creativeBrief: string | undefined, referenceImageUrl: string | undefined;
   try {
     ({
       brandId,
@@ -97,6 +102,7 @@ export async function POST(req: NextRequest) {
       variants = false,
       imageQuality = "flash",
       creativeBrief = undefined,
+      referenceImageUrl = undefined,
     } = await req.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -125,7 +131,6 @@ export async function POST(req: NextRequest) {
   const geminiKey = user?.geminiApiKey ?? undefined;
 
   // Guard: require both BYOK keys before attempting generation.
-  // Without them, Claude and Gemini calls will throw unhelpful errors.
   if (!anthropicKey) {
     return NextResponse.json(
       { error: "Claude (Anthropic) API key is not set. Go to Settings → API Keys to add it." },
@@ -152,7 +157,8 @@ export async function POST(req: NextRequest) {
         anthropicKey,
         geminiKey,
         imageQuality,
-        creativeBrief
+        creativeBrief,
+        referenceImageUrl
       );
       return NextResponse.json(result, { status: 201 });
     } catch (err) {
@@ -179,7 +185,7 @@ export async function POST(req: NextRequest) {
   const userId = session.user.id as string;
   const results = await Promise.allSettled(
     variantAngles.map((a) =>
-      generateOne(brandDna, format, a, userId, brandId, anthropicKey, geminiKey, imageQuality, creativeBrief)
+      generateOne(brandDna, format, a, userId, brandId, anthropicKey, geminiKey, imageQuality, creativeBrief, referenceImageUrl)
     )
   );
 
