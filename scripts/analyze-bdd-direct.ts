@@ -32,12 +32,14 @@ const { values } = parseArgs({
   options: {
     limit:       { type: "string", default: "0" },   // 0 = all
     concurrency: { type: "string", default: "2" },
+    force:       { type: "boolean", default: false }, // re-analyze already-analyzed templates
   },
   strict: true,
 });
 
 const limitN      = parseInt(values["limit"] as string, 10);
 const concurrency = Math.max(1, parseInt(values["concurrency"] as string, 10));
+const force       = values["force"] as boolean;
 
 // ─────────────────────────────────────────────────────────────
 // Clients
@@ -197,8 +199,8 @@ async function main(): Promise<void> {
 
   const claude = new Anthropic({ apiKey: user.anthropicApiKey });
 
-  // Fetch unanalyzed templates
-  const whereClause = { analyzedAt: null };
+  // Fetch templates to analyze
+  const whereClause = force ? {} : { analyzedAt: null };
   const total = await (prisma as PrismaClient).template.count({ where: whereClause });
   const templates = await (prisma as PrismaClient).template.findMany({
     where: whereClause,
@@ -207,7 +209,8 @@ async function main(): Promise<void> {
     ...(limitN > 0 ? { take: limitN } : {}),
   });
 
-  console.log(`Found ${total} unanalyzed templates. Processing ${templates.length} (concurrency=${concurrency})…\n`);
+  const label = force ? "templates (force re-analyze)" : "unanalyzed templates";
+  console.log(`Found ${total} ${label}. Processing ${templates.length} (concurrency=${concurrency})…\n`);
 
   let done   = 0;
   let errors = 0;
