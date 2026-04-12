@@ -99,10 +99,23 @@ function badge(value: string) {
 // ──────────────────────────────────────────────────────────────
 // Main component
 // ──────────────────────────────────────────────────────────────
+interface FolderConfirm {
+  files: File[];
+  total: number;
+}
+
+interface FolderProgress {
+  done: number;
+  total: number;
+}
+
 export function BddManagerClient() {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const [folderConfirm, setFolderConfirm] = useState<FolderConfirm | null>(null);
+  const [folderProgress, setFolderProgress] = useState<FolderProgress | null>(null);
 
   // Library state
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -143,6 +156,13 @@ export function BddManagerClient() {
   useEffect(() => {
     fetchLibrary(1);
   }, [fetchLibrary]);
+
+  // webkitdirectory is not in React's type definitions — set it imperatively
+  useEffect(() => {
+    if (folderInputRef.current) {
+      folderInputRef.current.setAttribute("webkitdirectory", "");
+    }
+  }, []);
 
   // ──────────────────────────────────────────────────────────
   // Upload handling
@@ -233,6 +253,53 @@ export function BddManagerClient() {
       }
     }
   }, []);
+
+  // Folder import: upload in batches of 10 with overall progress tracking
+  const processFolderImport = useCallback(
+    async (files: File[]) => {
+      const total = files.length;
+      setFolderConfirm(null);
+      setFolderProgress({ done: 0, total });
+
+      const BATCH_SIZE = 10;
+      let done = 0;
+
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        const batch = files.slice(i, i + BATCH_SIZE);
+        const formData = new FormData();
+        batch.forEach((f) => formData.append("files", f));
+
+        try {
+          const res = await fetch("/api/admin/bdd/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
+          done += data.success ?? batch.length;
+        } catch {
+          done += batch.length; // keep progress moving even on network error
+        }
+
+        setFolderProgress({ done, total });
+      }
+
+      // Brief completion pause then reset and refresh library
+      setTimeout(() => {
+        setFolderProgress(null);
+        fetchLibrary(1);
+      }, 2000);
+    },
+    [fetchLibrary]
+  );
+
+  const onFolderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []).filter((f) =>
+      f.type.startsWith("image/")
+    );
+    e.target.value = "";
+    if (files.length === 0) return;
+    setFolderConfirm({ files, total: files.length });
+  };
 
   // Poll until analysis completes or errors (max 30s)
   const pollAnalysis = useCallback(
@@ -340,7 +407,7 @@ export function BddManagerClient() {
         onDragLeave={onDragLeave}
         onDrop={onDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`relative rounded-2xl border-2 border-dashed p-12 text-center cursor-pointer transition-colors mb-6 ${
+        className={`relative rounded-2xl border-2 border-dashed p-12 text-center cursor-pointer transition-colors ${
           isDragging
             ? "border-black bg-gray-100"
             : "border-gray-300 hover:border-gray-400 bg-white"
@@ -368,6 +435,80 @@ export function BddManagerClient() {
           JPG, PNG, WebP, GIF — up to 20 MB each — multiple files supported
         </p>
       </div>
+
+      {/* Folder import button + hidden folder input */}
+      <div className="mt-3 mb-6 flex items-center gap-3">
+        <input
+          ref={folderInputRef}
+          type="file"
+          multiple
+          accept="image/*"
+          className="hidden"
+          onChange={onFolderInputChange}
+        />
+        <button
+          onClick={() => folderInputRef.current?.click()}
+          disabled={!!folderProgress}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+          </svg>
+          Import folder
+        </button>
+        <p className="text-xs text-gray-400">
+          Select a folder to import thousands of images at once
+        </p>
+      </div>
+
+      {/* Folder confirmation banner */}
+      {folderConfirm && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 flex items-center gap-4">
+          <svg className="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+          </svg>
+          <p className="text-sm text-amber-800 flex-1">
+            <span className="font-semibold">{folderConfirm.total.toLocaleString()} images detected</span> — ready to import?
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setFolderConfirm(null)}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg bg-white hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => processFolderImport(folderConfirm.files)}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-black rounded-lg hover:bg-gray-800"
+            >
+              Start import
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Overall folder import progress */}
+      {folderProgress && (
+        <div className="mb-6 rounded-xl border border-gray-200 bg-white px-5 py-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-gray-700">
+              Importing folder…
+            </span>
+            <span className="text-sm text-gray-500">
+              {folderProgress.done.toLocaleString()} / {folderProgress.total.toLocaleString()}
+            </span>
+          </div>
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-black rounded-full transition-all duration-300"
+              style={{ width: `${Math.round((folderProgress.done / folderProgress.total) * 100)}%` }}
+            />
+          </div>
+          {folderProgress.done >= folderProgress.total && (
+            <p className="text-xs text-green-600 mt-2">Import complete ✓</p>
+          )}
+        </div>
+      )}
 
       {/* Upload queue */}
       {uploads.length > 0 && (
