@@ -348,20 +348,7 @@ AD PARAMETERS:
 - Hook angle: ${angle}
 - Language: ${brandDna.language}
 
-Return ONLY a valid JSON object with this exact structure. CRITICAL: do not use literal newlines or tab characters inside string values — the output must be parseable by JSON.parse() without any repair.
-
-{
-  "headline": "The main headline (max 6 words, punchy, uses the ${angle} angle)",
-  "subheadline": "Supporting line (max 12 words)",
-  "copy": "Body copy (max 20 words, ${brandDna.toneOfVoice} tone)",
-  "callToAction": "CTA button text (2-4 words)",
-  "angle": "${angle}",
-  "format": "${format}",
-  "layout": "Describe the visual layout: e.g., 'Product hero center, headline top-left, CTA bottom-right'",
-  "colorGuidance": "Exact color usage: primary ${brandDna.colors.primary} for background, accent ${brandDna.colors.accent} for CTA button",
-  "fontGuidance": "Font hierarchy: ${brandDna.fonts?.[0] ?? "sans-serif"} for headline bold, same regular for body",
-  "imagePrompt": "A detailed image generation prompt for Gemini. Keep this as a single continuous string — no line breaks. Include: exact layout, product placement, background color (${brandDna.colors.primary}), text positions, visual style. The ad must look like it was made by the brand's in-house design team. Make it specific to ${brandDna.productCategory}. Format: ${format}. Style: photorealistic, professional ad quality, no watermarks."
-}`;
+Call the submit_creative_brief tool with the completed brief. For imagePrompt: write it as one continuous paragraph with no line breaks — it must read as a single flowing instruction for the image model.`;
 
   // Build multimodal message: template images first (vision), then text prompt
   const messageContent = [
@@ -376,27 +363,46 @@ Return ONLY a valid JSON object with this exact structure. CRITICAL: do not use 
     { type: "text" as const, text: textPrompt },
   ];
 
+  // Use tool_use to get guaranteed valid JSON — eliminates all JSON parse errors.
+  // When tool_choice is forced, Claude serialises the output as structured data
+  // rather than text, so no regex stripping or repair is ever needed.
   const response = await client.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 4096,
+    tools: [
+      {
+        name: "submit_creative_brief",
+        description: "Submit the completed creative brief for this Meta Ad",
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            headline:      { type: "string", description: "Main headline — max 6 words, punchy, uses the hook angle" },
+            subheadline:   { type: "string", description: "Supporting line — max 12 words" },
+            copy:          { type: "string", description: `Body copy — max 20 words, ${brandDna.toneOfVoice} tone` },
+            callToAction:  { type: "string", description: "CTA button text — 2–4 words" },
+            angle:         { type: "string", description: "Creative angle (must match requested angle)" },
+            format:        { type: "string", description: "Ad format (must match requested format)" },
+            layout:        { type: "string", description: "Visual layout: product placement, text zones, hierarchy" },
+            colorGuidance: { type: "string", description: `Exact color usage — primary ${brandDna.colors.primary} for bg, accent ${brandDna.colors.accent} for CTA` },
+            fontGuidance:  { type: "string", description: `Font hierarchy — ${brandDna.fonts?.[0] ?? "sans-serif"} bold for headline, regular for body` },
+            imagePrompt:   { type: "string", description: `Gemini image generation prompt — single continuous paragraph, no line breaks. Include layout, product placement, bg color (${brandDna.colors.primary}), text positions, style. Must look like ${brandDna.name}'s in-house design team. Category: ${brandDna.productCategory}. Format: ${format}. Photorealistic, professional ad quality, no watermarks.` },
+          },
+          required: ["headline", "subheadline", "copy", "callToAction", "angle", "format", "layout", "colorGuidance", "fontGuidance", "imagePrompt"],
+        },
+      },
+    ],
+    tool_choice: { type: "tool", name: "submit_creative_brief" },
     messages: [{ role: "user", content: messageContent }],
   });
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
-  const cleaned = text
-    .replace(/^```(?:json)?\n?/m, "")
-    .replace(/\n?```$/m, "")
-    .trim();
-
-  // Robust parse: try direct first, then use state-machine repair for literal
-  // control chars that Claude sometimes emits inside string values.
-  let parsed: Omit<CreativeBrief, "brandDnaRef" | "inspirationTemplateIds">;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    parsed = JSON.parse(repairJsonStrings(cleaned));
+  // Extract from the tool_use block — guaranteed valid, no parsing needed.
+  const toolUseBlock = response.content.find((c) => c.type === "tool_use");
+  if (!toolUseBlock || toolUseBlock.type !== "tool_use") {
+    throw new Error("Claude did not return a creative brief via tool_use");
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsed = toolUseBlock.input as Omit<CreativeBrief, "brandDnaRef" | "inspirationTemplateIds">;
+
   const brief: CreativeBrief = {
     ...parsed,
     brandDnaRef: brandDna,

@@ -125,18 +125,8 @@ EVALUATION CRITERIA:
 6. Text legibility: Is any text in the image readable, correctly spelled, and on-brand?
 7. Ad quality: No watermarks, no obvious AI artifacts, professional Meta-ad standard?` : ""}
 
-Return ONLY a valid JSON object:
-{
-  "score": 0.0 to 1.0 (0.7+ = approved),
-  "approved": true or false,
-  "feedback": "One concise sentence summarizing the overall quality",
-  "brandConsistency": "Assessment of brand alignment",
-  "textQuality": "Assessment of copy quality",
-  "visualQuality": "${hasImage ? "Assessment of actual image: layout, colors, legibility, AI artifacts" : "Assessment of layout/visual concept from brief"}",
-  "improvements": ["Specific improvement 1 if score < 0.7", "Improvement 2"]
-}
-
-Be rigorous. A score of 0.9+ means this looks like premium agency work for this specific brand. Generic = 0.4 or below.`;
+Be rigorous. A score of 0.9+ means this looks like premium agency work for this specific brand. Generic = 0.4 or below.
+Call the submit_qa_review tool with your assessment.`;
 
   // Build the message content: include the image when available (Claude vision)
   type ContentBlock =
@@ -152,18 +142,36 @@ Be rigorous. A score of 0.9+ means this looks like premium agency work for this 
   }
   content.push({ type: "text", text: textSection });
 
+  // Use tool_use for guaranteed valid JSON — no parsing errors possible.
   const response = await client.messages.create({
     model: CLAUDE_QA_MODEL,
     max_tokens: 800,
+    tools: [
+      {
+        name: "submit_qa_review",
+        description: "Submit the QA review result for this ad creative",
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            score:            { type: "number",  description: "Quality score 0.0–1.0. 0.7+ = approved. Generic = 0.4 or below." },
+            approved:         { type: "boolean", description: "true if score >= 0.7" },
+            feedback:         { type: "string",  description: "One concise sentence summarising overall quality" },
+            brandConsistency: { type: "string",  description: "Assessment of brand alignment" },
+            textQuality:      { type: "string",  description: "Assessment of copy quality" },
+            visualQuality:    { type: "string",  description: hasImage ? "Assessment of actual image: layout, colors, legibility, AI artifacts" : "Assessment of layout/visual concept from brief" },
+            improvements:     { type: "array", items: { type: "string" }, description: "Specific improvements if score < 0.7" },
+          },
+          required: ["score", "approved", "feedback", "brandConsistency", "textQuality", "visualQuality", "improvements"],
+        },
+      },
+    ],
+    tool_choice: { type: "tool", name: "submit_qa_review" },
     messages: [{ role: "user", content }],
   });
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
-  const cleaned = text
-    .replace(/^```(?:json)?\n?/m, "")
-    .replace(/\n?```$/m, "")
-    .trim();
-
-  return JSON.parse(cleaned) as QAReviewResponse;
+  const toolUseBlock = response.content.find((c) => c.type === "tool_use");
+  if (!toolUseBlock || toolUseBlock.type !== "tool_use") {
+    throw new Error("Claude did not return a QA review via tool_use");
+  }
+  return toolUseBlock.input as QAReviewResponse;
 }
