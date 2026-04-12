@@ -225,25 +225,70 @@ function EditModal({ template, onClose, onSaved }: EditModalProps) {
             {field("Language", "language", ["fr","en","de","other"])}
           </div>
 
-          {/* Palette swatches (read-only display, updated by re-analysis) */}
-          {form.palette.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-[var(--sf-text-muted)] uppercase tracking-wide mb-1">
-                Palette (re-analyse to update)
+          {/* Palette editor — 0–4 editable hex colors */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-[var(--sf-text-muted)] uppercase tracking-wide">
+                Colour palette
               </p>
-              <div className="flex gap-2">
-                {form.palette.map((hex) => (
-                  <div key={hex} className="flex items-center gap-1.5">
-                    <span
-                      className="w-6 h-6 rounded-full border border-[var(--sf-border)]"
-                      style={{ backgroundColor: hex }}
-                    />
-                    <span className="text-xs text-[var(--sf-text-secondary)] font-mono">{hex}</span>
-                  </div>
-                ))}
-              </div>
+              {form.palette.length < 4 && (
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, palette: [...f.palette, "#000000"] }))}
+                  className="text-xs text-[var(--sf-accent)] hover:opacity-70 font-medium"
+                >
+                  + Add colour
+                </button>
+              )}
             </div>
-          )}
+            {form.palette.length === 0 && (
+              <p className="text-xs text-[var(--sf-text-muted)] italic">No colours set.</p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              {form.palette.map((hex, idx) => (
+                <div key={idx} className="flex items-center gap-1.5 bg-[var(--sf-bg-primary)] border border-[var(--sf-border)] rounded-lg px-2 py-1.5">
+                  {/* Native colour picker */}
+                  <input
+                    type="color"
+                    value={hex}
+                    onChange={(e) => {
+                      const updated = [...form.palette];
+                      updated[idx] = e.target.value.toUpperCase();
+                      setForm((f) => ({ ...f, palette: updated }));
+                    }}
+                    className="w-6 h-6 rounded cursor-pointer border-0 p-0 bg-transparent"
+                    title="Pick colour"
+                  />
+                  {/* Hex text input */}
+                  <input
+                    type="text"
+                    value={hex}
+                    maxLength={7}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      const updated = [...form.palette];
+                      updated[idx] = val;
+                      setForm((f) => ({ ...f, palette: updated }));
+                    }}
+                    className="w-20 text-xs font-mono bg-transparent border-0 focus:outline-none text-[var(--sf-text-primary)]"
+                    placeholder="#RRGGBB"
+                  />
+                  {/* Remove button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = form.palette.filter((_, i) => i !== idx);
+                      setForm((f) => ({ ...f, palette: updated }));
+                    }}
+                    className="text-[var(--sf-text-muted)] hover:text-red-500 transition-colors ml-1 leading-none"
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">

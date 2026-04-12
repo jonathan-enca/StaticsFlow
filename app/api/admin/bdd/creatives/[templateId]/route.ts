@@ -75,7 +75,7 @@ export async function PATCH(
     ) {
       return NextResponse.json({ error: "Invalid palette: must be array of hex colors" }, { status: 400 });
     }
-    data.palette = (body.palette as string[]).slice(0, 3);
+    data.palette = (body.palette as string[]).slice(0, 4); // allow 0–4 colors
   }
 
   if (Object.keys(data).length === 0) {
