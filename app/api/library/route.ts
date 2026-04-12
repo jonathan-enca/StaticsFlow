@@ -30,9 +30,9 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "48", 10)));
 
-  // Base filter: only show templates that have been analyzed (have metadata)
+  // Base filter: show all uploaded templates (analysis enriches metadata but
+  // unanalyzed templates still have sensible defaults and should be visible)
   const where: Prisma.TemplateWhereInput = {
-    analyzedAt: { not: null },
     ...(category && { category }),
     ...(type && { type }),
     ...(hookType && { hookType }),
