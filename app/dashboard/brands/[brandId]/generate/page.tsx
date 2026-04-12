@@ -36,7 +36,7 @@ export default async function GeneratePage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
-      <AppNavbar email={session.user?.email} />
+      <AppNavbar email={session.user?.email} brandId={brand.id} />
 
       <GenerateClient
         brandId={brand.id}
