@@ -7,6 +7,7 @@
 // STA-49: demo mode — investors can complete the full flow without real API keys
 
 import { useState } from "react";
+import { Key, Sparkles, PartyPopper, CheckCircle, ThumbsUp, RefreshCw } from "lucide-react";
 
 type Step = "url" | "dna" | "creative";
 const STEPS: Step[] = ["url", "dna", "creative"];
@@ -83,7 +84,7 @@ function Stepper({ step, onNavigate }: { step: Step; onNavigate: (s: Step) => vo
         {STEPS.map((s, i) => {
           const done = currentIdx > i;
           const active = step === s;
-          const clickable = done; // can only go back to completed steps
+          const clickable = done;
           return (
             <div key={s} className="flex items-center gap-3">
               <button
@@ -91,41 +92,57 @@ function Stepper({ step, onNavigate }: { step: Step; onNavigate: (s: Step) => vo
                 disabled={!clickable}
                 onClick={() => clickable && onNavigate(s)}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors
-                  ${active ? "bg-black text-white" : done ? "bg-green-500 text-white cursor-pointer hover:bg-green-600" : "bg-gray-100 text-gray-400 cursor-default"}`}
+                  ${active
+                    ? 'text-white'
+                    : done
+                    ? 'bg-green-500 text-white cursor-pointer hover:bg-green-600'
+                    : 'text-gray-400 cursor-default'
+                  }`}
+                style={active ? { background: 'var(--sf-accent)' } : done ? undefined : { background: 'var(--sf-bg-elevated)' }}
               >
                 {done ? "✓" : i + 1}
               </button>
-              <span className={`text-sm font-medium ${active ? "text-gray-900" : done ? "text-green-600 cursor-pointer" : "text-gray-400"}`}
+              <span
+                className={`text-sm font-medium ${done ? "text-green-500 cursor-pointer" : ""}`}
+                style={active
+                  ? { color: 'var(--sf-text-primary)' }
+                  : done
+                  ? undefined
+                  : { color: 'var(--sf-text-muted)' }
+                }
                 onClick={() => done && onNavigate(s)}
               >
                 {STEP_LABELS[s]}
               </span>
-              {i < STEPS.length - 1 && <div className="w-8 h-px bg-gray-200" />}
+              {i < STEPS.length - 1 && (
+                <div className="w-8 h-px" style={{ background: 'var(--sf-border)' }} />
+              )}
             </div>
           );
         })}
       </div>
 
-      {/* Mobile stepper (<640px): "Step 2/3 · Brand DNA" + progress bar */}
+      {/* Mobile stepper (<640px) */}
       <div className="sm:hidden mb-8">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--sf-text-muted)' }}>
             Step {currentIdx + 1}/{STEPS.length} · {STEP_LABELS[step]}
           </span>
           {currentIdx > 0 && (
             <button
               type="button"
               onClick={() => onNavigate(STEPS[currentIdx - 1])}
-              className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+              className="text-xs font-medium hover:opacity-80"
+              style={{ color: 'var(--sf-text-secondary)' }}
             >
               ← Back
             </button>
           )}
         </div>
-        <div className="w-full h-1 bg-gray-200 rounded-full overflow-hidden">
+        <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: 'var(--sf-bg-elevated)' }}>
           <div
-            className="h-full bg-black rounded-full transition-all duration-300"
-            style={{ width: `${((currentIdx + 1) / STEPS.length) * 100}%` }}
+            className="h-full rounded-full transition-all duration-300"
+            style={{ width: `${((currentIdx + 1) / STEPS.length) * 100}%`, background: 'var(--sf-accent)' }}
           />
         </div>
       </div>
@@ -137,7 +154,6 @@ function Stepper({ step, onNavigate }: { step: Step; onNavigate: (s: Step) => vo
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>("url");
   const [url, setUrl] = useState("");
-  // C5: keys expanded by default — no friction
   const [anthropicKey, setAnthropicKey] = useState("");
   const [geminiKey, setGeminiKey] = useState("");
 
@@ -152,21 +168,18 @@ export default function OnboardingPage() {
   // STA-49: demo mode flag — skips all API calls
   const [isDemo, setIsDemo] = useState(false);
 
-  // M7: navigate back to a completed step (clears subsequent data)
   function navigateTo(s: Step) {
     setStep(s);
     if (s === "url") { setDna(null); setCreative(null); setIsDemo(false); }
     if (s === "dna") { setCreative(null); }
   }
 
-  // STA-49: activate demo mode — load hardcoded Brand DNA instantly, no API call
   function handleTryDemo() {
     setIsDemo(true);
     setDna(DEMO_DNA);
     setStep("dna");
   }
 
-  // ── Step 1: Extract Brand DNA ─────────────────────────────────────────────
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();
     setExtractError(null);
@@ -195,14 +208,11 @@ export default function OnboardingPage() {
     setStep("dna");
   }
 
-  // ── Step 2: Generate first creative ──────────────────────────────────────
   async function handleGenerate() {
     if (!dna) return;
 
-    // STA-49: demo mode — load hardcoded creative instantly, no Gemini call
     if (isDemo) {
       setGenerating(true);
-      // Simulate a brief generation delay for UX realism
       await new Promise((r) => setTimeout(r, 1200));
       setGenerating(false);
       setCreative(DEMO_CREATIVE);
@@ -242,15 +252,26 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen" style={{ background: 'var(--sf-bg-primary)' }}>
       {/* Header */}
-      <div className="border-b border-gray-100 px-6 py-4 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
-          <span className="text-white font-bold text-sm">S</span>
+      <div
+        className="border-b px-6 py-4 flex items-center gap-3"
+        style={{ borderColor: 'var(--sf-border)' }}
+      >
+        <div
+          className="w-8 h-8 rounded-md flex items-center justify-center"
+          style={{ background: 'var(--sf-accent)' }}
+        >
+          <span className="text-white font-bold text-sm font-display">S</span>
         </div>
-        <span className="text-lg font-bold text-gray-900">StaticsFlow</span>
+        <span
+          className="text-lg font-bold font-display"
+          style={{ color: 'var(--sf-text-primary)', letterSpacing: '-0.02em' }}
+        >
+          <span style={{ color: 'var(--sf-accent)' }}>S</span>taticsFlow
+        </span>
         {isDemo && (
-          <span className="ml-2 text-xs font-semibold px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full">
+          <span className="ml-2 text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: 'rgba(255,159,10,0.15)', color: 'var(--sf-warning)' }}>
             Demo mode
           </span>
         )}
@@ -262,10 +283,13 @@ export default function OnboardingPage() {
         {/* ── Step 1: URL + API keys ─────────────────────────────────── */}
         {step === "url" && (
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-3">
+            <h1
+              className="text-3xl font-bold mb-3 font-display"
+              style={{ color: 'var(--sf-text-primary)', letterSpacing: '-0.02em' }}
+            >
               Paste your website URL
             </h1>
-            <p className="text-gray-500 mb-8">
+            <p className="mb-8" style={{ color: 'var(--sf-text-secondary)' }}>
               We&apos;ll extract your Brand DNA automatically in ~30 seconds — colors, fonts, tone of voice, key benefits, and more.
             </p>
 
@@ -276,28 +300,38 @@ export default function OnboardingPage() {
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://yourstore.com"
-                className="w-full px-4 py-3.5 text-lg rounded-xl border border-gray-200 text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-3.5 text-lg rounded-md border focus:outline-none focus:ring-2 font-sans"
+                style={{
+                  background: 'var(--sf-bg-secondary)',
+                  borderColor: 'var(--sf-border)',
+                  color: 'var(--sf-text-primary)',
+                  '--tw-ring-color': 'var(--sf-accent)',
+                } as React.CSSProperties}
               />
 
-              {/* C5: API keys expanded by default */}
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 flex items-center gap-2 bg-gray-50 border-b border-gray-200">
-                  <span className="text-base">🔑</span>
-                  <span className="text-sm font-semibold text-gray-700">Your API Keys</span>
-                  <span className="ml-auto text-xs text-gray-400">Used only for this session — never stored</span>
+              {/* API keys */}
+              <div className="rounded-md overflow-hidden border" style={{ borderColor: 'var(--sf-border)' }}>
+                <div
+                  className="px-4 py-3 flex items-center gap-2 border-b"
+                  style={{ background: 'var(--sf-bg-elevated)', borderColor: 'var(--sf-border)' }}
+                >
+                  <Key className="w-4 h-4" style={{ color: 'var(--sf-text-muted)' }} />
+                  <span className="text-sm font-semibold" style={{ color: 'var(--sf-text-primary)' }}>Your API Keys</span>
+                  <span className="ml-auto text-xs" style={{ color: 'var(--sf-text-muted)' }}>Used only for this session — never stored</span>
                 </div>
-                <div className="p-4 space-y-4 bg-white">
+                <div className="p-4 space-y-4" style={{ background: 'var(--sf-bg-secondary)' }}>
                   {/* Claude key */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-gray-600">
-                        Claude API Key <span className="text-red-400">*</span>
+                      <label className="text-xs font-semibold" style={{ color: 'var(--sf-text-secondary)' }}>
+                        Claude API Key <span style={{ color: 'var(--sf-error)' }}>*</span>
                       </label>
                       <a
                         href="https://console.anthropic.com/settings/keys"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                        className="text-xs font-medium hover:opacity-80"
+                        style={{ color: 'var(--sf-accent)' }}
                       >
                         Get key →
                       </a>
@@ -308,20 +342,26 @@ export default function OnboardingPage() {
                       onChange={(e) => setAnthropicKey(e.target.value)}
                       placeholder="sk-ant-..."
                       autoComplete="off"
-                      className="w-full px-3 py-2.5 text-sm rounded-lg border border-gray-200 text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white font-mono"
+                      className="w-full px-3 py-2.5 text-sm rounded-md border focus:outline-none font-mono"
+                      style={{
+                        background: 'var(--sf-bg-elevated)',
+                        borderColor: 'var(--sf-border)',
+                        color: 'var(--sf-text-primary)',
+                      }}
                     />
                   </div>
                   {/* Gemini key */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold text-gray-600">
-                        Gemini API Key <span className="text-red-400">*</span>
+                      <label className="text-xs font-semibold" style={{ color: 'var(--sf-text-secondary)' }}>
+                        Gemini API Key <span style={{ color: 'var(--sf-error)' }}>*</span>
                       </label>
                       <a
                         href="https://aistudio.google.com/app/apikey"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                        className="text-xs font-medium hover:opacity-80"
+                        style={{ color: 'var(--sf-accent)' }}
                       >
                         Get key →
                       </a>
@@ -332,17 +372,25 @@ export default function OnboardingPage() {
                       onChange={(e) => setGeminiKey(e.target.value)}
                       placeholder="AIza..."
                       autoComplete="off"
-                      className="w-full px-3 py-2.5 text-sm rounded-lg border border-gray-200 text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white font-mono"
+                      className="w-full px-3 py-2.5 text-sm rounded-md border focus:outline-none font-mono"
+                      style={{
+                        background: 'var(--sf-bg-elevated)',
+                        borderColor: 'var(--sf-border)',
+                        color: 'var(--sf-text-primary)',
+                      }}
                     />
                   </div>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs" style={{ color: 'var(--sf-text-muted)' }}>
                     StaticsFlow is BYOK — your keys power the AI, we never store them.
                   </p>
                 </div>
               </div>
 
               {extractError && (
-                <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
+                <p
+                  className="text-sm px-4 py-3 rounded-md border"
+                  style={{ color: 'var(--sf-error)', background: 'rgba(255,69,58,0.1)', borderColor: 'rgba(255,69,58,0.2)' }}
+                >
                   {extractError}
                 </p>
               )}
@@ -350,7 +398,8 @@ export default function OnboardingPage() {
               <button
                 type="submit"
                 disabled={extracting}
-                className="w-full py-3.5 px-6 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                className="w-full py-3.5 px-6 text-white font-semibold rounded-md hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ background: 'var(--sf-accent)' }}
               >
                 {extracting ? (
                   <>
@@ -366,21 +415,22 @@ export default function OnboardingPage() {
               </button>
             </form>
 
-            {/* STA-49: Demo mode divider + button */}
+            {/* STA-49: Demo mode */}
             <div className="mt-6 flex items-center gap-4">
-              <div className="flex-1 h-px bg-gray-100" />
-              <span className="text-xs text-gray-400 font-medium">or</span>
-              <div className="flex-1 h-px bg-gray-100" />
+              <div className="flex-1 h-px" style={{ background: 'var(--sf-border)' }} />
+              <span className="text-xs font-medium" style={{ color: 'var(--sf-text-muted)' }}>or</span>
+              <div className="flex-1 h-px" style={{ background: 'var(--sf-border)' }} />
             </div>
             <button
               type="button"
               onClick={handleTryDemo}
-              className="mt-4 w-full py-3 px-6 border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors text-sm flex items-center justify-center gap-2"
+              className="mt-4 w-full py-3 px-6 border text-sm font-semibold rounded-md hover:opacity-80 transition-opacity flex items-center justify-center gap-2"
+              style={{ borderColor: 'var(--sf-border)', color: 'var(--sf-text-primary)' }}
             >
-              <span>✨</span>
+              <Sparkles className="w-4 h-4" style={{ color: 'var(--sf-accent)' }} />
               Try Demo — see the full flow instantly
             </button>
-            <p className="mt-2 text-xs text-gray-400 text-center">
+            <p className="mt-2 text-xs text-center" style={{ color: 'var(--sf-text-muted)' }}>
               No API keys needed · Uses a sample fashion brand
             </p>
           </div>
@@ -391,8 +441,8 @@ export default function OnboardingPage() {
           <div>
             <div className="flex items-center gap-3 mb-6">
               <div
-                className="w-10 h-10 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden"
-                style={{ backgroundColor: dna.colors.primary }}
+                className="w-10 h-10 rounded-md border flex items-center justify-center overflow-hidden"
+                style={{ backgroundColor: dna.colors.primary, borderColor: 'var(--sf-border)' }}
               >
                 {dna.logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -402,30 +452,38 @@ export default function OnboardingPage() {
                 )}
               </div>
               <div>
-                <h2 className="font-bold text-gray-900">{dna.name}</h2>
-                <p className="text-sm text-gray-500">{dna.url}</p>
+                <h2 className="font-bold" style={{ color: 'var(--sf-text-primary)' }}>{dna.name}</h2>
+                <p className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{dna.url}</p>
               </div>
-              <span className="ml-auto text-xs font-medium px-2.5 py-1 bg-green-100 text-green-700 rounded-full">
+              <span
+                className="ml-auto text-xs font-medium px-2.5 py-1 rounded-full"
+                style={{ background: 'rgba(52,199,89,0.15)', color: 'var(--sf-success)' }}
+              >
                 ✓ Brand DNA extracted
               </span>
             </div>
 
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Brand DNA is ready</h1>
-            <p className="text-gray-500 mb-8">
+            <h1
+              className="text-3xl font-bold mb-2 font-display"
+              style={{ color: 'var(--sf-text-primary)', letterSpacing: '-0.02em' }}
+            >
+              Your Brand DNA is ready
+            </h1>
+            <p className="mb-8" style={{ color: 'var(--sf-text-secondary)' }}>
               Review and validate the extracted brand profile before generating your first creative.
             </p>
 
             <div className="space-y-4 mb-8">
               {/* Colors */}
-              <div className="border border-gray-200 rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Brand Colors</h3>
+              <div className="rounded-md p-5 border" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
+                <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--sf-text-primary)' }}>Brand Colors</h3>
                 <div className="flex gap-3">
                   {(["primary", "secondary", "accent"] as const).map((key) => (
                     <div key={key} className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg border border-gray-200" style={{ backgroundColor: dna.colors[key] }} />
+                      <div className="w-8 h-8 rounded-md border" style={{ backgroundColor: dna.colors[key], borderColor: 'var(--sf-border)' }} />
                       <div>
-                        <div className="text-xs text-gray-500 capitalize">{key}</div>
-                        <div className="text-xs font-mono text-gray-900">{dna.colors[key]}</div>
+                        <div className="text-xs capitalize" style={{ color: 'var(--sf-text-muted)' }}>{key}</div>
+                        <div className="text-xs font-mono" style={{ color: 'var(--sf-text-primary)' }}>{dna.colors[key]}</div>
                       </div>
                     </div>
                   ))}
@@ -433,18 +491,18 @@ export default function OnboardingPage() {
               </div>
 
               {/* Tone & Voice */}
-              <div className="border border-gray-200 rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">Tone of Voice</h3>
-                <p className="text-sm text-gray-600">{dna.toneOfVoice}</p>
+              <div className="rounded-md p-5 border" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
+                <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--sf-text-primary)' }}>Tone of Voice</h3>
+                <p className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{dna.toneOfVoice}</p>
               </div>
 
               {/* Key Benefits */}
-              <div className="border border-gray-200 rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Key Benefits</h3>
+              <div className="rounded-md p-5 border" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
+                <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--sf-text-primary)' }}>Key Benefits</h3>
                 <ul className="space-y-1">
                   {dna.keyBenefits.slice(0, 3).map((benefit, i) => (
-                    <li key={i} className="text-sm text-gray-600 flex gap-2">
-                      <span className="text-green-500 font-bold">✓</span>
+                    <li key={i} className="text-sm flex gap-2" style={{ color: 'var(--sf-text-secondary)' }}>
+                      <span className="font-bold" style={{ color: 'var(--sf-success)' }}>✓</span>
                       {benefit}
                     </li>
                   ))}
@@ -453,19 +511,25 @@ export default function OnboardingPage() {
 
               {/* Personas */}
               {dna.personas.length > 0 && (
-                <div className="border border-gray-200 rounded-xl p-5">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Target Personas</h3>
-                  <p className="text-sm text-gray-600">{dna.personas[0]}</p>
+                <div className="rounded-md p-5 border" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
+                  <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--sf-text-primary)' }}>Target Personas</h3>
+                  <p className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{dna.personas[0]}</p>
                 </div>
               )}
             </div>
 
             {/* Gemini key reminder — hidden in demo mode */}
             {!isDemo && !geminiKey && (
-              <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <div
+                className="mb-4 p-4 rounded-md border"
+                style={{ background: 'rgba(255,159,10,0.1)', borderColor: 'rgba(255,159,10,0.25)' }}
+              >
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-semibold text-amber-800">🔑 Gemini API key needed</p>
-                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-xs text-amber-700 font-medium hover:underline">Get key →</a>
+                  <p className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--sf-warning)' }}>
+                    <Key className="w-4 h-4" />
+                    Gemini API key needed
+                  </p>
+                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-xs font-medium hover:opacity-80" style={{ color: 'var(--sf-warning)' }}>Get key →</a>
                 </div>
                 <input
                   type="password"
@@ -473,13 +537,17 @@ export default function OnboardingPage() {
                   onChange={(e) => setGeminiKey(e.target.value)}
                   placeholder="AIza..."
                   autoComplete="off"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-amber-200 text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white font-mono"
+                  className="w-full px-3 py-2 text-sm rounded-md border focus:outline-none font-mono"
+                  style={{ background: 'var(--sf-bg-elevated)', borderColor: 'var(--sf-border)', color: 'var(--sf-text-primary)' }}
                 />
               </div>
             )}
 
             {generateError && (
-              <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg mb-4">
+              <p
+                className="text-sm px-4 py-3 rounded-md border mb-4"
+                style={{ color: 'var(--sf-error)', background: 'rgba(255,69,58,0.1)', borderColor: 'rgba(255,69,58,0.2)' }}
+              >
                 {generateError}
               </p>
             )}
@@ -487,7 +555,8 @@ export default function OnboardingPage() {
             <button
               onClick={handleGenerate}
               disabled={generating}
-              className="w-full py-3.5 px-6 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              className="w-full py-3.5 px-6 text-white font-semibold rounded-md hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ background: 'var(--sf-accent)' }}
             >
               {generating ? (
                 <>
@@ -502,7 +571,11 @@ export default function OnboardingPage() {
               )}
             </button>
 
-            <button onClick={() => navigateTo("url")} className="mt-3 w-full py-2.5 text-sm text-gray-500 hover:text-gray-700">
+            <button
+              onClick={() => navigateTo("url")}
+              className="mt-3 w-full py-2.5 text-sm hover:opacity-80"
+              style={{ color: 'var(--sf-text-secondary)' }}
+            >
               ← Try a different URL
             </button>
           </div>
@@ -512,14 +585,14 @@ export default function OnboardingPage() {
         {step === "creative" && creative && dna && (
           <div>
             <div className="flex items-center gap-2 mb-6">
-              <span className="text-2xl">🎉</span>
-              <span className="text-lg font-bold text-gray-900">
+              <PartyPopper className="w-6 h-6" style={{ color: 'var(--sf-accent)' }} />
+              <span className="text-lg font-bold" style={{ color: 'var(--sf-text-primary)' }}>
                 Your first on-brand creative is ready!
               </span>
             </div>
 
             {/* Creative preview */}
-            <div className="rounded-2xl border border-gray-200 overflow-hidden mb-6">
+            <div className="rounded-lg border overflow-hidden mb-6" style={{ borderColor: 'var(--sf-border)' }}>
               {creative.imageUrl &&
               creative.imageUrl.startsWith("data:image/png;base64,") &&
               creative.imageUrl.length > 100 ? (
@@ -533,21 +606,21 @@ export default function OnboardingPage() {
                   className="w-full aspect-square flex flex-col items-center justify-center p-8 text-center"
                   style={{ backgroundColor: dna.colors.primary + "20" }}
                 >
-                  <div className="w-16 h-16 rounded-xl mb-4 flex items-center justify-center" style={{ backgroundColor: dna.colors.primary }}>
+                  <div className="w-16 h-16 rounded-md mb-4 flex items-center justify-center" style={{ backgroundColor: dna.colors.primary }}>
                     <span className="text-white font-bold text-2xl">{dna.name.charAt(0)}</span>
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">{creative.briefJson?.headline ?? "Your Headline Here"}</h2>
-                  <p className="text-gray-600 mb-4">{creative.briefJson?.copy ?? "Your ad copy here"}</p>
-                  <div className="px-6 py-2.5 rounded-lg font-semibold text-sm" style={{ backgroundColor: dna.colors.accent, color: "#fff" }}>
+                  <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--sf-text-primary)' }}>{creative.briefJson?.headline ?? "Your Headline Here"}</h2>
+                  <p className="mb-4" style={{ color: 'var(--sf-text-secondary)' }}>{creative.briefJson?.copy ?? "Your ad copy here"}</p>
+                  <div className="px-6 py-2.5 rounded-md font-semibold text-sm" style={{ backgroundColor: dna.colors.accent, color: "#fff" }}>
                     {creative.briefJson?.callToAction ?? "Shop Now"}
                   </div>
                   {isDemo && (
-                    <p className="mt-4 text-xs text-gray-400">
+                    <p className="mt-4 text-xs" style={{ color: 'var(--sf-text-muted)' }}>
                       Demo mode — connect your Gemini key to generate real AI images
                     </p>
                   )}
                   {!isDemo && (
-                    <p className="mt-4 text-xs text-gray-400">Configure R2 storage to see the full Gemini-generated image</p>
+                    <p className="mt-4 text-xs" style={{ color: 'var(--sf-text-muted)' }}>Configure R2 storage to see the full Gemini-generated image</p>
                   )}
                 </div>
               )}
@@ -555,18 +628,26 @@ export default function OnboardingPage() {
 
             {/* QA score */}
             {creative.score !== null && (
-              <div className="flex items-center gap-3 mb-6 p-4 bg-gray-50 rounded-xl">
-                <div className="text-2xl">
-                  {creative.score >= 0.8 ? "✅" : creative.score >= 0.7 ? "👍" : "🔄"}
+              <div
+                className="flex items-center gap-3 mb-6 p-4 rounded-md"
+                style={{ background: 'var(--sf-bg-secondary)' }}
+              >
+                <div>
+                  {creative.score >= 0.8
+                    ? <CheckCircle className="w-6 h-6" style={{ color: 'var(--sf-success)' }} />
+                    : creative.score >= 0.7
+                    ? <ThumbsUp className="w-6 h-6 text-yellow-500" />
+                    : <RefreshCw className="w-6 h-6 text-orange-500" />
+                  }
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-gray-900">
+                  <div className="text-sm font-semibold" style={{ color: 'var(--sf-text-primary)' }}>
                     Brand consistency score:{" "}
-                    <span className={creative.score >= 0.8 ? "text-green-600" : creative.score >= 0.7 ? "text-yellow-600" : "text-orange-600"}>
+                    <span style={{ color: creative.score >= 0.8 ? 'var(--sf-success)' : creative.score >= 0.7 ? '#f59e0b' : '#f97316' }}>
                       {Math.round(creative.score * 100)}%
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs" style={{ color: 'var(--sf-text-muted)' }}>
                     Claude QA review — {creative.score >= 0.7 ? "approved" : "review recommended"}
                   </div>
                 </div>
@@ -581,33 +662,37 @@ export default function OnboardingPage() {
                   <a
                     href={creative.imageUrl}
                     download="staticsflow-creative.png"
-                    className="flex-1 py-3 px-4 bg-black text-white text-sm font-semibold rounded-xl hover:bg-gray-800 transition-colors text-center"
+                    className="flex-1 py-3 px-4 text-white text-sm font-semibold rounded-md hover:opacity-90 transition-opacity text-center"
+                    style={{ background: 'var(--sf-accent)' }}
                   >
                     Download Creative
                   </a>
                 )}
               <a
                 href="/signup"
-                className="flex-1 py-3 px-4 border border-gray-200 text-gray-900 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors text-center"
+                className="flex-1 py-3 px-4 border text-sm font-semibold rounded-md hover:opacity-80 transition-opacity text-center"
+                style={{ borderColor: 'var(--sf-border)', color: 'var(--sf-text-primary)' }}
               >
                 Create account to save →
               </a>
             </div>
 
-            {/* M7: back navigation from step 3 */}
             <div className="flex gap-3 mt-3">
               <button
                 onClick={() => navigateTo("dna")}
-                className="flex-1 py-2.5 text-sm text-gray-500 hover:text-gray-700"
+                className="flex-1 py-2.5 text-sm hover:opacity-80"
+                style={{ color: 'var(--sf-text-secondary)' }}
               >
                 ← Back to Brand DNA
               </button>
               <button
                 onClick={handleGenerate}
                 disabled={generating}
-                className="flex-1 py-2.5 text-sm text-purple-600 hover:text-purple-700 font-medium disabled:opacity-50"
+                className="flex-1 py-2.5 text-sm font-medium hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-1"
+                style={{ color: 'var(--sf-accent)' }}
               >
-                {generating ? "Generating…" : "↺ Generate another"}
+                <RefreshCw className="w-3.5 h-3.5" />
+                {generating ? "Generating…" : "Generate another"}
               </button>
             </div>
           </div>

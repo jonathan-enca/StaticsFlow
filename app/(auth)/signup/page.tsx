@@ -18,7 +18,6 @@ export default function SignupPage() {
     setError(null);
     setLoading(true);
 
-    // 1. Create the account
     const res = await fetch("/api/auth/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -32,7 +31,6 @@ export default function SignupPage() {
       return;
     }
 
-    // 2. Auto-sign-in after successful signup
     const signInRes = await signIn("credentials", {
       email,
       password,
@@ -44,7 +42,6 @@ export default function SignupPage() {
     if (signInRes?.error) {
       setError("Account created but sign-in failed. Please log in manually.");
     } else {
-      // Redirect to onboarding flow
       router.push("/onboarding");
     }
   }
@@ -53,13 +50,18 @@ export default function SignupPage() {
     <div className="w-full max-w-md">
       {/* Logo */}
       <div className="mb-8 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-black flex items-center justify-center">
-          <span className="text-white font-bold">S</span>
+        <div
+          className="w-9 h-9 rounded-md flex items-center justify-center"
+          style={{ background: 'var(--sf-accent)' }}
+        >
+          <span className="text-white font-bold font-display">S</span>
         </div>
-        <span className="text-xl font-bold text-gray-900">StaticsFlow</span>
+        <span className="text-xl font-bold text-gray-900 font-display" style={{ letterSpacing: '-0.02em' }}>
+          <span style={{ color: 'var(--sf-accent)' }}>S</span>taticsFlow
+        </span>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">
           Start for free
         </h1>
@@ -81,7 +83,8 @@ export default function SignupPage() {
               autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+              className="w-full px-4 py-2.5 rounded-md border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent text-sm"
+              style={{ '--tw-ring-color': 'var(--sf-accent)' } as React.CSSProperties}
               placeholder="Your name"
             />
           </div>
@@ -100,7 +103,8 @@ export default function SignupPage() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+              className="w-full px-4 py-2.5 rounded-md border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent text-sm"
+              style={{ '--tw-ring-color': 'var(--sf-accent)' } as React.CSSProperties}
               placeholder="you@company.com"
             />
           </div>
@@ -120,13 +124,14 @@ export default function SignupPage() {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+              className="w-full px-4 py-2.5 rounded-md border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent text-sm"
+              style={{ '--tw-ring-color': 'var(--sf-accent)' } as React.CSSProperties}
               placeholder="Min. 8 characters"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 px-4 py-2.5 rounded-lg">
+            <p className="text-sm text-red-600 bg-red-50 px-4 py-2.5 rounded-md">
               {error}
             </p>
           )}
@@ -134,7 +139,8 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 bg-black text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-2.5 px-4 text-white text-sm font-semibold rounded-md hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: 'var(--sf-accent)' }}
           >
             {loading ? "Creating account…" : "Create free account"}
           </button>
@@ -146,7 +152,7 @@ export default function SignupPage() {
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{" "}
-          <Link href="/login" className="text-purple-600 font-medium hover:underline">
+          <Link href="/login" className="font-medium hover:opacity-80" style={{ color: 'var(--sf-accent)' }}>
             Sign in
           </Link>
         </p>

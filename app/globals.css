@@ -6,21 +6,49 @@
 @source "../components/**/*.{tsx,ts,jsx,js}";
 @source "../lib/**/*.{tsx,ts,jsx,js}";
 
-/* StaticsFlow global styles */
+/* ─── StaticsFlow Design Tokens ──────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand accent — CEO-approved deep violet */
+  --sf-accent: #6C47FF;
+  --sf-accent-hover: #7D5FFF;
+  --sf-accent-muted: rgba(108, 71, 255, 0.12);
+
+  /* Semantic status */
+  --sf-success: #34C759;
+  --sf-warning: #FF9F0A;
+  --sf-error:   #FF453A;
+
+  /* Light theme (default — used for landing page & auth pages) */
+  --sf-bg-primary:    #FAFAFA;
+  --sf-bg-secondary:  #FFFFFF;
+  --sf-bg-elevated:   #F5F5F7;
+  --sf-border:        #E5E5EA;
+  --sf-text-primary:  #1D1D1F;
+  --sf-text-secondary:#636366;
+  --sf-text-muted:    #8E8E93;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Dark theme — applied on app pages via data-theme="dark" on <html> */
+[data-theme='dark'] {
+  --sf-bg-primary:    #0C0C0E;
+  --sf-bg-secondary:  #141416;
+  --sf-bg-elevated:   #1C1C20;
+  --sf-border:        #2A2A2E;
+  --sf-text-primary:  #F5F5F7;
+  --sf-text-secondary:#8E8E93;
+  --sf-text-muted:    #636366;
 }
 
+/* ─── Base styles ────────────────────────────────────────────────────────── */
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--sf-bg-primary);
+  color: var(--sf-text-primary);
   font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Satoshi — display font for headlines & logo (loaded via Fontshare CDN) */
+.font-display {
+  font-family: 'Satoshi', var(--font-inter), system-ui, sans-serif;
 }

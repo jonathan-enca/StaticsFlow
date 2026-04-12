@@ -35,37 +35,51 @@ export default async function LibraryPage() {
   });
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen" style={{ background: 'var(--sf-bg-primary)' }}>
       {/* Navbar */}
-      <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+      <nav
+        className="px-6 py-4 flex items-center justify-between border-b"
+        style={{ background: 'var(--sf-bg-secondary)', borderColor: 'var(--sf-border)' }}
+      >
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
-              <span className="text-white font-bold text-sm">S</span>
+            <div
+              className="w-8 h-8 rounded-md flex items-center justify-center"
+              style={{ background: 'var(--sf-accent)' }}
+            >
+              <span className="text-white font-bold text-sm font-display">S</span>
             </div>
-            <span className="text-lg font-bold text-gray-900">StaticsFlow</span>
+            <span
+              className="text-lg font-bold font-display"
+              style={{ color: 'var(--sf-text-primary)', letterSpacing: '-0.02em' }}
+            >
+              <span style={{ color: 'var(--sf-accent)' }}>S</span>taticsFlow
+            </span>
           </div>
           <nav className="flex items-center gap-1">
             <a
               href="/dashboard"
-              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
+              className="px-3 py-1.5 text-sm rounded-md transition-opacity hover:opacity-80"
+              style={{ color: 'var(--sf-text-secondary)' }}
             >
               Dashboard
             </a>
             <a
               href="/library"
-              className="px-3 py-1.5 text-sm font-medium text-gray-900 bg-gray-100 rounded-lg"
+              className="px-3 py-1.5 text-sm font-medium rounded-md"
+              style={{ color: 'var(--sf-text-primary)', background: 'var(--sf-bg-elevated)' }}
             >
               Library
             </a>
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">{session.user?.email}</span>
+          <span className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{session.user?.email}</span>
           <form action="/api/auth/signout" method="post">
             <button
               type="submit"
-              className="text-sm text-gray-600 hover:text-gray-900 font-medium"
+              className="text-sm font-medium hover:opacity-80 transition-opacity"
+              style={{ color: 'var(--sf-text-secondary)' }}
             >
               Sign out
             </button>
@@ -76,10 +90,13 @@ export default async function LibraryPage() {
       {/* Header */}
       <div className="max-w-7xl mx-auto px-6 py-10">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <h1
+            className="text-3xl font-bold mb-2 font-display"
+            style={{ color: 'var(--sf-text-primary)', letterSpacing: '-0.01em' }}
+          >
             Inspiration Library
           </h1>
-          <p className="text-gray-500">
+          <p style={{ color: 'var(--sf-text-secondary)' }}>
             {totalTemplates > 0
               ? `${totalTemplates.toLocaleString()} curated creatives — updated continuously.`
               : "Creatives will appear here once uploaded in the BDD Manager."}
@@ -92,12 +109,12 @@ export default async function LibraryPage() {
             <div className="flex gap-8">
               <div className="w-56 flex-shrink-0 space-y-3">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-8 bg-gray-100 rounded-lg animate-pulse" />
+                  <div key={i} className="h-8 rounded-md animate-pulse" style={{ background: 'var(--sf-bg-elevated)' }} />
                 ))}
               </div>
               <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="aspect-square bg-gray-100 rounded-2xl animate-pulse" />
+                  <div key={i} className="aspect-square rounded-lg animate-pulse" style={{ background: 'var(--sf-bg-elevated)' }} />
                 ))}
               </div>
             </div>

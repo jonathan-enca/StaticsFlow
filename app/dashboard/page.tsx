@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import type { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
+import { Sparkles } from "lucide-react";
 
 export default async function DashboardPage() {
   let session;
@@ -20,37 +21,51 @@ export default async function DashboardPage() {
   });
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen" style={{ background: 'var(--sf-bg-primary)' }}>
       {/* Navbar */}
-      <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+      <nav
+        className="px-6 py-4 flex items-center justify-between border-b"
+        style={{ background: 'var(--sf-bg-secondary)', borderColor: 'var(--sf-border)' }}
+      >
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
-              <span className="text-white font-bold text-sm">S</span>
+            <div
+              className="w-8 h-8 rounded-md flex items-center justify-center"
+              style={{ background: 'var(--sf-accent)' }}
+            >
+              <span className="text-white font-bold text-sm font-display">S</span>
             </div>
-            <span className="text-lg font-bold text-gray-900">StaticsFlow</span>
+            <span
+              className="text-lg font-bold font-display"
+              style={{ color: 'var(--sf-text-primary)', letterSpacing: '-0.02em' }}
+            >
+              <span style={{ color: 'var(--sf-accent)' }}>S</span>taticsFlow
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <a
               href="/dashboard"
-              className="px-3 py-1.5 text-sm font-medium text-gray-900 bg-gray-100 rounded-lg"
+              className="px-3 py-1.5 text-sm font-medium rounded-md"
+              style={{ color: 'var(--sf-text-primary)', background: 'var(--sf-bg-elevated)' }}
             >
               Dashboard
             </a>
             <a
               href="/library"
-              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-colors"
+              className="px-3 py-1.5 text-sm rounded-md transition-colors hover:opacity-80"
+              style={{ color: 'var(--sf-text-secondary)' }}
             >
               Library
             </a>
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">{session.user?.email}</span>
+          <span className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{session.user?.email}</span>
           <form action="/api/auth/signout" method="post">
             <button
               type="submit"
-              className="text-sm text-gray-600 hover:text-gray-900 font-medium"
+              className="text-sm font-medium hover:opacity-80 transition-opacity"
+              style={{ color: 'var(--sf-text-secondary)' }}
             >
               Sign out
             </button>
@@ -62,14 +77,20 @@ export default async function DashboardPage() {
       <div className="max-w-5xl mx-auto px-6 py-12">
         <div className="flex items-center justify-between mb-10">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-1">Dashboard</h1>
-            <p className="text-gray-500">
+            <h1
+              className="text-3xl font-bold mb-1 font-display"
+              style={{ color: 'var(--sf-text-primary)', letterSpacing: '-0.01em' }}
+            >
+              Dashboard
+            </h1>
+            <p style={{ color: 'var(--sf-text-secondary)' }}>
               Welcome back, {session.user?.name ?? session.user?.email}
             </p>
           </div>
           <a
             href="/onboarding"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-black text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-sm font-semibold rounded-md hover:opacity-90 transition-opacity"
+            style={{ background: 'var(--sf-accent)' }}
           >
             + New brand
           </a>
@@ -77,17 +98,29 @@ export default async function DashboardPage() {
 
         {brands.length === 0 ? (
           /* Empty state */
-          <div className="rounded-2xl border-2 border-dashed border-gray-200 p-16 text-center">
-            <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">✨</span>
+          <div
+            className="rounded-lg border-2 border-dashed p-16 text-center"
+            style={{ borderColor: 'var(--sf-border)' }}
+          >
+            <div
+              className="w-12 h-12 rounded-md flex items-center justify-center mx-auto mb-4"
+              style={{ background: 'var(--sf-accent-muted)' }}
+            >
+              <Sparkles className="w-6 h-6" style={{ color: 'var(--sf-accent)' }} />
             </div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">No brands yet</h2>
-            <p className="text-gray-500 text-sm mb-6">
+            <h2
+              className="text-lg font-semibold mb-2"
+              style={{ color: 'var(--sf-text-primary)' }}
+            >
+              No brands yet
+            </h2>
+            <p className="text-sm mb-6" style={{ color: 'var(--sf-text-secondary)' }}>
               Start by extracting your Brand DNA from your website URL.
             </p>
             <a
               href="/onboarding"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-black text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-sm font-semibold rounded-md hover:opacity-90 transition-opacity"
+              style={{ background: 'var(--sf-accent)' }}
             >
               Extract Brand DNA →
             </a>
@@ -103,44 +136,60 @@ export default async function DashboardPage() {
               return (
                 <div
                   key={brand.id}
-                  className="bg-white rounded-2xl border border-gray-200 p-6 flex items-center justify-between gap-4 hover:border-gray-300 transition-colors"
+                  className="rounded-lg border p-6 flex items-center justify-between gap-4 hover:opacity-90 transition-opacity"
+                  style={{ background: 'var(--sf-bg-secondary)', borderColor: 'var(--sf-border)' }}
                 >
                   {/* Color swatch + info */}
                   <div className="flex items-center gap-4 min-w-0">
                     <div
-                      className="w-12 h-12 rounded-xl flex-shrink-0"
+                      className="w-12 h-12 rounded-md flex-shrink-0"
                       style={{ backgroundColor: primaryColor }}
                     />
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate">{brand.name}</h3>
-                      <p className="text-sm text-gray-500 truncate">{brand.url}</p>
+                      <h3
+                        className="font-semibold truncate"
+                        style={{ color: 'var(--sf-text-primary)' }}
+                      >
+                        {brand.name}
+                      </h3>
+                      <p
+                        className="text-sm truncate"
+                        style={{ color: 'var(--sf-text-secondary)' }}
+                      >
+                        {brand.url}
+                      </p>
                     </div>
                   </div>
 
                   {/* Enrichment status */}
                   <div className="flex items-center gap-4 flex-shrink-0">
                     <div className="text-right hidden sm:block">
-                      <p className="text-xs text-gray-400 mb-1">Brand DNA enrichment</p>
+                      <p className="text-xs mb-1" style={{ color: 'var(--sf-text-muted)' }}>Brand DNA enrichment</p>
                       <div className="flex items-center gap-2">
-                        <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="w-24 h-1.5 rounded-full overflow-hidden"
+                          style={{ background: 'var(--sf-bg-elevated)' }}
+                        >
                           <div
-                            className="h-full bg-purple-500 rounded-full transition-all"
-                            style={{ width: `${enrichmentScore}%` }}
+                            className="h-full rounded-full transition-all"
+                            style={{ width: `${enrichmentScore}%`, background: 'var(--sf-accent)' }}
                           />
                         </div>
-                        <span className="text-xs text-gray-500">{enrichmentScore}%</span>
+                        <span className="text-xs" style={{ color: 'var(--sf-text-secondary)' }}>{enrichmentScore}%</span>
                       </div>
                     </div>
                     <div className="flex gap-2">
                       <a
                         href={`/dashboard/brands/${brand.id}`}
-                        className="px-3 py-2 text-sm font-medium bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors whitespace-nowrap"
+                        className="px-3 py-2 text-sm font-medium rounded-md hover:opacity-80 transition-opacity whitespace-nowrap"
+                        style={{ background: 'var(--sf-accent-muted)', color: 'var(--sf-accent)' }}
                       >
                         Enrich DNA
                       </a>
                       <a
                         href={`/dashboard/brands/${brand.id}/generate`}
-                        className="px-3 py-2 text-sm font-medium bg-black text-white rounded-lg hover:bg-gray-800 transition-colors whitespace-nowrap"
+                        className="px-3 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity whitespace-nowrap"
+                        style={{ background: 'var(--sf-accent)' }}
                       >
                         Generate →
                       </a>

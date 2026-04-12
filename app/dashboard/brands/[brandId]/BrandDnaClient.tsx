@@ -331,7 +331,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
         <div className="space-y-6">
           <div className="flex items-center gap-2 mb-2">
             <h2 className="text-lg font-bold text-gray-900">Auto-Extracted</h2>
-            <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full font-medium">
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--sf-accent-muted)', color: 'var(--sf-accent)' }}>
               Editable
             </span>
           </div>
@@ -465,7 +465,8 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
                 type="button"
                 onClick={extractReviews}
                 disabled={extractingReviews || !reviewsUrl.trim()}
-                className="px-4 py-2 text-sm font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                className="px-4 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
+                style={{ background: 'var(--sf-accent)' }}
               >
                 {extractingReviews ? "Extracting…" : "Extract with Claude"}
               </button>
@@ -476,14 +477,14 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
                 <p className="text-sm font-medium text-gray-700">Extracted vocabulary</p>
                 <ul className="space-y-1">
                   {dna.customerVocabulary.verbatims.slice(0, 5).map((v, i) => (
-                    <li key={i} className="text-sm text-gray-700 italic border-l-2 border-purple-200 pl-3">
+                    <li key={i} className="text-sm text-gray-700 italic border-l-2 pl-3" style={{ borderColor: 'var(--sf-accent-muted)' }}>
                       &ldquo;{v}&rdquo;
                     </li>
                   ))}
                 </ul>
                 <div className="flex flex-wrap gap-2">
                   {dna.customerVocabulary.emotionalWords.map((w, i) => (
-                    <span key={i} className="px-2.5 py-1 bg-purple-50 text-purple-700 text-xs rounded-full">{w}</span>
+                    <span key={i} className="px-2.5 py-1 text-xs rounded-full" style={{ background: 'var(--sf-accent-muted)', color: 'var(--sf-accent)' }}>{w}</span>
                   ))}
                 </div>
               </div>

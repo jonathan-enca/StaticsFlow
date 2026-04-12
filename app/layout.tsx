@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   title: 'StaticsFlow — On-brand Meta Ads Creatives',
   description:
     'Generate on-brand static Meta Ads creatives powered by AI. Brand DNA extraction, creative generation, and QA — all in one platform.',
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({
@@ -16,7 +19,17 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    // data-theme="dark" — app pages are dark by default.
+    // Landing & auth pages override locally with data-theme="light" on their wrapper.
+    <html lang="en" className={inter.variable} data-theme="dark" suppressHydrationWarning>
+      <head>
+        {/* Satoshi — display font for headlines and logo wordmark (Fontshare CDN) */}
+        <link rel="preconnect" href="https://api.fontshare.com" />
+        <link
+          rel="stylesheet"
+          href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap"
+        />
+      </head>
       <body className="font-sans">{children}</body>
     </html>
   )
