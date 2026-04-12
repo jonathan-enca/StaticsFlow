@@ -2,11 +2,11 @@
 // Takes a creative brief from Claude and generates the ad image via Gemini
 // Gemini is THE ONLY image model — no fallback (SPECS.md §1.5)
 
-import { createGeminiClient, GEMINI_IMAGE_MODEL } from "@/lib/gemini";
+import { createGeminiClient, getGeminiImageModel } from "@/lib/gemini";
 import { createClaudeClient, CLAUDE_MODEL } from "@/lib/claude";
 import { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
 import { uploadToR2, creativeKey } from "@/lib/r2";
-import type { AdFormat, CreativeAngle } from "@/types/index";
+import type { AdFormat, CreativeAngle, ImageQuality } from "@/types/index";
 import type { Template } from "@prisma/client";
 
 export interface CreativeBrief {
@@ -46,9 +46,10 @@ export async function generateCreative(
     anthropicApiKey?: string;
     geminiApiKey?: string;
     inspirationTemplates?: Template[];
+    imageQuality?: ImageQuality;
   }
 ): Promise<GeneratedCreative> {
-  const { anthropicApiKey, geminiApiKey, inspirationTemplates } = options ?? {};
+  const { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality } = options ?? {};
 
   // Step 1: Generate the creative brief via Claude
   const brief = await generateCreativeBrief(
@@ -60,7 +61,7 @@ export async function generateCreative(
   );
 
   // Step 2: Generate the image via Gemini
-  const imageData = await generateImageWithGemini(brief, geminiApiKey ?? undefined);
+  const imageData = await generateImageWithGemini(brief, geminiApiKey ?? undefined, imageQuality);
 
   // Step 3: Upload to R2 (skip if R2 not configured in dev)
   let imageUrl: string;
@@ -90,12 +91,13 @@ export async function regenerateImageWithFeedback(
   userId?: string,
   brandId?: string,
   creativeId?: string,
-  geminiApiKey?: string
+  geminiApiKey?: string,
+  imageQuality?: ImageQuality
 ): Promise<GeneratedCreative> {
   const enhancedPrompt = `${previous.brief.imagePrompt}\n\nQA FEEDBACK TO ADDRESS: ${feedback}`;
   const enhancedBrief = { ...previous.brief, imagePrompt: enhancedPrompt };
 
-  const imageData = await generateImageWithGemini(enhancedBrief, geminiApiKey);
+  const imageData = await generateImageWithGemini(enhancedBrief, geminiApiKey, imageQuality);
 
   let imageUrl: string;
   let imageBase64: string | undefined;
@@ -255,13 +257,15 @@ Return ONLY a valid JSON object with this exact structure:
  */
 async function generateImageWithGemini(
   brief: CreativeBrief,
-  apiKey?: string
+  apiKey?: string,
+  quality?: ImageQuality
 ): Promise<string> {
   const client = createGeminiClient(apiKey);
+  const modelName = getGeminiImageModel(quality);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const model = client.getGenerativeModel({
-    model: GEMINI_IMAGE_MODEL,
+    model: modelName,
     // responseModalities is not yet in the SDK's GenerationConfig types but is
     // required for the image generation model — cast to any.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

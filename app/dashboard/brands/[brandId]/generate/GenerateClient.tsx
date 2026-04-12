@@ -46,6 +46,25 @@ const BATCH_SIZES = [
   { value: 20, label: "20" },
 ] as const;
 
+type ImageQuality = "flash" | "pro";
+
+const QUALITY_OPTIONS: { value: ImageQuality; label: string; model: string; desc: string; badge: string }[] = [
+  {
+    value: "flash",
+    label: "Flash",
+    model: "Gemini 3.1 Flash",
+    desc: "Fast generation, cost-effective. Ideal for bulk batches and A/B testing.",
+    badge: "Recommended",
+  },
+  {
+    value: "pro",
+    label: "Pro",
+    model: "Gemini 3 Pro",
+    desc: "Highest image quality, best brand accuracy. Best for hero creatives.",
+    badge: "Premium",
+  },
+];
+
 interface SingleResult {
   creative: ExistingCreative;
   qaResult: { approved: boolean; score: number; feedback: string; iterations: number };
@@ -110,6 +129,7 @@ function CreativeThumbnail({ c, brandName }: { c: ExistingCreative; brandName: s
 export default function GenerateClient({ brandId, brandName, existingCreatives }: Props) {
   const [format, setFormat] = useState<AdFormat>("1080x1080");
   const [angle, setAngle] = useState<CreativeAngle>("benefit");
+  const [imageQuality, setImageQuality] = useState<ImageQuality>("flash");
   const [batchSize, setBatchSize] = useState<number>(1);
   const [variantsMode, setVariantsMode] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -181,6 +201,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             count: batchSize,
             formats: [format],
             angles: ["benefit", "pain", "social_proof", "curiosity"],
+            imageQuality,
           }),
         });
         const data = await res.json();
@@ -192,7 +213,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         const res = await fetch("/api/creatives/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, format, angle, variants: true }),
+          body: JSON.stringify({ brandId, format, angle, variants: true, imageQuality }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Generation failed");
@@ -207,7 +228,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         const res = await fetch("/api/creatives/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, format, angle }),
+          body: JSON.stringify({ brandId, format, angle, imageQuality }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Generation failed");
@@ -302,6 +323,48 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                 </button>
               </label>
             )}
+          </div>
+
+          {/* Image quality picker */}
+          <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Image Quality</h2>
+              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
+                Choose quality vs. cost for Gemini image generation
+              </p>
+            </div>
+            <div className="space-y-2">
+              {QUALITY_OPTIONS.map((q) => (
+                <button
+                  key={q.value}
+                  type="button"
+                  onClick={() => setImageQuality(q.value)}
+                  className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+                    imageQuality === q.value
+                      ? "border-black bg-black text-white"
+                      : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-sm font-medium">{q.label}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      imageQuality === q.value
+                        ? "bg-white/20 text-white"
+                        : q.value === "pro"
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-green-50 text-green-700"
+                    }`}>
+                      {q.badge}
+                    </span>
+                  </div>
+                  <p className={`text-xs leading-snug ${
+                    imageQuality === q.value ? "text-white/70" : "text-[var(--sf-text-secondary)]"
+                  }`}>
+                    {q.model} · {q.desc}
+                  </p>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Format picker */}

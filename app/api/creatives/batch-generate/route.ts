@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { generateCreative } from "@/lib/image-generator";
 import { qaReviewCreative } from "@/lib/qa-reviewer";
 import { findMatchingTemplates } from "@/lib/template-matcher";
-import type { AdFormat, CreativeAngle } from "@/types/index";
+import type { AdFormat, CreativeAngle, ImageQuality } from "@/types/index";
 
 const VALID_COUNTS = [1, 5, 10, 20] as const;
 type BatchCount = (typeof VALID_COUNTS)[number];
@@ -41,7 +41,8 @@ async function runBatchAsync(
   angles: CreativeAngle[],
   formats: AdFormat[],
   anthropicApiKey?: string,
-  geminiApiKey?: string
+  geminiApiKey?: string,
+  imageQuality?: ImageQuality
 ) {
   const CONCURRENCY = 3;
 
@@ -87,7 +88,7 @@ async function runBatchAsync(
               userId,
               brandId,
               creative.id,
-              { anthropicApiKey, geminiApiKey, inspirationTemplates }
+              { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality }
             );
 
             const qaResult = await qaReviewCreative(
@@ -97,7 +98,9 @@ async function runBatchAsync(
               geminiApiKey,
               userId,
               brandId,
-              creative.id
+              creative.id,
+              2,
+              imageQuality
             );
 
             await prisma.creative.update({
@@ -150,7 +153,8 @@ export async function POST(req: NextRequest) {
     count: BatchCount,
     formats: string[],
     angles: string[],
-    language: string;
+    language: string,
+    imageQuality: ImageQuality;
   try {
     ({
       brandId,
@@ -158,6 +162,7 @@ export async function POST(req: NextRequest) {
       formats = ["1080x1080"],
       angles = ["benefit", "pain", "social_proof", "curiosity"],
       language = "fr",
+      imageQuality = "flash",
     } = await req.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -221,7 +226,8 @@ export async function POST(req: NextRequest) {
       distributedAngles,
       resolvedFormats,
       user?.anthropicApiKey ?? undefined,
-      user?.geminiApiKey ?? undefined
+      user?.geminiApiKey ?? undefined,
+      imageQuality
     ).catch((err) => console.error("[batch-generate] runBatchAsync threw:", err));
   });
 

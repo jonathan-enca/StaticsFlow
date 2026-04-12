@@ -5,6 +5,7 @@ import { createClaudeClient, CLAUDE_QA_MODEL } from "@/lib/claude";
 import { regenerateImageWithFeedback } from "@/lib/image-generator";
 import type { GeneratedCreative } from "@/lib/image-generator";
 import type { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
+import type { ImageQuality } from "@/types/index";
 
 export interface QAResult {
   approved: boolean;
@@ -27,7 +28,8 @@ export async function qaReviewCreative(
   userId?: string,
   brandId?: string,
   creativeId?: string,
-  maxIterations = 2
+  maxIterations = 2,
+  imageQuality?: ImageQuality
 ): Promise<QAResult> {
   let currentCreative = creative;
   let iteration = 0;
@@ -52,7 +54,8 @@ export async function qaReviewCreative(
         userId,
         brandId,
         creativeId,
-        geminiApiKey
+        geminiApiKey,
+        imageQuality
       );
     }
   }

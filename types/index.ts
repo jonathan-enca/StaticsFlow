@@ -81,3 +81,10 @@ export type CreativeAngle =
   | 'benefit'
   | 'authority'
   | 'urgency'
+
+/**
+ * Image generation quality tier.
+ * - "flash"  → gemini-3.1-flash-image-preview  — fast, cost-effective
+ * - "pro"    → gemini-3-pro-image-preview       — highest quality, higher cost
+ */
+export type ImageQuality = 'flash' | 'pro'

@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { generateCreative } from "@/lib/image-generator";
 import { qaReviewCreative } from "@/lib/qa-reviewer";
 import { findMatchingTemplates } from "@/lib/template-matcher";
-import type { AdFormat, CreativeAngle } from "@/types/index";
+import type { AdFormat, CreativeAngle, ImageQuality } from "@/types/index";
 
 // Extend Vercel function timeout — generation pipeline (Claude + Gemini + QA) can take 60-120s.
 // Vercel Pro allows up to 300s; default 10s would cause silent timeouts.
@@ -33,7 +33,8 @@ async function generateOne(
   userId: string,
   brandId: string,
   anthropicApiKey?: string,
-  geminiApiKey?: string
+  geminiApiKey?: string,
+  imageQuality?: ImageQuality
 ) {
   const creative = await prisma.creative.create({
     data: { brandId, format, angle, status: "GENERATING", briefJson: {} },
@@ -48,7 +49,7 @@ async function generateOne(
       userId,
       brandId,
       creative.id,
-      { anthropicApiKey, geminiApiKey, inspirationTemplates }
+      { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality }
     );
     const qaResult = await qaReviewCreative(
       generated,
@@ -57,7 +58,9 @@ async function generateOne(
       geminiApiKey,
       userId,
       brandId,
-      creative.id
+      creative.id,
+      2,
+      imageQuality
     );
     const updated = await prisma.creative.update({
       where: { id: creative.id },
@@ -84,13 +87,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let brandId: string, format: AdFormat, angle: CreativeAngle, variants: boolean;
+  let brandId: string, format: AdFormat, angle: CreativeAngle, variants: boolean, imageQuality: ImageQuality;
   try {
     ({
       brandId,
       format = "1080x1080",
       angle = "benefit",
       variants = false,
+      imageQuality = "flash",
     } = await req.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -144,7 +148,8 @@ export async function POST(req: NextRequest) {
         singleUserId,
         brandId,
         anthropicKey,
-        geminiKey
+        geminiKey,
+        imageQuality
       );
       return NextResponse.json(result, { status: 201 });
     } catch (err) {
@@ -171,7 +176,7 @@ export async function POST(req: NextRequest) {
   const userId = session.user.id as string;
   const results = await Promise.allSettled(
     variantAngles.map((a) =>
-      generateOne(brandDna, format, a, userId, brandId, anthropicKey, geminiKey)
+      generateOne(brandDna, format, a, userId, brandId, anthropicKey, geminiKey, imageQuality)
     )
   );
 

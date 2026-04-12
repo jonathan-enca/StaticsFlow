@@ -19,7 +19,23 @@ export function createGeminiClient(apiKey?: string): GoogleGenerativeAI {
   return new GoogleGenerativeAI(key);
 }
 
-// Gemini model for image generation (requires responseModalities: ["IMAGE", "TEXT"])
-// Updated from "gemini-2.0-flash-preview-image-generation" which was removed from v1beta.
-// Use the experimental image generation model available on v1beta.
-export const GEMINI_IMAGE_MODEL = "gemini-2.0-flash-exp-image-generation";
+import type { ImageQuality } from "@/types/index";
+
+/**
+ * Gemini image generation model tiers.
+ *
+ * flash → gemini-3.1-flash-image-preview  Fast, cost-effective. Good for bulk / drafts.
+ * pro   → gemini-3-pro-image-preview       Highest quality. Best for hero creatives.
+ *
+ * Both require responseModalities: ["IMAGE", "TEXT"] at model instantiation.
+ */
+export const GEMINI_IMAGE_MODEL_FLASH = "gemini-3.1-flash-image-preview";
+export const GEMINI_IMAGE_MODEL_PRO   = "gemini-3-pro-image-preview";
+
+/** Default model (flash) kept for backward compatibility. */
+export const GEMINI_IMAGE_MODEL = GEMINI_IMAGE_MODEL_FLASH;
+
+/** Select the Gemini image model string from a quality tier. */
+export function getGeminiImageModel(quality: ImageQuality = "flash"): string {
+  return quality === "pro" ? GEMINI_IMAGE_MODEL_PRO : GEMINI_IMAGE_MODEL_FLASH;
+}
