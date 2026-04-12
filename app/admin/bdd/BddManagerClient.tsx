@@ -67,7 +67,7 @@ const HOOK_OPTIONS = [
 const BADGE_COLORS: Record<string, string> = {
   skincare: "bg-pink-100 text-pink-700",
   food: "bg-orange-100 text-orange-700",
-  fashion: "bg-purple-100 text-purple-700",
+  fashion: "bg-violet-100 text-violet-700",
   tech: "bg-blue-100 text-blue-700",
   fitness: "bg-green-100 text-green-700",
   home: "bg-yellow-100 text-yellow-700",
