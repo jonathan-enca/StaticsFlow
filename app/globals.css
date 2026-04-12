@@ -28,6 +28,18 @@
   --sf-text-muted:    #8E8E93;
 }
 
+/* Light theme — explicit override so data-theme="light" on any element
+   restores the light palette even when <html data-theme="dark"> is set. */
+[data-theme='light'] {
+  --sf-bg-primary:    #FAFAFA;
+  --sf-bg-secondary:  #FFFFFF;
+  --sf-bg-elevated:   #F5F5F7;
+  --sf-border:        #E5E5EA;
+  --sf-text-primary:  #1D1D1F;
+  --sf-text-secondary:#636366;
+  --sf-text-muted:    #8E8E93;
+}
+
 /* Dark theme — applied on app pages via data-theme="dark" on <html> */
 [data-theme='dark'] {
   --sf-bg-primary:    #0C0C0E;
