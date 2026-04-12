@@ -465,256 +465,261 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         )}
       </div>
 
-      {/* Controls — 2-row asymmetric layout grouped by importance */}
+      {/* Controls + Generate button — single grouped container (Stripe-style) */}
+      <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-6 space-y-5">
+        <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Generation Settings</h2>
 
-      {/* Row 1: Creative Brief (2/3) + Number of Creatives (1/3) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* Creative Brief — primary control, gets full breathing room */}
-        <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-5 space-y-3 sm:col-span-2">
-          <div>
-            <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">
-              Creative Brief{" "}
-              <span className="normal-case">(optional)</span>
-            </h2>
-            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
-              Specific guidance for Claude: promo, season, product…
-            </p>
-          </div>
-          <textarea
-            placeholder={"e.g. Summer collection, 30% off, target women 25–35\ne.g. New product launch, emphasize eco-friendly packaging"}
-            value={creativeBrief}
-            onChange={(e) => setCreativeBrief(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-[var(--sf-accent)] transition-colors resize-none min-h-[120px]"
-          />
-          {creativeBrief.length > 200 && (
-            <p className="text-xs text-[var(--sf-text-muted)] text-right">{creativeBrief.length} chars</p>
-          )}
-        </div>
-
-        {/* Number of Creatives — quick-select chips + variants toggle */}
-        <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-5 space-y-3">
-          <div>
-            <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Quantity</h2>
-            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Up to {BATCH_MAX}</p>
-          </div>
-          {/* Quick-select chips */}
-          <div className="flex gap-1.5 flex-wrap">
-            {BATCH_PRESETS.map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => {
+        {/* Row 1: Number of Creatives (1/3) | Creative Brief (2/3) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Number of Creatives — quick-select chips */}
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Quantity</p>
+              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Up to {BATCH_MAX}</p>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {BATCH_PRESETS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => {
+                    setBatchSize(n);
+                    setBatchSizeInput(String(n));
+                    if (n > 1) setVariantsMode(false);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    batchSize === n
+                      ? "bg-[var(--sf-accent)] text-white"
+                      : "bg-[var(--sf-bg-elevated)] text-[var(--sf-text-primary)] hover:bg-[var(--sf-border)]"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            {/* Custom input — shown when value is not a preset */}
+            {!BATCH_PRESETS.includes(batchSize) && (
+              <input
+                type="number"
+                min={BATCH_MIN}
+                max={BATCH_MAX}
+                value={batchSizeInput}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setBatchSizeInput(raw);
+                  const n = parseInt(raw, 10);
+                  if (!isNaN(n) && n >= BATCH_MIN && n <= BATCH_MAX) {
+                    setBatchSize(n);
+                    if (n > 1) setVariantsMode(false);
+                  }
+                }}
+                onBlur={() => {
+                  const n = Math.min(BATCH_MAX, Math.max(BATCH_MIN, parseInt(batchSizeInput, 10) || 1));
                   setBatchSize(n);
                   setBatchSizeInput(String(n));
                   if (n > 1) setVariantsMode(false);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  batchSize === n
-                    ? "bg-[var(--sf-accent)] text-white"
-                    : "bg-[var(--sf-bg-elevated)] text-[var(--sf-text-primary)] hover:bg-[var(--sf-border)]"
-                }`}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-          {/* Custom input — shown when value is not a preset */}
-          {!BATCH_PRESETS.includes(batchSize) && (
-            <input
-              type="number"
-              min={BATCH_MIN}
-              max={BATCH_MAX}
-              value={batchSizeInput}
-              onChange={(e) => {
-                const raw = e.target.value;
-                setBatchSizeInput(raw);
-                const n = parseInt(raw, 10);
-                if (!isNaN(n) && n >= BATCH_MIN && n <= BATCH_MAX) {
-                  setBatchSize(n);
-                  if (n > 1) setVariantsMode(false);
-                }
-              }}
-              onBlur={() => {
-                const n = Math.min(BATCH_MAX, Math.max(BATCH_MIN, parseInt(batchSizeInput, 10) || 1));
-                setBatchSize(n);
-                setBatchSizeInput(String(n));
-                if (n > 1) setVariantsMode(false);
-              }}
-              className="w-full px-3 py-2 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm focus:outline-none focus:border-[var(--sf-accent)] transition-colors"
-              placeholder="Custom…"
-            />
-          )}
-          {/* Custom quantity shortcut — type any number */}
-          {BATCH_PRESETS.includes(batchSize) && (
-            <button
-              type="button"
-              onClick={() => {
-                setBatchSizeInput("");
-                setBatchSize(0);
-              }}
-              className="text-xs text-[var(--sf-text-muted)] hover:text-[var(--sf-text-secondary)] transition-colors"
-            >
-              Custom quantity…
-            </button>
-          )}
-          {/* Variants toggle — only in single mode */}
-          {batchSize === 1 && (
-            <label className="flex items-center justify-between cursor-pointer pt-1 border-t border-[var(--sf-border)]">
-              <div>
-                <span className="text-sm font-medium text-[var(--sf-text-primary)]">3 Variants</span>
-                <p className="text-xs text-[var(--sf-text-secondary)]">Hooks A · B · Social Proof</p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={variantsMode}
-                onClick={() => setVariantsMode((v) => !v)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-                  variantsMode ? "bg-[var(--sf-accent)]" : "bg-[var(--sf-bg-elevated)]"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-[var(--sf-bg-secondary)] transition-transform ${
-                    variantsMode ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
-            </label>
-          )}
-        </div>
-      </div>
-
-      {/* Row 2: Image Quality (1/2) + Ad Format (1/2) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Image Quality — segmented control */}
-        <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-5 space-y-3">
-          <div>
-            <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Image Quality</h2>
-            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Gemini model — quality vs. cost</p>
-          </div>
-          {/* Segmented control */}
-          <div className="flex bg-[var(--sf-bg-elevated)] rounded-xl p-1 gap-1">
-            {QUALITY_OPTIONS.map((q) => (
-              <button
-                key={q.value}
-                type="button"
-                onClick={() => setImageQuality(q.value)}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  imageQuality === q.value
-                    ? "bg-[var(--sf-bg-secondary)] shadow-sm text-[var(--sf-text-primary)]"
-                    : "text-[var(--sf-text-secondary)] hover:text-[var(--sf-text-primary)]"
-                }`}
-              >
-                {q.label}
-              </button>
-            ))}
-          </div>
-          {/* Description + badge for selected quality */}
-          {QUALITY_OPTIONS.filter((q) => q.value === imageQuality).map((q) => (
-            <div key={q.value} className="flex items-start gap-2">
-              <p className="text-xs text-[var(--sf-text-secondary)] leading-snug flex-1">{q.desc}</p>
-              <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                q.badgeColor === "amber" ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"
-              }`}>
-                {q.badge}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Ad Format — horizontal icon pills */}
-        <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-5 space-y-3">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Ad Format</h2>
-          <div className="flex gap-2">
-            {FORMAT_OPTIONS.map((f) => (
-              <button
-                key={f.value}
-                type="button"
-                onClick={() => setFormat(f.value)}
-                className={`flex-1 flex flex-col items-center gap-1.5 px-2 py-3 rounded-lg border text-sm transition-colors ${
-                  format === f.value
-                    ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
-                    : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] hover:border-gray-400"
-                }`}
-              >
-                {/* Aspect ratio icon */}
-                <span className={`flex items-center justify-center ${format === f.value ? "text-white" : "text-[var(--sf-text-secondary)]"}`}>
-                  {f.value === "1080x1080" && (
-                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="1" y="1" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                    </svg>
-                  )}
-                  {f.value === "1080x1350" && (
-                    <svg width="14" height="18" viewBox="0 0 14 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="1" y="1" width="12" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                    </svg>
-                  )}
-                  {f.value === "1200x628" && (
-                    <svg width="20" height="12" viewBox="0 0 20 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="1" y="1" width="18" height="10" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                    </svg>
-                  )}
-                </span>
-                <span className="font-medium text-xs">{f.label}</span>
-                <span className={`text-[10px] leading-tight text-center ${format === f.value ? "text-white/70" : "text-[var(--sf-text-muted)]"}`}>
-                  {f.desc.split(" — ")[0]}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Generate button + progress */}
-      <div className="space-y-4">
-        <button
-          type="button"
-          onClick={generate}
-          disabled={generating}
-          className="w-full py-4 bg-[var(--sf-accent)] text-white text-sm font-bold rounded-xl hover:bg-[var(--sf-accent-hover)] disabled:opacity-50 transition-colors"
-        >
-          {generating ? (
-            <span className="flex items-center justify-center gap-2">
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              {isBatchMode ? "Generating batch…" : variantsMode ? "Generating variants…" : "Generating…"}
-            </span>
-          ) : buttonLabel}
-        </button>
-
-        {/* Step progress bar — single / variants mode only */}
-        {generating && !isBatchMode && stepIndex >= 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-[var(--sf-text-secondary)]">
-              <span>{SINGLE_STEPS[stepIndex]?.label}</span>
-              <span>{SINGLE_STEPS[stepIndex]?.pct ?? 0}%</span>
-            </div>
-            <div className="h-1.5 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[var(--sf-accent)] rounded-full transition-all duration-[2000ms] ease-out"
-                style={{ width: `${SINGLE_STEPS[stepIndex]?.pct ?? 0}%` }}
+                className="w-full px-3 py-2 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm focus:outline-none focus:border-[var(--sf-accent)] transition-colors"
+                placeholder="Custom…"
               />
+            )}
+            {BATCH_PRESETS.includes(batchSize) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBatchSizeInput("");
+                  setBatchSize(0);
+                }}
+                className="text-xs text-[var(--sf-text-muted)] hover:text-[var(--sf-text-secondary)] transition-colors"
+              >
+                Custom quantity…
+              </button>
+            )}
+          </div>
+
+          {/* Creative Brief — primary control, gets 2/3 width */}
+          <div className="sm:col-span-2 space-y-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">
+                Creative Brief <span className="normal-case font-normal">(optional)</span>
+              </p>
+              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
+                Specific guidance for Claude: promo, season, product…
+              </p>
             </div>
-            <div className="flex gap-1 pt-0.5">
-              {SINGLE_STEPS.map((s, i) => (
-                <div
-                  key={i}
-                  className={`h-1 flex-1 rounded-full transition-colors duration-500 ${
-                    i <= stepIndex ? "bg-[var(--sf-accent)]" : "bg-[var(--sf-bg-elevated)]"
+            <textarea
+              placeholder="e.g. Summer collection, 30% off…"
+              value={creativeBrief}
+              onChange={(e) => setCreativeBrief(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-[var(--sf-accent)] transition-colors resize-none min-h-[100px]"
+            />
+            {creativeBrief.length > 200 && (
+              <p className="text-xs text-[var(--sf-text-muted)] text-right">{creativeBrief.length} chars</p>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: Image Quality (1/3) | Ad Format (1/3) | Variants toggle (1/3) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+          {/* Image Quality — segmented control */}
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Image Quality</p>
+              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Gemini model</p>
+            </div>
+            <div className="flex bg-[var(--sf-bg-elevated)] rounded-lg p-1 gap-1">
+              {QUALITY_OPTIONS.map((q) => (
+                <button
+                  key={q.value}
+                  type="button"
+                  onClick={() => setImageQuality(q.value)}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    imageQuality === q.value
+                      ? "bg-[var(--sf-bg-secondary)] shadow-sm text-[var(--sf-text-primary)]"
+                      : "text-[var(--sf-text-secondary)] hover:text-[var(--sf-text-primary)]"
                   }`}
-                />
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+            {QUALITY_OPTIONS.filter((q) => q.value === imageQuality).map((q) => (
+              <div key={q.value} className="flex items-start gap-2">
+                <p className="text-xs text-[var(--sf-text-secondary)] leading-snug flex-1">{q.desc}</p>
+                <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                  q.badgeColor === "amber" ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"
+                }`}>
+                  {q.badge}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Ad Format — horizontal icon pills */}
+          <div className="space-y-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Ad Format</p>
+            <div className="flex gap-2">
+              {FORMAT_OPTIONS.map((f) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  onClick={() => setFormat(f.value)}
+                  className={`flex-1 flex flex-col items-center gap-1.5 px-2 py-3 rounded-lg border text-sm transition-colors ${
+                    format === f.value
+                      ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
+                      : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] hover:border-gray-400"
+                  }`}
+                >
+                  <span className={`flex items-center justify-center ${format === f.value ? "text-white" : "text-[var(--sf-text-secondary)]"}`}>
+                    {f.value === "1080x1080" && (
+                      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="1" y="1" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                      </svg>
+                    )}
+                    {f.value === "1080x1350" && (
+                      <svg width="14" height="18" viewBox="0 0 14 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="1" y="1" width="12" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                      </svg>
+                    )}
+                    {f.value === "1200x628" && (
+                      <svg width="20" height="12" viewBox="0 0 20 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="1" y="1" width="18" height="10" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                      </svg>
+                    )}
+                  </span>
+                  <span className="font-medium text-xs">{f.label}</span>
+                  <span className={`text-[10px] leading-tight text-center ${format === f.value ? "text-white/70" : "text-[var(--sf-text-muted)]"}`}>
+                    {f.desc.split(" — ")[0]}
+                  </span>
+                </button>
               ))}
             </div>
           </div>
-        )}
 
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
-            {error}
+          {/* Variants — own cell in row 2 (Spec G) */}
+          <div className="space-y-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Variants</p>
+            {batchSize === 1 ? (
+              <>
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div>
+                    <span className="text-sm font-semibold text-[var(--sf-text-primary)]">3 Variants</span>
+                    <p className="text-xs text-[var(--sf-text-secondary)]">Benefit · Pain · Social Proof</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={variantsMode}
+                    onClick={() => setVariantsMode((v) => !v)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                      variantsMode ? "bg-[var(--sf-accent)]" : "bg-[var(--sf-bg-elevated)]"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-[var(--sf-bg-secondary)] transition-transform ${
+                        variantsMode ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </label>
+              </>
+            ) : (
+              <p className="text-xs text-[var(--sf-text-muted)] leading-relaxed">Auto-distributed angles across batch</p>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* Generate button pinned inside container with separator */}
+        <div className="pt-4 border-t border-[var(--sf-border)] space-y-4">
+          <button
+            type="button"
+            onClick={generate}
+            disabled={generating}
+            className="w-full py-4 bg-[var(--sf-accent)] text-white text-sm font-bold rounded-xl hover:bg-[var(--sf-accent-hover)] disabled:opacity-50 transition-colors"
+          >
+            {generating ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                {isBatchMode ? "Generating batch…" : variantsMode ? "Generating variants…" : "Generating…"}
+              </span>
+            ) : buttonLabel}
+          </button>
+
+          {/* Step progress bar — single / variants mode only */}
+          {generating && !isBatchMode && stepIndex >= 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-[var(--sf-text-secondary)]">
+                <span>{SINGLE_STEPS[stepIndex]?.label}</span>
+                <span>{SINGLE_STEPS[stepIndex]?.pct ?? 0}%</span>
+              </div>
+              <div className="h-1.5 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[var(--sf-accent)] rounded-full transition-all duration-[2000ms] ease-out"
+                  style={{ width: `${SINGLE_STEPS[stepIndex]?.pct ?? 0}%` }}
+                />
+              </div>
+              <div className="flex gap-1 pt-0.5">
+                {SINGLE_STEPS.map((s, i) => (
+                  <div
+                    key={i}
+                    className={`h-1 flex-1 rounded-full transition-colors duration-500 ${
+                      i <= stepIndex ? "bg-[var(--sf-accent)]" : "bg-[var(--sf-bg-elevated)]"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+              {error}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Results */}
