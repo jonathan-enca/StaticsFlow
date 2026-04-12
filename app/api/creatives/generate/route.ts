@@ -26,6 +26,12 @@ const NEXT_ANGLE: Record<CreativeAngle, CreativeAngle> = {
   urgency: "fomo",
 };
 
+interface InspirationSource {
+  type: "template" | "url" | "upload";
+  imageUrl: string | null;
+  label: string;
+}
+
 async function generateOne(
   brandDna: Parameters<typeof generateCreative>[0],
   format: AdFormat,
@@ -49,6 +55,21 @@ async function generateOne(
     const inspirationTemplates = hasReference
       ? undefined
       : await findMatchingTemplates(brandDna, angle, format);
+
+    // Build inspirationSource for the response so the client can show "Inspired by…"
+    let inspirationSource: InspirationSource | undefined;
+    if (referenceImageUrl) {
+      inspirationSource = { type: "url", imageUrl: referenceImageUrl, label: "Your reference image" };
+    } else if (referenceImageData) {
+      inspirationSource = { type: "upload", imageUrl: null, label: "Your uploaded image" };
+    } else if (inspirationTemplates && inspirationTemplates.length > 0) {
+      const tpl = inspirationTemplates[0];
+      inspirationSource = {
+        type: "template",
+        imageUrl: tpl.thumbnailUrl ?? tpl.sourceImageUrl,
+        label: `BDD Template — ${tpl.category}`,
+      };
+    }
 
     const generated = await generateCreative(
       brandDna,
@@ -79,7 +100,7 @@ async function generateOne(
         score: qaResult.score,
       },
     });
-    return { creative: updated, qaResult };
+    return { creative: updated, qaResult, inspirationSource };
   } catch (err) {
     await prisma.creative.update({
       where: { id: creative.id },
@@ -164,7 +185,7 @@ export async function POST(req: NextRequest) {
         referenceImageUrl,
         referenceImageData
       );
-      return NextResponse.json(result, { status: 201 });
+      return NextResponse.json({ creative: result.creative, qaResult: result.qaResult, inspirationSource: result.inspirationSource }, { status: 201 });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("[creatives/generate]", err);
@@ -208,5 +229,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ variants: successfulVariants }, { status: 201 });
+  // Share the inspirationSource (same across all variants since mode is consistent)
+  const inspirationSource = successfulVariants[0]?.inspirationSource;
+  return NextResponse.json({ variants: successfulVariants, inspirationSource }, { status: 201 });
 }

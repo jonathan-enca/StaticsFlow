@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { AdFormat } from "@/types/index";
+import CreativePreviewModal, { type InspirationSource, type CreativePreviewData } from "@/components/CreativePreviewModal";
 
 interface ExistingCreative {
   id: string;
@@ -58,6 +59,7 @@ const QUALITY_OPTIONS: { value: ImageQuality; label: string; model: string; desc
 interface SingleResult {
   creative: ExistingCreative;
   qaResult: { approved: boolean; score: number; feedback: string; iterations: number };
+  inspirationSource?: InspirationSource;
 }
 
 interface BatchStatus {
@@ -68,7 +70,7 @@ interface BatchStatus {
   creatives: ExistingCreative[];
 }
 
-function CreativeThumbnail({ c, brandName }: { c: ExistingCreative; brandName: string }) {
+function CreativeThumbnail({ c, brandName, onPreview }: { c: ExistingCreative; brandName: string; onPreview?: () => void }) {
   return (
     <div className="space-y-2">
       <div className="rounded-xl overflow-hidden border border-[var(--sf-border)] aspect-square bg-[var(--sf-bg-primary)] flex items-center justify-center relative group">
@@ -83,16 +85,33 @@ function CreativeThumbnail({ c, brandName }: { c: ExistingCreative; brandName: s
                 (e.target as HTMLImageElement).style.display = "none";
               }}
             />
-            <a
-              href={c.imageUrl}
-              download={`${brandName}_${c.angle}_${c.format}.png`}
-              className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-              title="Download"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-            </a>
+            {/* Two-action hover overlay: preview + download */}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              {onPreview && (
+                <button
+                  type="button"
+                  onClick={onPreview}
+                  title="Preview"
+                  className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 transition-colors flex items-center justify-center"
+                >
+                  {/* Eye icon */}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+              )}
+              <a
+                href={c.imageUrl}
+                download={`${brandName}_${c.angle}_${c.format}.png`}
+                onClick={(e) => e.stopPropagation()}
+                title="Download"
+                className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 transition-colors flex items-center justify-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              </a>
+            </div>
           </>
         ) : (
           <span className="text-xs text-[var(--sf-text-muted)] text-center px-2">
@@ -161,6 +180,9 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
 
   // Historical creatives
   const [creatives, setCreatives] = useState<ExistingCreative[]>(existingCreatives);
+
+  // Lightbox preview state
+  const [previewCreative, setPreviewCreative] = useState<{ creative: CreativePreviewData; inspirationSource?: InspirationSource } | null>(null);
 
   // Poll batch status while running
   useEffect(() => {
@@ -291,9 +313,14 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         stopStepProgress();
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Generation failed");
-        setVariantResults(data.variants as SingleResult[]);
+        // Attach inspirationSource to each variant if available
+        const variants: SingleResult[] = (data.variants as SingleResult[]).map((v) => ({
+          ...v,
+          inspirationSource: data.inspirationSource,
+        }));
+        setVariantResults(variants);
         setCreatives((prev) => [
-          ...data.variants.map((v: SingleResult) => v.creative),
+          ...variants.map((v) => v.creative),
           ...prev,
         ]);
         setGenerating(false);
@@ -308,7 +335,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         stopStepProgress();
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Generation failed");
-        setSingleResult({ creative: data.creative, qaResult: data.qaResult });
+        setSingleResult({ creative: data.creative, qaResult: data.qaResult, inspirationSource: data.inspirationSource });
         setCreatives((prev) => [data.creative, ...prev]);
         setGenerating(false);
       }
@@ -770,7 +797,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
               {batchData.creatives.length > 0 && (
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 pt-2">
                   {batchData.creatives.map((c) => (
-                    <CreativeThumbnail key={c.id} c={c} brandName={brandName} />
+                    <CreativeThumbnail key={c.id} c={c} brandName={brandName} onPreview={() => setPreviewCreative({ creative: c })} />
                   ))}
                 </div>
               )}
@@ -799,15 +826,30 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                             alt={`Variant ${["A", "B", "C"][idx]}`}
                             className="w-full h-full object-cover"
                           />
-                          <a
-                            href={v.creative.imageUrl}
-                            download={`${brandName}_variant${["A", "B", "C"][idx]}_${v.creative.angle}.png`}
-                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
-                          </a>
+                          {/* Two-action hover overlay */}
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewCreative({ creative: v.creative, inspirationSource: v.inspirationSource })}
+                              title="Preview"
+                              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 transition-colors flex items-center justify-center"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                              </svg>
+                            </button>
+                            <a
+                              href={v.creative.imageUrl}
+                              download={`${brandName}_variant${["A", "B", "C"][idx]}_${v.creative.angle}.png`}
+                              onClick={(e) => e.stopPropagation()}
+                              title="Download"
+                              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 transition-colors flex items-center justify-center"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                              </svg>
+                            </a>
+                          </div>
                         </>
                       ) : (
                         <span className="text-xs text-[var(--sf-text-muted)]">No preview</span>
@@ -853,7 +895,11 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
               </div>
 
               {singleResult.creative.imageUrl ? (
-                <div className="p-4 bg-[var(--sf-bg-primary)] flex items-center justify-center min-h-64">
+                <div
+                  className="p-4 bg-[var(--sf-bg-primary)] flex items-center justify-center min-h-64 cursor-pointer"
+                  onClick={() => setPreviewCreative({ creative: singleResult.creative, inspirationSource: singleResult.inspirationSource })}
+                  title="Click to preview"
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={singleResult.creative.imageUrl}
@@ -882,11 +928,21 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {creatives.map((c) => (
-                  <CreativeThumbnail key={c.id} c={c} brandName={brandName} />
+                  <CreativeThumbnail key={c.id} c={c} brandName={brandName} onPreview={() => setPreviewCreative({ creative: c })} />
                 ))}
               </div>
             </div>
           )}
+
+      {/* Lightbox preview modal */}
+      {previewCreative && (
+        <CreativePreviewModal
+          creative={previewCreative.creative}
+          inspirationSource={previewCreative.inspirationSource}
+          brandName={brandName}
+          onClose={() => setPreviewCreative(null)}
+        />
+      )}
 
           {creatives.length === 0 && !singleResult && !variantResults && !batchData && (
             <div className="bg-[var(--sf-bg-secondary)] rounded-lg border-2 border-dashed border-[var(--sf-border)] p-16 text-center">
