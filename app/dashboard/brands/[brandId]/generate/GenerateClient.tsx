@@ -1,9 +1,10 @@
 "use client";
 
 // Creative generation UI
-// Lets the user pick format + angle, triggers generation, shows results
+// Supports: single creative, 3-variant mode, and batch generation (5/10/20)
+// Batch mode: polls progress and shows gallery + Download All ZIP
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { AdFormat, CreativeAngle } from "@/types/index";
 
 interface ExistingCreative {
@@ -38,56 +39,202 @@ const ANGLE_OPTIONS: { value: CreativeAngle; label: string; desc: string }[] = [
   { value: "urgency", label: "Urgency", desc: "Time-sensitive offer" },
 ];
 
-interface GenerateResult {
+const BATCH_SIZES = [
+  { value: 1, label: "Single" },
+  { value: 5, label: "5" },
+  { value: 10, label: "10" },
+  { value: 20, label: "20" },
+] as const;
+
+interface SingleResult {
   creative: ExistingCreative;
-  qaResult: {
-    approved: boolean;
-    score: number;
-    feedback: string;
-    iterations: number;
-  };
+  qaResult: { approved: boolean; score: number; feedback: string; iterations: number };
+}
+
+interface BatchStatus {
+  id: string;
+  totalCount: number;
+  completedCount: number;
+  status: "PENDING" | "RUNNING" | "DONE" | "FAILED";
+  creatives: ExistingCreative[];
+}
+
+function CreativeThumbnail({ c, brandName }: { c: ExistingCreative; brandName: string }) {
+  return (
+    <div className="space-y-2">
+      <div className="rounded-xl overflow-hidden border border-gray-200 aspect-square bg-gray-50 flex items-center justify-center relative group">
+        {c.imageUrl && !c.imageUrl.startsWith("data:image/png;base64,data") ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={c.imageUrl}
+              alt=""
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+            />
+            <a
+              href={c.imageUrl}
+              download={`${brandName}_${c.angle}_${c.format}.png`}
+              className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+              title="Download"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </a>
+          </>
+        ) : (
+          <span className="text-xs text-gray-400 text-center px-2">
+            {c.status === "GENERATING" ? "Generating…" : "No preview"}
+          </span>
+        )}
+      </div>
+      <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
+        <span className={`inline-block px-2 py-0.5 rounded-full ${
+          c.status === "APPROVED" ? "bg-green-50 text-green-700"
+          : c.status === "REJECTED" ? "bg-red-50 text-red-700"
+          : c.status === "GENERATING" ? "bg-blue-50 text-blue-600"
+          : "bg-gray-100 text-gray-600"
+        }`}>
+          {c.status === "GENERATING" ? "…" : c.status}
+        </span>
+        <span className="capitalize">{c.angle}</span>
+        {c.score != null && <span>{Math.round(c.score * 100)}%</span>}
+      </div>
+    </div>
+  );
 }
 
 export default function GenerateClient({ brandId, brandName, existingCreatives }: Props) {
   const [format, setFormat] = useState<AdFormat>("1080x1080");
   const [angle, setAngle] = useState<CreativeAngle>("benefit");
+  const [batchSize, setBatchSize] = useState<number>(1);
+  const [variantsMode, setVariantsMode] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<GenerateResult | null>(null);
+
+  // Single / variants result
+  const [singleResult, setSingleResult] = useState<SingleResult | null>(null);
+  const [variantResults, setVariantResults] = useState<SingleResult[] | null>(null);
+
+  // Batch state
+  const [batchId, setBatchId] = useState<string | null>(null);
+  const [batchData, setBatchData] = useState<BatchStatus | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Historical creatives
   const [creatives, setCreatives] = useState<ExistingCreative[]>(existingCreatives);
+
+  // Poll batch status while running
+  useEffect(() => {
+    if (!batchId) return;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/creatives/batch/${batchId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const batch: BatchStatus = data.batch;
+        setBatchData(batch);
+
+        if (batch.status === "DONE" || batch.status === "FAILED") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          setGenerating(false);
+          // Add batch creatives to history
+          setCreatives((prev) => {
+            const existingIds = new Set(prev.map((c) => c.id));
+            const newOnes = batch.creatives.filter((c) => !existingIds.has(c.id));
+            return [...newOnes, ...prev];
+          });
+        }
+      } catch {
+        // ignore transient poll errors
+      }
+    };
+
+    poll(); // immediate first check
+    pollRef.current = setInterval(poll, 3000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [batchId]);
 
   const generate = async () => {
     setGenerating(true);
     setError(null);
-    setResult(null);
+    setSingleResult(null);
+    setVariantResults(null);
+    setBatchId(null);
+    setBatchData(null);
 
     try {
-      const res = await fetch("/api/creatives/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brandId, format, angle }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Generation failed");
-
-      const newCreative: ExistingCreative = {
-        id: data.creative.id,
-        imageUrl: data.creative.imageUrl,
-        status: data.creative.status,
-        score: data.creative.score,
-        format: data.creative.format,
-        angle: data.creative.angle,
-        createdAt: data.creative.createdAt,
-      };
-
-      setResult({ creative: newCreative, qaResult: data.qaResult });
-      setCreatives((prev) => [newCreative, ...prev]);
+      if (batchSize > 1) {
+        // Batch mode
+        const res = await fetch("/api/creatives/batch-generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            brandId,
+            count: batchSize,
+            formats: [format],
+            angles: ["benefit", "pain", "social_proof", "curiosity"],
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Batch generation failed");
+        setBatchId(data.batchId);
+        // setGenerating stays true — cleared by poller when done
+      } else if (variantsMode) {
+        // Variants mode (3 hooks)
+        const res = await fetch("/api/creatives/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brandId, format, angle, variants: true }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Generation failed");
+        setVariantResults(data.variants as SingleResult[]);
+        setCreatives((prev) => [
+          ...data.variants.map((v: SingleResult) => v.creative),
+          ...prev,
+        ]);
+        setGenerating(false);
+      } else {
+        // Single creative
+        const res = await fetch("/api/creatives/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brandId, format, angle }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Generation failed");
+        setSingleResult({ creative: data.creative, qaResult: data.qaResult });
+        setCreatives((prev) => [data.creative, ...prev]);
+        setGenerating(false);
+      }
     } catch (err) {
       setError((err as Error).message);
-    } finally {
       setGenerating(false);
     }
   };
+
+  const downloadBatchZip = async () => {
+    if (!batchId) return;
+    const a = document.createElement("a");
+    a.href = `/api/creatives/batch/${batchId}/export`;
+    a.download = `${brandName.toLowerCase()}_batch.zip`;
+    a.click();
+  };
+
+  const isBatchMode = batchSize > 1;
+  const buttonLabel = isBatchMode
+    ? `Generate ${batchSize} Creatives →`
+    : variantsMode
+    ? "Generate 3 Variants →"
+    : "Generate Creative →";
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
@@ -108,6 +255,55 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left: Controls */}
         <div className="lg:col-span-1 space-y-6">
+          {/* Batch size selector */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+            <h2 className="text-sm font-semibold text-gray-900">Batch Size</h2>
+            <div className="grid grid-cols-4 gap-2">
+              {BATCH_SIZES.map((b) => (
+                <button
+                  key={b.value}
+                  type="button"
+                  onClick={() => {
+                    setBatchSize(b.value);
+                    if (b.value > 1) setVariantsMode(false);
+                  }}
+                  className={`py-2 rounded-xl border text-sm font-medium transition-colors ${
+                    batchSize === b.value
+                      ? "border-black bg-black text-white"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"
+                  }`}
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Variants toggle — only in single mode */}
+            {batchSize === 1 && (
+              <label className="flex items-center justify-between cursor-pointer pt-1">
+                <div>
+                  <span className="text-sm font-medium text-gray-900">Generate variants</span>
+                  <p className="text-xs text-gray-500">3 hooks: A · B · Social Proof</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={variantsMode}
+                  onClick={() => setVariantsMode((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    variantsMode ? "bg-black" : "bg-gray-200"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      variantsMode ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </label>
+            )}
+          </div>
+
           {/* Format picker */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
             <h2 className="text-sm font-semibold text-gray-900">Ad Format</h2>
@@ -130,27 +326,35 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             </div>
           </div>
 
-          {/* Angle picker */}
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-900">Creative Angle</h2>
-            <div className="space-y-2">
-              {ANGLE_OPTIONS.map((a) => (
-                <button
-                  key={a.value}
-                  type="button"
-                  onClick={() => setAngle(a.value)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
-                    angle === a.value
-                      ? "border-black bg-black text-white"
-                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"
-                  }`}
-                >
-                  <span className="font-medium">{a.label}</span>
-                  <span className={angle === a.value ? "text-gray-300" : "text-gray-400 text-xs"}>{a.desc}</span>
-                </button>
-              ))}
+          {/* Angle picker (hidden in batch mode — angles are auto-distributed) */}
+          {!isBatchMode && (
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+              <h2 className="text-sm font-semibold text-gray-900">Creative Angle</h2>
+              <div className="space-y-2">
+                {ANGLE_OPTIONS.map((a) => (
+                  <button
+                    key={a.value}
+                    type="button"
+                    onClick={() => setAngle(a.value)}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
+                      angle === a.value
+                        ? "border-black bg-black text-white"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"
+                    }`}
+                  >
+                    <span className="font-medium">{a.label}</span>
+                    <span className={angle === a.value ? "text-gray-300" : "text-gray-400 text-xs"}>{a.desc}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {isBatchMode && (
+            <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-500">
+              Angles are auto-distributed across Benefit, Pain, Social Proof, and Curiosity.
+            </div>
+          )}
 
           {/* Generate button */}
           <button
@@ -165,14 +369,12 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
-                Generating…
+                {isBatchMode ? "Generating batch…" : variantsMode ? "Generating variants…" : "Generating…"}
               </span>
-            ) : (
-              "Generate Creative →"
-            )}
+            ) : buttonLabel}
           </button>
 
-          {generating && (
+          {generating && !isBatchMode && (
             <div className="text-xs text-gray-500 text-center space-y-1">
               <p>Claude is writing the creative brief…</p>
               <p>Gemini is generating the image…</p>
@@ -187,27 +389,129 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
           )}
         </div>
 
-        {/* Right: Result + history */}
+        {/* Right: Results */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Latest result */}
-          {result && (
+          {/* Batch progress */}
+          {batchData && (
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900">Batch Progress</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {batchData.completedCount} / {batchData.totalCount} generated
+                    {" · "}
+                    <span className={
+                      batchData.status === "DONE" ? "text-green-600 font-medium"
+                      : batchData.status === "FAILED" ? "text-red-600 font-medium"
+                      : "text-blue-600"
+                    }>
+                      {batchData.status}
+                    </span>
+                  </p>
+                </div>
+                {batchData.status === "DONE" && (
+                  <button
+                    type="button"
+                    onClick={downloadBatchZip}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Download All
+                  </button>
+                )}
+              </div>
+
+              {/* Progress bar */}
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    batchData.status === "FAILED" ? "bg-red-400" : "bg-black"
+                  }`}
+                  style={{ width: `${batchData.totalCount > 0 ? (batchData.completedCount / batchData.totalCount) * 100 : 0}%` }}
+                />
+              </div>
+
+              {/* Batch creatives gallery */}
+              {batchData.creatives.length > 0 && (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 pt-2">
+                  {batchData.creatives.map((c) => (
+                    <CreativeThumbnail key={c.id} c={c} brandName={brandName} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Variants result */}
+          {variantResults && variantResults.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <h2 className="text-sm font-semibold text-gray-900">3 Variants Generated</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Variant A · Variant B · Social Proof</p>
+              </div>
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {variantResults.map((v, idx) => (
+                  <div key={v.creative.id} className="space-y-2">
+                    <div className="text-xs font-medium text-gray-500 mb-1">
+                      Variant {["A", "B", "C"][idx]} — {v.creative.angle}
+                    </div>
+                    <div className="rounded-xl overflow-hidden border border-gray-200 aspect-square bg-gray-50 flex items-center justify-center relative group">
+                      {v.creative.imageUrl ? (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={v.creative.imageUrl}
+                            alt={`Variant ${["A", "B", "C"][idx]}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <a
+                            href={v.creative.imageUrl}
+                            download={`${brandName}_variant${["A", "B", "C"][idx]}_${v.creative.angle}.png`}
+                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                          </a>
+                        </>
+                      ) : (
+                        <span className="text-xs text-gray-400">No preview</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Score: {v.qaResult.score != null ? Math.round(v.qaResult.score * 100) : "—"}%
+                      {" · "}
+                      <span className={v.qaResult.approved ? "text-green-600" : "text-amber-600"}>
+                        {v.qaResult.approved ? "Approved" : "Review"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Single result */}
+          {singleResult && (
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-gray-900">Generated Creative</h2>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {result.qaResult.iterations} QA iteration{result.qaResult.iterations !== 1 ? "s" : ""}
-                    {" · "}Score: {Math.round(result.qaResult.score * 100)}%
+                    {singleResult.qaResult.iterations} QA iteration{singleResult.qaResult.iterations !== 1 ? "s" : ""}
+                    {" · "}Score: {Math.round(singleResult.qaResult.score * 100)}%
                     {" · "}
-                    <span className={result.qaResult.approved ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
-                      {result.qaResult.approved ? "Approved" : "Needs review"}
+                    <span className={singleResult.qaResult.approved ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
+                      {singleResult.qaResult.approved ? "Approved" : "Needs review"}
                     </span>
                   </p>
                 </div>
-                {result.creative.imageUrl && (
+                {singleResult.creative.imageUrl && (
                   <a
-                    href={result.creative.imageUrl}
-                    download={`creative-${result.creative.id}.png`}
+                    href={singleResult.creative.imageUrl}
+                    download={`creative-${singleResult.creative.id}.png`}
                     className="px-3 py-1.5 text-xs font-medium bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
                   >
                     Download
@@ -215,11 +519,11 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                 )}
               </div>
 
-              {result.creative.imageUrl ? (
+              {singleResult.creative.imageUrl ? (
                 <div className="p-4 bg-gray-50 flex items-center justify-center min-h-64">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={result.creative.imageUrl}
+                    src={singleResult.creative.imageUrl}
                     alt="Generated creative"
                     className="max-w-full max-h-[600px] rounded-xl shadow-lg object-contain"
                   />
@@ -228,66 +532,33 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                 <div className="p-8 text-center text-sm text-gray-400">Image not available</div>
               )}
 
-              {result.qaResult.feedback && (
+              {singleResult.qaResult.feedback && (
                 <div className="px-6 py-4 border-t border-gray-100">
                   <p className="text-xs text-gray-500 font-medium mb-1">QA Feedback</p>
-                  <p className="text-sm text-gray-700">{result.qaResult.feedback}</p>
+                  <p className="text-sm text-gray-700">{singleResult.qaResult.feedback}</p>
                 </div>
               )}
             </div>
           )}
 
-          {/* Previous creatives */}
-          {creatives.length > 0 && (
+          {/* Previous creatives gallery */}
+          {creatives.length > 0 && !batchData && (
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <h2 className="text-sm font-semibold text-gray-900 mb-4">
                 Previous Creatives ({creatives.length})
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {creatives.map((c) => (
-                  <div key={c.id} className="space-y-2">
-                    <div className="rounded-xl overflow-hidden border border-gray-200 aspect-square bg-gray-50 flex items-center justify-center">
-                      {c.imageUrl && !c.imageUrl.startsWith("data:image/png;base64,data") ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={c.imageUrl}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <span className="text-xs text-gray-400">
-                          {c.status === "GENERATING" ? "Generating…" : "No preview"}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      <span className={`inline-block px-2 py-0.5 rounded-full ${
-                        c.status === "APPROVED"
-                          ? "bg-green-50 text-green-700"
-                          : c.status === "REJECTED"
-                          ? "bg-red-50 text-red-700"
-                          : "bg-gray-100 text-gray-600"
-                      }`}>
-                        {c.status}
-                      </span>
-                      {c.score != null && (
-                        <span className="ml-1">{Math.round(c.score * 100)}%</span>
-                      )}
-                    </div>
-                  </div>
+                  <CreativeThumbnail key={c.id} c={c} brandName={brandName} />
                 ))}
               </div>
             </div>
           )}
 
-          {creatives.length === 0 && !result && (
+          {creatives.length === 0 && !singleResult && !variantResults && !batchData && (
             <div className="bg-white rounded-lg border-2 border-dashed border-gray-200 p-16 text-center">
-              <div className="w-12 h-12 rounded-md flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--sf-accent-muted)' }}>
-                {/* Palette icon — Lucide */}
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--sf-accent)' }}><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+              <div className="w-12 h-12 rounded-md flex items-center justify-center mx-auto mb-4" style={{ background: "var(--sf-accent-muted)" }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--sf-accent)" }}><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
               </div>
               <h2 className="text-lg font-semibold text-gray-900 mb-2">No creatives yet</h2>
               <p className="text-sm text-gray-500">

@@ -90,6 +90,7 @@ model Brand {
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   creatives Creative[]
+  batches   Batch[]
 
   @@unique([userId, url])
 }
@@ -97,6 +98,7 @@ model Brand {
 model Creative {
   id        String         @id @default(cuid())
   brandId   String
+  batchId   String?        // Set when generated as part of a batch
   imageUrl  String?        // R2 URL of the generated image
   briefJson Json           @default("{}") // Claude brief that produced this creative
   status    CreativeStatus @default(GENERATING)
@@ -106,7 +108,23 @@ model Creative {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+}
+
+// Batch generation job — tracks progress of a multi-creative generation request
+model Batch {
+  id             String      @id @default(cuid())
+  brandId        String
+  userId         String
+  totalCount     Int
+  completedCount Int         @default(0)
+  status         BatchStatus @default(PENDING)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  brand     Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  creatives Creative[]
 }
 
 // Inspiration templates in the living BDD (base de données) of ad creatives
@@ -163,4 +181,11 @@ enum CreativeStatus {
   QA_REVIEW
   APPROVED
   REJECTED
+}
+
+enum BatchStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
 }
