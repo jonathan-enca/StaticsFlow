@@ -32,6 +32,7 @@ const FORMAT_OPTIONS: { value: AdFormat; label: string; desc: string }[] = [
 // Batch count range
 const BATCH_MIN = 1;
 const BATCH_MAX = 50;
+const BATCH_PRESETS = [1, 5, 10, 20];
 
 type ImageQuality = "flash" | "pro";
 
@@ -327,11 +328,13 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
   };
 
   const isBatchMode = batchSize > 1;
+  const selectedFormat = FORMAT_OPTIONS.find((f) => f.value === format);
+  const formatSuffix = selectedFormat ? ` — ${selectedFormat.label} ${selectedFormat.desc.split(" — ")[0]}` : "";
   const buttonLabel = isBatchMode
-    ? `Generate ${batchSize} Creatives →`
+    ? `Generate ${batchSize} Creatives${formatSuffix} →`
     : variantsMode
-    ? "Generate 3 Variants →"
-    : "Generate Creative →";
+    ? `Generate 3 Variants${formatSuffix} →`
+    : `Generate Creative${formatSuffix} →`;
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
@@ -461,49 +464,111 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         )}
       </div>
 
-      {/* Controls — horizontal grid so everything is visible at a glance */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* 1. Number of Creatives */}
+      {/* Controls — 2-row asymmetric layout grouped by importance */}
+
+      {/* Row 1: Creative Brief (2/3) + Number of Creatives (1/3) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Creative Brief — primary control, gets full breathing room */}
+        <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3 sm:col-span-2">
+          <div>
+            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">
+              Creative Brief{" "}
+              <span className="text-[var(--sf-text-muted)] font-normal">(optional)</span>
+            </h2>
+            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
+              Specific guidance for Claude: promo, season, product…
+            </p>
+          </div>
+          <textarea
+            placeholder={"e.g. Summer collection, 30% off, target women 25–35\ne.g. New product launch, emphasize eco-friendly packaging"}
+            value={creativeBrief}
+            onChange={(e) => setCreativeBrief(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-black transition-colors resize-none min-h-[120px]"
+          />
+          {creativeBrief.length > 200 && (
+            <p className="text-xs text-[var(--sf-text-muted)] text-right">{creativeBrief.length} chars</p>
+          )}
+        </div>
+
+        {/* Number of Creatives — quick-select chips + variants toggle */}
         <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3">
           <div>
-            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Number of Creatives</h2>
-            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">1 to {BATCH_MAX}</p>
+            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Quantity</h2>
+            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Up to {BATCH_MAX}</p>
           </div>
-          <input
-            type="number"
-            min={BATCH_MIN}
-            max={BATCH_MAX}
-            value={batchSizeInput}
-            onChange={(e) => {
-              const raw = e.target.value;
-              setBatchSizeInput(raw);
-              const n = parseInt(raw, 10);
-              if (!isNaN(n) && n >= BATCH_MIN && n <= BATCH_MAX) {
+          {/* Quick-select chips */}
+          <div className="flex gap-1.5 flex-wrap">
+            {BATCH_PRESETS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => {
+                  setBatchSize(n);
+                  setBatchSizeInput(String(n));
+                  if (n > 1) setVariantsMode(false);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  batchSize === n
+                    ? "bg-black text-white"
+                    : "bg-[var(--sf-bg-elevated)] text-[var(--sf-text-primary)] hover:bg-[var(--sf-border)]"
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          {/* Custom input — shown when value is not a preset */}
+          {!BATCH_PRESETS.includes(batchSize) && (
+            <input
+              type="number"
+              min={BATCH_MIN}
+              max={BATCH_MAX}
+              value={batchSizeInput}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setBatchSizeInput(raw);
+                const n = parseInt(raw, 10);
+                if (!isNaN(n) && n >= BATCH_MIN && n <= BATCH_MAX) {
+                  setBatchSize(n);
+                  if (n > 1) setVariantsMode(false);
+                }
+              }}
+              onBlur={() => {
+                const n = Math.min(BATCH_MAX, Math.max(BATCH_MIN, parseInt(batchSizeInput, 10) || 1));
                 setBatchSize(n);
+                setBatchSizeInput(String(n));
                 if (n > 1) setVariantsMode(false);
-              }
-            }}
-            onBlur={() => {
-              const n = Math.min(BATCH_MAX, Math.max(BATCH_MIN, parseInt(batchSizeInput, 10) || 1));
-              setBatchSize(n);
-              setBatchSizeInput(String(n));
-              if (n > 1) setVariantsMode(false);
-            }}
-            className="w-full px-4 py-3 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm focus:outline-none focus:border-black transition-colors"
-          />
+              }}
+              className="w-full px-3 py-2 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm focus:outline-none focus:border-black transition-colors"
+              placeholder="Custom…"
+            />
+          )}
+          {/* Custom quantity shortcut — type any number */}
+          {BATCH_PRESETS.includes(batchSize) && (
+            <button
+              type="button"
+              onClick={() => {
+                setBatchSizeInput("");
+                setBatchSize(0);
+              }}
+              className="text-xs text-[var(--sf-text-muted)] hover:text-[var(--sf-text-secondary)] transition-colors"
+            >
+              Custom quantity…
+            </button>
+          )}
           {/* Variants toggle — only in single mode */}
           {batchSize === 1 && (
-            <label className="flex items-center justify-between cursor-pointer pt-1">
+            <label className="flex items-center justify-between cursor-pointer pt-1 border-t border-[var(--sf-border)]">
               <div>
-                <span className="text-sm font-medium text-[var(--sf-text-primary)]">Variants</span>
-                <p className="text-xs text-[var(--sf-text-secondary)]">3 hooks A · B · SP</p>
+                <span className="text-sm font-medium text-[var(--sf-text-primary)]">3 Variants</span>
+                <p className="text-xs text-[var(--sf-text-secondary)]">Hooks A · B · Social Proof</p>
               </div>
               <button
                 type="button"
                 role="switch"
                 aria-checked={variantsMode}
                 onClick={() => setVariantsMode((v) => !v)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
                   variantsMode ? "bg-black" : "bg-[var(--sf-bg-elevated)]"
                 }`}
               >
@@ -516,81 +581,83 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             </label>
           )}
         </div>
+      </div>
 
-        {/* 2. Creative Brief */}
-        <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3 sm:col-span-1 lg:col-span-1">
-          <div>
-            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Creative Brief <span className="text-[var(--sf-text-muted)] font-normal">(optional)</span></h2>
-            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
-              Specific guidance for Claude: promo, season, product…
-            </p>
-          </div>
-          <textarea
-            rows={4}
-            placeholder="e.g. Summer collection, 30% off, target women 25–35…"
-            value={creativeBrief}
-            onChange={(e) => setCreativeBrief(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-black transition-colors resize-none"
-          />
-        </div>
-
-        {/* 3. Image Quality */}
+      {/* Row 2: Image Quality (1/2) + Ad Format (1/2) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Image Quality — segmented control */}
         <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3">
           <div>
             <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Image Quality</h2>
             <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Gemini model — quality vs. cost</p>
           </div>
-          <div className="space-y-2">
+          {/* Segmented control */}
+          <div className="flex bg-[var(--sf-bg-elevated)] rounded-xl p-1 gap-1">
             {QUALITY_OPTIONS.map((q) => (
               <button
                 key={q.value}
                 type="button"
                 onClick={() => setImageQuality(q.value)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl border transition-colors ${
+                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   imageQuality === q.value
-                    ? "border-black bg-black text-white"
-                    : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
+                    ? "bg-[var(--sf-bg-secondary)] shadow-sm text-[var(--sf-text-primary)]"
+                    : "text-[var(--sf-text-secondary)] hover:text-[var(--sf-text-primary)]"
                 }`}
               >
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-sm font-medium">{q.label}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                    imageQuality === q.value
-                      ? "bg-white/20 text-white"
-                      : q.badgeColor === "amber"
-                        ? "bg-amber-50 text-amber-700"
-                        : "bg-green-50 text-green-700"
-                  }`}>
-                    {q.badge}
-                  </span>
-                </div>
-                <p className={`text-xs leading-snug ${
-                  imageQuality === q.value ? "text-white/70" : "text-[var(--sf-text-secondary)]"
-                }`}>
-                  {q.desc}
-                </p>
+                {q.label}
               </button>
             ))}
           </div>
+          {/* Description + badge for selected quality */}
+          {QUALITY_OPTIONS.filter((q) => q.value === imageQuality).map((q) => (
+            <div key={q.value} className="flex items-start gap-2">
+              <p className="text-xs text-[var(--sf-text-secondary)] leading-snug flex-1">{q.desc}</p>
+              <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                q.badgeColor === "amber" ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"
+              }`}>
+                {q.badge}
+              </span>
+            </div>
+          ))}
         </div>
 
-        {/* 4. Ad Format */}
+        {/* Ad Format — horizontal icon pills */}
         <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3">
           <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Ad Format</h2>
-          <div className="space-y-2">
+          <div className="flex gap-2">
             {FORMAT_OPTIONS.map((f) => (
               <button
                 key={f.value}
                 type="button"
                 onClick={() => setFormat(f.value)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-colors ${
+                className={`flex-1 flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl border text-sm transition-colors ${
                   format === f.value
                     ? "border-black bg-black text-white"
-                    : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
+                    : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] hover:border-gray-400"
                 }`}
               >
-                <span className="font-medium">{f.label}</span>
-                <span className={`text-xs ${format === f.value ? "text-white/70" : "text-[var(--sf-text-muted)]"}`}>{f.desc}</span>
+                {/* Aspect ratio icon */}
+                <span className={`flex items-center justify-center ${format === f.value ? "text-white" : "text-[var(--sf-text-secondary)]"}`}>
+                  {f.value === "1080x1080" && (
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="1" y="1" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                    </svg>
+                  )}
+                  {f.value === "1080x1350" && (
+                    <svg width="14" height="18" viewBox="0 0 14 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="1" y="1" width="12" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                    </svg>
+                  )}
+                  {f.value === "1200x628" && (
+                    <svg width="20" height="12" viewBox="0 0 20 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="1" y="1" width="18" height="10" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                    </svg>
+                  )}
+                </span>
+                <span className="font-medium text-xs">{f.label}</span>
+                <span className={`text-[10px] leading-tight text-center ${format === f.value ? "text-white/70" : "text-[var(--sf-text-muted)]"}`}>
+                  {f.desc.split(" — ")[0]}
+                </span>
               </button>
             ))}
           </div>
