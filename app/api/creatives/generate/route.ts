@@ -36,7 +36,8 @@ async function generateOne(
   geminiApiKey?: string,
   imageQuality?: ImageQuality,
   creativeBrief?: string,
-  referenceImageUrl?: string // "From example" mode — skips BDD template lookup
+  referenceImageUrl?: string, // "From example" mode via URL — skips BDD template lookup
+  referenceImageData?: { data: string; mimeType: string } // "From example" mode via drag-and-drop
 ) {
   const creative = await prisma.creative.create({
     data: { brandId, format, angle, status: "GENERATING", briefJson: {} },
@@ -44,7 +45,8 @@ async function generateOne(
 
   try {
     // In "from example" mode, skip BDD matching entirely — reference image is passed directly
-    const inspirationTemplates = referenceImageUrl
+    const hasReference = !!(referenceImageUrl || referenceImageData);
+    const inspirationTemplates = hasReference
       ? undefined
       : await findMatchingTemplates(brandDna, angle, format);
 
@@ -55,7 +57,7 @@ async function generateOne(
       userId,
       brandId,
       creative.id,
-      { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief, referenceImageUrl }
+      { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief, referenceImageUrl, referenceImageData }
     );
     const qaResult = await qaReviewCreative(
       generated,
@@ -93,7 +95,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let brandId: string, format: AdFormat, angle: CreativeAngle, variants: boolean, imageQuality: ImageQuality, creativeBrief: string | undefined, referenceImageUrl: string | undefined;
+  let brandId: string, format: AdFormat, angle: CreativeAngle, variants: boolean, imageQuality: ImageQuality, creativeBrief: string | undefined, referenceImageUrl: string | undefined, referenceImageData: { data: string; mimeType: string } | undefined;
   try {
     ({
       brandId,
@@ -103,6 +105,7 @@ export async function POST(req: NextRequest) {
       imageQuality = "flash",
       creativeBrief = undefined,
       referenceImageUrl = undefined,
+      referenceImageData = undefined,
     } = await req.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -158,7 +161,8 @@ export async function POST(req: NextRequest) {
         geminiKey,
         imageQuality,
         creativeBrief,
-        referenceImageUrl
+        referenceImageUrl,
+        referenceImageData
       );
       return NextResponse.json(result, { status: 201 });
     } catch (err) {
@@ -185,7 +189,7 @@ export async function POST(req: NextRequest) {
   const userId = session.user.id as string;
   const results = await Promise.allSettled(
     variantAngles.map((a) =>
-      generateOne(brandDna, format, a, userId, brandId, anthropicKey, geminiKey, imageQuality, creativeBrief, referenceImageUrl)
+      generateOne(brandDna, format, a, userId, brandId, anthropicKey, geminiKey, imageQuality, creativeBrief, referenceImageUrl, referenceImageData)
     )
   );
 

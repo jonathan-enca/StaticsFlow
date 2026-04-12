@@ -44,6 +44,32 @@ function repairJsonStrings(raw: string): string {
 }
 
 /**
+ * Detect the true MIME type from the first bytes of an image buffer.
+ * More reliable than HTTP Content-Type headers, which are sometimes wrong
+ * (e.g. a server serving PNGs with image/jpeg).
+ */
+function detectMimeType(buf: Buffer): string {
+  if (buf.length >= 8 &&
+      buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+      buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a) {
+    return "image/png";
+  }
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (buf.length >= 12 &&
+      buf.subarray(0, 4).toString("binary") === "RIFF" &&
+      buf.subarray(8, 12).toString("binary") === "WEBP") {
+    return "image/webp";
+  }
+  if (buf.length >= 6 &&
+      (buf.subarray(0, 6).toString() === "GIF87a" || buf.subarray(0, 6).toString() === "GIF89a")) {
+    return "image/gif";
+  }
+  return "image/jpeg"; // fallback
+}
+
+/**
  * Fetch a remote image URL and return it as a base64 string with its MIME type.
  * Used to send BDD template images to Claude (vision) and Gemini.
  * Silently returns null on network errors so a failed image fetch never
@@ -56,8 +82,9 @@ async function fetchImageBase64(
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const buf = Buffer.from(await res.arrayBuffer());
-    const ct = res.headers.get("content-type") ?? "image/jpeg";
-    return { data: buf.toString("base64"), mimeType: ct.split(";")[0].trim() };
+    // Detect MIME from magic bytes — headers are not always reliable
+    const mimeType = detectMimeType(buf);
+    return { data: buf.toString("base64"), mimeType };
   } catch {
     return null;
   }
@@ -103,13 +130,17 @@ export async function generateCreative(
     imageQuality?: ImageQuality;
     creativeBrief?: string; // Optional user guidance injected into Claude's briefing prompt
     referenceImageUrl?: string; // "From example" mode: single reference image URL (skips BDD templates)
+    referenceImageData?: { data: string; mimeType: string }; // "From example" mode: pre-loaded base64 (drag-and-drop upload)
   }
 ): Promise<GeneratedCreative> {
-  const { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief, referenceImageUrl } = options ?? {};
+  const { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief, referenceImageUrl, referenceImageData } = options ?? {};
 
-  // "From example" mode: fetch the user-provided reference image, skip BDD template matching
+  // "From example" mode: use pre-loaded base64 (drag-and-drop) or fetch from URL, skip BDD template matching
   let preloadedImages: FetchedImage[] | undefined;
-  if (referenceImageUrl) {
+  if (referenceImageData) {
+    // Drag-and-drop: image already in memory, use directly
+    preloadedImages = [referenceImageData];
+  } else if (referenceImageUrl) {
     const img = await fetchImageBase64(referenceImageUrl);
     if (img) preloadedImages = [img];
   }

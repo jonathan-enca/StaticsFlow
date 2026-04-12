@@ -133,9 +133,15 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
   const [batchSizeInput, setBatchSizeInput] = useState<string>("1");
   const [creativeBrief, setCreativeBrief] = useState<string>("");
   const [variantsMode, setVariantsMode] = useState(false);
-  // Generation mode: "database" uses BDD curated templates, "example" uses a single user-provided URL
+  // Generation mode: "database" uses BDD curated templates, "example" uses a single user-provided URL or drag-and-drop
   const [generationMode, setGenerationMode] = useState<GenerationMode>("database");
   const [referenceImageUrl, setReferenceImageUrl] = useState<string>("");
+  // Drag-and-drop: uploaded image file converted to base64
+  const [referenceImageData, setReferenceImageData] = useState<{ data: string; mimeType: string } | null>(null);
+  const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -211,6 +217,35 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
     setStepIndex(-1);
   };
 
+  // Convert a File object to base64 + MIME type for the API
+  const fileToImageData = (file: File): Promise<{ data: string; mimeType: string }> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // result is "data:<mimeType>;base64,<data>"
+        const [header, data] = result.split(",");
+        const mimeType = header.replace("data:", "").replace(";base64", "");
+        resolve({ data, mimeType });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleReferenceFile = async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    const imgData = await fileToImageData(file);
+    setReferenceImageData(imgData);
+    setReferenceImagePreview(URL.createObjectURL(file));
+    setReferenceImageUrl(""); // clear URL input when file is uploaded
+  };
+
+  const clearReferenceImage = () => {
+    setReferenceImageData(null);
+    setReferenceImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const generate = async () => {
     setGenerating(true);
     setError(null);
@@ -220,7 +255,8 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
     setBatchData(null);
 
     const briefPayload = creativeBrief.trim() || undefined;
-    const refUrl = generationMode === "example" ? (referenceImageUrl.trim() || undefined) : undefined;
+    const refUrl = generationMode === "example" && !referenceImageData ? (referenceImageUrl.trim() || undefined) : undefined;
+    const refData = generationMode === "example" ? (referenceImageData ?? undefined) : undefined;
 
     try {
       if (batchSize > 1) {
@@ -236,6 +272,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             imageQuality,
             creativeBrief: briefPayload,
             referenceImageUrl: refUrl,
+            referenceImageData: refData,
           }),
         });
         const data = await res.json();
@@ -248,7 +285,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         const res = await fetch("/api/creatives/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, format, angle, variants: true, imageQuality, creativeBrief: briefPayload, referenceImageUrl: refUrl }),
+          body: JSON.stringify({ brandId, format, angle, variants: true, imageQuality, creativeBrief: briefPayload, referenceImageUrl: refUrl, referenceImageData: refData }),
         });
         stopStepProgress();
         const data = await res.json();
@@ -265,7 +302,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         const res = await fetch("/api/creatives/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, format, angle, imageQuality, creativeBrief: briefPayload, referenceImageUrl: refUrl }),
+          body: JSON.stringify({ brandId, format, angle, imageQuality, creativeBrief: briefPayload, referenceImageUrl: refUrl, referenceImageData: refData }),
         });
         stopStepProgress();
         const data = await res.json();
@@ -345,19 +382,81 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             </div>
           </button>
         </div>
-        {/* URL input — only shown in "example" mode */}
+        {/* Reference image input — drag-and-drop + URL, only shown in "example" mode */}
         {generationMode === "example" && (
-          <div className="mt-3">
+          <div className="mt-3 space-y-2">
+            {/* Drag-and-drop zone */}
+            {referenceImagePreview ? (
+              /* Preview of uploaded image */
+              <div className="relative rounded-xl border border-[var(--sf-border)] overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={referenceImagePreview} alt="Reference" className="w-full max-h-48 object-contain bg-[var(--sf-bg-primary)]" />
+                <button
+                  type="button"
+                  onClick={clearReferenceImage}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black transition-colors"
+                  title="Remove image"
+                >
+                  ✕
+                </button>
+                <div className="px-3 py-2 bg-[var(--sf-bg-secondary)] border-t border-[var(--sf-border)]">
+                  <p className="text-xs text-[var(--sf-text-secondary)]">Image uploaded — Claude &amp; Gemini will use this as visual reference.</p>
+                </div>
+              </div>
+            ) : (
+              <div
+                ref={dropZoneRef}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  const file = e.dataTransfer.files[0];
+                  if (file) await handleReferenceFile(file);
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                className={`w-full rounded-xl border-2 border-dashed cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 py-6 ${
+                  isDragging
+                    ? "border-black bg-[var(--sf-bg-elevated)]"
+                    : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] hover:border-gray-400"
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--sf-text-muted)" }}>
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                </svg>
+                <div className="text-center">
+                  <p className="text-sm font-medium" style={{ color: "var(--sf-text-primary)" }}>Drop an image here</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--sf-text-secondary)" }}>or click to browse — JPG, PNG, WebP</p>
+                </div>
+              </div>
+            )}
             <input
-              type="url"
-              placeholder="https://example.com/reference-ad.jpg"
-              value={referenceImageUrl}
-              onChange={(e) => setReferenceImageUrl(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-black transition-colors"
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (file) await handleReferenceFile(file);
+              }}
             />
-            <p className="text-xs text-[var(--sf-text-secondary)] mt-1.5">
-              Must be a direct image URL (jpg, png, webp). Claude and Gemini will both see this ad as visual reference.
-            </p>
+            {/* URL fallback — only shown when no file uploaded */}
+            {!referenceImageData && (
+              <>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-px bg-[var(--sf-border)]" />
+                  <span className="text-xs text-[var(--sf-text-muted)]">or paste URL</span>
+                  <div className="flex-1 h-px bg-[var(--sf-border)]" />
+                </div>
+                <input
+                  type="url"
+                  placeholder="https://example.com/reference-ad.jpg"
+                  value={referenceImageUrl}
+                  onChange={(e) => setReferenceImageUrl(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-black transition-colors"
+                />
+              </>
+            )}
           </div>
         )}
       </div>

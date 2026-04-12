@@ -46,7 +46,8 @@ async function runBatchAsync(
   geminiApiKey?: string,
   imageQuality?: ImageQuality,
   creativeBrief?: string,
-  referenceImageUrl?: string // "From example" mode
+  referenceImageUrl?: string, // "From example" mode via URL
+  referenceImageData?: { data: string; mimeType: string } // "From example" mode via drag-and-drop
 ) {
   const CONCURRENCY = 3;
 
@@ -80,7 +81,8 @@ async function runBatchAsync(
         chunk.map(async (creative) => {
           try {
             // In "from example" mode, skip BDD matching — reference image is used directly
-            const inspirationTemplates = referenceImageUrl
+            const hasReference = !!(referenceImageUrl || referenceImageData);
+            const inspirationTemplates = hasReference
               ? undefined
               : await findMatchingTemplates(
                   brandDna,
@@ -95,7 +97,7 @@ async function runBatchAsync(
               userId,
               brandId,
               creative.id,
-              { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief, referenceImageUrl }
+              { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief, referenceImageUrl, referenceImageData }
             );
 
             const qaResult = await qaReviewCreative(
@@ -163,7 +165,8 @@ export async function POST(req: NextRequest) {
     language: string,
     imageQuality: ImageQuality,
     creativeBrief: string | undefined,
-    referenceImageUrl: string | undefined;
+    referenceImageUrl: string | undefined,
+    referenceImageData: { data: string; mimeType: string } | undefined;
   try {
     ({
       brandId,
@@ -174,6 +177,7 @@ export async function POST(req: NextRequest) {
       imageQuality = "flash",
       creativeBrief = undefined,
       referenceImageUrl = undefined,
+      referenceImageData = undefined,
     } = await req.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -242,7 +246,8 @@ export async function POST(req: NextRequest) {
       user?.geminiApiKey ?? undefined,
       imageQuality,
       creativeBrief,
-      referenceImageUrl
+      referenceImageUrl,
+      referenceImageData
     ).catch((err) => console.error("[batch-generate] runBatchAsync threw:", err));
   });
 
