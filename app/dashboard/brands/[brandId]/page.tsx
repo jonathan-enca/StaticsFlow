@@ -34,6 +34,7 @@ export default async function BrandDnaPage({ params }: PageProps) {
 
   // Ensure required arrays exist (backward compat with Phase 1 records)
   const safeDna: ExtractedBrandDNA = {
+    // ── Auto-extracted (Phase 1) ─────────────────────────────────────────────
     name: dna.name ?? brand.name,
     url: dna.url ?? brand.url,
     colors: dna.colors ?? { primary: "#000000", secondary: "#ffffff", accent: "#000000" },
@@ -48,7 +49,38 @@ export default async function BrandDnaPage({ params }: PageProps) {
     brandVoice: dna.brandVoice ?? "",
     forbiddenWords: dna.forbiddenWords ?? [],
     productCategory: dna.productCategory ?? "other",
-    // Enrichment fields
+    // ── Identity & Positioning (STA-55) ─────────────────────────────────────
+    brandArchetype: dna.brandArchetype,
+    pricePositioning: dna.pricePositioning,
+    targetMarkets: dna.targetMarkets ?? [],
+    competitorBrands: dna.competitorBrands ?? [],
+    differentiators: dna.differentiators ?? [],
+    // ── Voice & Messaging (STA-55) ───────────────────────────────────────────
+    brandVoiceAdjectives: dna.brandVoiceAdjectives ?? [],
+    mandatoryMentions: dna.mandatoryMentions ?? [],
+    messagingHierarchy: dna.messagingHierarchy ?? [],
+    callToActionExamples: dna.callToActionExamples ?? [],
+    // ── Creative Direction (STA-55) ──────────────────────────────────────────
+    visualStyleKeywords: dna.visualStyleKeywords ?? [],
+    moodboardUrls: dna.moodboardUrls ?? [],
+    creativeDoList: dna.creativeDoList ?? [],
+    creativeDontList: dna.creativeDontList ?? [],
+    preferredHooks: dna.preferredHooks ?? [],
+    avoidedHooks: dna.avoidedHooks ?? [],
+    referenceAdUrls: dna.referenceAdUrls ?? [],
+    // ── Customer Intelligence (STA-55) ───────────────────────────────────────
+    customerReviewsVerbatim: dna.customerReviewsVerbatim ?? [],
+    customerPainPoints: dna.customerPainPoints ?? [],
+    customerDesiredOutcome: dna.customerDesiredOutcome,
+    customerObjections: dna.customerObjections ?? [],
+    // ── Campaign Context (STA-55) ────────────────────────────────────────────
+    currentCampaignObjective: dna.currentCampaignObjective,
+    currentPromotion: dna.currentPromotion,
+    seasonalConstraints: dna.seasonalConstraints ?? [],
+    legalConstraints: dna.legalConstraints ?? [],
+    // ── Scraped assets (STA-63) ─────────────────────────────────────────────
+    icons: dna.icons ?? [],
+    // ── Enrichment layer (Phase 2) ───────────────────────────────────────────
     reviewsUrl: dna.reviewsUrl,
     customerVocabulary: dna.customerVocabulary,
     requiredWording: dna.requiredWording ?? [],

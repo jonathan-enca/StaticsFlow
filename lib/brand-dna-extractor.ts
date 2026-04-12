@@ -75,6 +75,9 @@ export interface ExtractedBrandDNA {
   brandBrief?: string;          // "we want to be perceived as X, never as Y"
   structuredPersonas?: Persona[];
   communicationAngles?: CommunicationAngles;
+
+  // ── Scraped assets (STA-63) ───────────────────────────────────────────────
+  icons?: string[];             // favicon / icon URLs from the site
 }
 
 /**
@@ -178,6 +181,12 @@ async function analyzeBrandWithClaude(
 ): Promise<ExtractedBrandDNA> {
   const client = createClaudeClient(apiKey);
 
+  // Aggregate Trustpilot data across all scraped pages (first hit wins)
+  const trustpilot = scraped.pages.find((p) => p.trustpilot)?.trustpilot ?? null;
+
+  // Aggregate icons across all scraped pages (deduplicated)
+  const allIcons = [...new Set(scraped.pages.flatMap((p) => p.icons ?? []))].slice(0, 20);
+
   // Build a compact summary of scraped content to send to Claude
   const pagesContent = scraped.pages
     .map(
@@ -186,11 +195,21 @@ async function analyzeBrandWithClaude(
         `Title: ${p.title}\n` +
         `Description: ${p.description}\n` +
         `Body text (excerpt):\n${p.bodyText}\n` +
-        `Images found: ${p.images.slice(0, 5).join(", ")}\n` +
+        `Images found: ${p.images.slice(0, 8).join(", ")}\n` +
+        `Icons found: ${(p.icons ?? []).slice(0, 5).join(", ")}\n` +
         `Colors detected: ${p.colors.slice(0, 10).join(", ")}\n` +
-        `Fonts detected: ${p.fonts.join(", ")}\n`
+        `Fonts detected: ${p.fonts.join(", ")}\n` +
+        (p.trustpilot
+          ? `Trustpilot: score=${p.trustpilot.score ?? "?"}, reviews=${p.trustpilot.reviewCount ?? "?"}\n` +
+            (p.trustpilot.verbatims.length
+              ? `Trustpilot reviews: ${p.trustpilot.verbatims.slice(0, 3).map((v) => `"${v}"`).join(" | ")}\n`
+              : "")
+          : "")
     )
     .join("\n\n");
+
+  // Also pass the Trustpilot verbatims separately for direct use
+  const trustpilotVerbatims = trustpilot?.verbatims ?? [];
 
   const prompt = `You are a senior creative strategist and brand analyst. Analyze the following website content and extract a complete Brand DNA profile. Be specific, concrete, and opinionated — generic answers are not acceptable.
 
@@ -264,12 +283,25 @@ CRITICAL RULES:
 
   // Parse the JSON response
   try {
-    // Strip any accidental markdown fences
     const cleaned = text
       .replace(/^```(?:json)?\n?/m, "")
       .replace(/\n?```$/m, "")
       .trim();
-    return JSON.parse(cleaned) as ExtractedBrandDNA;
+    const dna = JSON.parse(cleaned) as ExtractedBrandDNA;
+
+    // Merge scraped icons (not derived by Claude — direct from scraper)
+    if (allIcons.length > 0) {
+      dna.icons = allIcons;
+    }
+
+    // Merge Trustpilot verbatims into customerReviewsVerbatim (deduplicated)
+    if (trustpilotVerbatims.length > 0) {
+      const existing = dna.customerReviewsVerbatim ?? [];
+      const merged = [...existing, ...trustpilotVerbatims].slice(0, 10);
+      dna.customerReviewsVerbatim = [...new Set(merged)];
+    }
+
+    return dna;
   } catch {
     throw new Error(`Claude returned invalid JSON: ${text.slice(0, 500)}`);
   }

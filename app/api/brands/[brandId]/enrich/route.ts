@@ -56,6 +56,8 @@ interface EnrichPayload {
   brandBrief?: string;
   structuredPersonas?: Persona[];
   communicationAngles?: CommunicationAngles;
+  // Scraped assets
+  icons?: string[];
 }
 
 export async function PUT(
@@ -139,6 +141,8 @@ export async function PUT(
     ...pick("brandBrief"),
     ...pick("structuredPersonas"),
     ...pick("communicationAngles"),
+    // Scraped assets
+    ...pick("icons"),
   } as Partial<ExtractedBrandDNA>;
 
   const updated = await prisma.brand.update({

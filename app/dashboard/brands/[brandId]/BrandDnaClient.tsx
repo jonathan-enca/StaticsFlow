@@ -239,6 +239,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
   const [logoUrl, setLogoUrl] = useState(dna.logoUrl ?? "");
   const [productImages, setProductImages] = useState<string[]>(dna.productImages ?? []);
   const [lifestyleImages, setLifestyleImages] = useState<string[]>(dna.lifestyleImages ?? []);
+  const [icons, setIcons] = useState<string[]>(dna.icons ?? []);
 
   // ── Identity & Positioning ──────────────────────────────────────────────────
   const [brandArchetype, setBrandArchetype] = useState<typeof BRAND_ARCHETYPES[number] | "">(
@@ -331,6 +332,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
           logoUrl: logoUrl || null,
           productImages,
           lifestyleImages,
+          icons,
           // Identity & Positioning
           brandArchetype: brandArchetype || undefined,
           pricePositioning: pricePositioning || undefined,
@@ -530,6 +532,11 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
           {/* Lifestyle images */}
           <Section title="Lifestyle Images" subtitle="Editorial and lifestyle photos from the brand website.">
             <ImageGallery label="Lifestyle image URLs" urls={lifestyleImages} onChange={setLifestyleImages} />
+          </Section>
+
+          {/* Icons */}
+          <Section title="Icons & UI Elements" subtitle="Favicons, SVG icons, and UI assets scraped from the site.">
+            <ImageGallery label="Icon URLs" urls={icons} onChange={setIcons} />
           </Section>
         </div>
 
