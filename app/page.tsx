@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Link2,
   Dna,
@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   Check,
+  Monitor,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -29,15 +30,28 @@ function LogoWordmark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 }
 
 // ---------------------------------------------------------------------------
-// Navbar
+// Navbar — glassmorphism on scroll
 // ---------------------------------------------------------------------------
 function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   return (
     <nav
-      className="sticky top-0 z-50 shadow-sm"
-      style={{ background: 'var(--sf-bg-secondary)', borderBottom: '1px solid var(--sf-border)' }}
+      className="sticky top-0 z-50 transition-all duration-300"
+      style={{
+        background: scrolled ? 'rgba(255,255,255,0.8)' : 'var(--sf-bg-secondary)',
+        backdropFilter: scrolled ? 'blur(12px)' : 'none',
+        WebkitBackdropFilter: scrolled ? 'blur(12px)' : 'none',
+        borderBottom: scrolled ? '1px solid var(--sf-border)' : '1px solid transparent',
+        boxShadow: scrolled ? '0 1px 8px rgba(0,0,0,0.06)' : 'none',
+      }}
     >
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
@@ -118,7 +132,7 @@ function Hero() {
               style={{ background: 'var(--sf-bg-elevated)', color: 'var(--sf-text-secondary)' }}
             >
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--sf-accent)' }}></span>
-              Powered by Claude + Gemini
+              ✦ From URL to on-brand ad in under 3 minutes
             </div>
 
             {/* Headline */}
@@ -135,8 +149,9 @@ function Hero() {
 
             {/* Sub-headline */}
             <p className="text-xl max-w-lg mb-8 leading-relaxed" style={{ color: 'var(--sf-text-secondary)' }}>
-              Paste your URL. Get your Brand DNA extracted automatically. Generate
-              your first creative in under 3 minutes — no design skills needed.
+              Stop producing generic creatives that break your brand. Paste your URL,
+              get your Brand DNA extracted, and generate ads that look like your
+              in-house designer made them.
             </p>
 
             {/* CTA group */}
@@ -163,73 +178,63 @@ function Hero() {
             </p>
           </div>
 
-          {/* Right column — product mockup */}
-          <div className="hidden lg:block">
-            <div className="relative">
-              {/* Browser chrome frame */}
-              <div
-                className="rounded-lg shadow-2xl overflow-hidden"
-                style={{ background: 'var(--sf-bg-secondary)', border: '1px solid var(--sf-border)' }}
-              >
-                {/* Browser bar */}
-                <div
-                  className="px-4 py-3 flex items-center gap-3"
-                  style={{ background: 'var(--sf-bg-elevated)', borderBottom: '1px solid var(--sf-border)' }}
-                >
-                  <div className="flex gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                    <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                    <div className="w-3 h-3 rounded-full bg-green-400"></div>
-                  </div>
-                  <div
-                    className="flex-1 rounded px-3 py-1.5 text-xs text-center"
-                    style={{ background: 'var(--sf-bg-secondary)', border: '1px solid var(--sf-border)', color: 'var(--sf-text-muted)' }}
-                  >
-                    app.staticsflow.com/dashboard
-                  </div>
-                </div>
-
-                {/* Mockup content — Brand DNA card */}
-                <div className="p-6" style={{ background: 'var(--sf-bg-secondary)' }}>
-                  <div className="mb-4">
-                    <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--sf-text-muted)' }}>Brand DNA extracted</div>
-                    <div className="text-base font-bold" style={{ color: 'var(--sf-text-primary)' }}>Maison Élara</div>
-                  </div>
-                  {/* Color swatches */}
-                  <div className="flex gap-2 mb-4">
-                    <div className="w-8 h-8 rounded-md bg-gray-900"></div>
-                    <div className="w-8 h-8 rounded-md bg-amber-50" style={{ border: '1px solid var(--sf-border)' }}></div>
-                    <div className="w-8 h-8 rounded-md bg-amber-600"></div>
-                    <div className="w-8 h-8 rounded-md bg-stone-400"></div>
-                    <div className="flex items-center ml-2 text-xs" style={{ color: 'var(--sf-text-muted)' }}>Brand palette</div>
-                  </div>
-                  {/* Tone tags */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {['Elevated', 'Minimal', 'Sophisticated', 'Understated'].map(t => (
-                      <span
-                        key={t}
-                        className="px-2.5 py-1 rounded-full text-xs font-medium"
-                        style={{ background: 'var(--sf-bg-elevated)', color: 'var(--sf-text-secondary)' }}
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                  {/* Creative preview */}
-                  <div className="mt-4 rounded-lg p-4 text-white aspect-square max-w-[180px]" style={{ background: '#1C1C20' }}>
-                    <div className="text-xs mb-2" style={{ color: 'var(--sf-text-muted)' }}>Generated creative</div>
-                    <div className="text-sm font-semibold leading-snug text-white">Crafted for those who notice the difference.</div>
-                    <div className="mt-3 text-xs font-medium" style={{ color: 'var(--sf-accent)' }}>Shop the collection →</div>
-                  </div>
-                </div>
-              </div>
-              {/* Decorative blob */}
-              <div
-                className="absolute -top-6 -right-6 w-32 h-32 rounded-full blur-3xl opacity-20 -z-10"
-                style={{ background: 'var(--sf-accent)' }}
+          {/* Right column — placeholder frame for product screenshot */}
+          <div className="relative aspect-[4/3]">
+            <div
+              className="w-full h-full rounded-xl flex flex-col items-center justify-center gap-4"
+              style={{
+                background: 'linear-gradient(135deg, var(--sf-bg-elevated), rgba(108,71,255,0.06))',
+                border: '1px solid var(--sf-border)',
+              }}
+            >
+              <Monitor
+                className="w-10 h-10 opacity-25"
+                style={{ color: 'var(--sf-accent)' }}
               />
+              <p className="text-sm font-medium text-center px-6" style={{ color: 'var(--sf-text-muted)' }}>
+                Product screenshot coming soon
+              </p>
             </div>
+            {/* Decorative blob */}
+            <div
+              className="absolute -top-6 -right-6 w-32 h-32 rounded-full blur-3xl opacity-20 -z-10"
+              style={{ background: 'var(--sf-accent)' }}
+            />
           </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Social Proof Stats Bar
+// ---------------------------------------------------------------------------
+function StatsBar() {
+  const stats = [
+    { value: '1,000+', label: 'creatives in inspiration database' },
+    { value: '< 3 min', label: 'from URL to first creative' },
+    { value: '30 sec', label: 'Brand DNA extraction' },
+    { value: '0', label: 'design skills required' },
+  ]
+
+  return (
+    <section className="py-10" style={{ background: 'var(--sf-bg-primary)', borderTop: '1px solid var(--sf-border)', borderBottom: '1px solid var(--sf-border)' }}>
+      <div className="max-w-4xl mx-auto px-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+          {stats.map((s) => (
+            <div key={s.label}>
+              <div
+                className="text-3xl md:text-4xl font-bold font-display mb-1"
+                style={{ letterSpacing: '-0.02em', color: 'var(--sf-text-primary)' }}
+              >
+                {s.value}
+              </div>
+              <div className="text-sm leading-snug" style={{ color: 'var(--sf-text-muted)' }}>
+                {s.label}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -352,16 +357,32 @@ function Pricing() {
     {
       name: 'Starter',
       price: '29',
-      desc: 'For solo media buyers testing the waters.',
-      features: ['3 brands', '50 creatives / month', 'Brand DNA extraction', 'Basic inspiration library', 'Email support'],
+      desc: 'For solo media buyers getting started.',
+      features: [
+        '1 brand',
+        '1 Brand DNA profile',
+        'Full inspiration library',
+        '3 competitor references',
+        'Multi-format (1:1, 4:5, 1.91:1)',
+        'Email support',
+      ],
       cta: 'Get started',
       highlighted: false,
     },
     {
       name: 'Pro',
       price: '79',
-      desc: 'For agencies managing multiple clients.',
-      features: ['15 brands', '300 creatives / month', 'Brand DNA + enrichment', 'Full inspiration library', 'BDD Manager access', 'Priority support'],
+      desc: 'For growing teams managing multiple clients.',
+      features: [
+        '3 brands',
+        '3 Brand DNA profiles',
+        'Full inspiration library',
+        '5 competitor references',
+        'Multi-format',
+        'Multi-language',
+        'Team collaboration',
+        'Priority support',
+      ],
       cta: 'Get started',
       highlighted: true,
       badge: 'Most popular',
@@ -370,7 +391,17 @@ function Pricing() {
       name: 'Agency',
       price: '199',
       desc: 'For large teams running ads at scale.',
-      features: ['Unlimited brands', 'Unlimited creatives', 'Everything in Pro', 'Custom BDD uploads', 'API access', 'Dedicated support'],
+      features: [
+        'Unlimited brands',
+        'Unlimited Brand DNA profiles',
+        'Full library + early access',
+        '15 competitor references',
+        'Multi-format',
+        'Multi-language',
+        'Agency mode',
+        'Team collaboration',
+        'Dedicated support',
+      ],
       cta: 'Get started',
       highlighted: false,
     },
@@ -380,7 +411,9 @@ function Pricing() {
     <section id="pricing" className="py-20" style={{ background: 'var(--sf-bg-primary)' }}>
       <div className="max-w-7xl mx-auto px-6">
         <h2 className="text-3xl font-bold text-center mb-3 font-display" style={{ letterSpacing: '-0.01em', color: 'var(--sf-text-primary)' }}>Simple, transparent pricing</h2>
-        <p className="text-center mb-12" style={{ color: 'var(--sf-text-secondary)' }}>BYOK — you bring your own API keys. No hidden generation fees.</p>
+        <p className="text-center mb-12" style={{ color: 'var(--sf-text-secondary)' }}>
+          BYOK — you bring your own API keys. You pay API providers directly. No hidden generation fees.
+        </p>
         <div className="grid lg:grid-cols-3 gap-6">
           {plans.map((plan) => (
             <div
@@ -403,7 +436,7 @@ function Pricing() {
               <div className="text-lg font-semibold mb-1" style={{ color: 'var(--sf-text-primary)' }}>{plan.name}</div>
               <div className="text-sm mb-5" style={{ color: 'var(--sf-text-secondary)' }}>{plan.desc}</div>
               <div className="mb-6">
-                <span className="text-4xl font-bold" style={{ color: 'var(--sf-text-primary)' }}>${plan.price}</span>
+                <span className="text-4xl font-bold" style={{ color: 'var(--sf-text-primary)' }}>€{plan.price}</span>
                 <span className="text-sm ml-1" style={{ color: 'var(--sf-text-muted)' }}>/month</span>
               </div>
               <ul className="flex flex-col gap-3 mb-8 flex-1">
@@ -443,7 +476,7 @@ function FinalCTA() {
         <h2 className="text-3xl font-bold text-white mb-4 font-display" style={{ letterSpacing: '-0.01em' }}>
           Ready to generate your first on-brand creative?
         </h2>
-        <p className="text-lg mb-8" style={{ color: 'var(--sf-text-muted)' }}>
+        <p className="text-lg mb-8" style={{ color: 'rgba(255,255,255,0.7)' }}>
           Paste your URL. See your Brand DNA in 30 seconds. No credit card required.
         </p>
         <a
@@ -494,6 +527,7 @@ export default function Home() {
     <main data-theme="light" className="min-h-screen" style={{ background: 'var(--sf-bg-secondary)' }}>
       <Navbar />
       <Hero />
+      <StatsBar />
       <HowItWorks />
       <Features />
       <Pricing />
