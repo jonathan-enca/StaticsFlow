@@ -340,11 +340,12 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
     <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
       {/* Header */}
       <div>
-        <p className="text-sm text-[var(--sf-text-secondary)] mb-1">
+        <p className="text-sm text-[var(--sf-text-secondary)] mb-1 flex items-center gap-1.5 flex-wrap">
           <a href="/dashboard" className="hover:underline">Dashboard</a>
-          {" / "}
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-[var(--sf-text-muted)]"><path d="M4.5 2.5l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           <a href={`/dashboard/brands/${brandId}`} className="hover:underline">Brand DNA</a>
-          {" / "}Generate
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-[var(--sf-text-muted)]"><path d="M4.5 2.5l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <span>Generate</span>
         </p>
         <h1 className="text-2xl font-bold text-[var(--sf-text-primary)]">{brandName} — Generate Creative</h1>
         <p className="text-sm text-[var(--sf-text-secondary)] mt-1">
@@ -353,15 +354,15 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
       </div>
 
       {/* Generation Mode selector — full width above the controls grid */}
-      <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5">
-        <h2 className="text-sm font-semibold text-[var(--sf-text-primary)] mb-3">Inspiration Source</h2>
+      <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-5">
+        <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)] mb-3">Inspiration Source</h2>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={() => setGenerationMode("database")}
-            className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-colors text-left ${
+            className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-colors text-left ${
               generationMode === "database"
-                ? "border-black bg-black text-white"
+                ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
                 : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] hover:border-gray-400"
             }`}
           >
@@ -373,9 +374,9 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
           <button
             type="button"
             onClick={() => setGenerationMode("example")}
-            className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-colors text-left ${
+            className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-colors text-left ${
               generationMode === "example"
-                ? "border-black bg-black text-white"
+                ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
                 : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] hover:border-gray-400"
             }`}
           >
@@ -420,7 +421,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                 onClick={() => fileInputRef.current?.click()}
                 className={`w-full rounded-xl border-2 border-dashed cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 py-6 ${
                   isDragging
-                    ? "border-black bg-[var(--sf-bg-elevated)]"
+                    ? "border-[var(--sf-accent)] bg-[var(--sf-bg-elevated)]"
                     : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] hover:border-gray-400"
                 }`}
               >
@@ -456,7 +457,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                   placeholder="https://example.com/reference-ad.jpg"
                   value={referenceImageUrl}
                   onChange={(e) => setReferenceImageUrl(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-black transition-colors"
+                  className="w-full px-4 py-3 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-[var(--sf-accent)] transition-colors"
                 />
               </>
             )}
@@ -469,11 +470,11 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
       {/* Row 1: Creative Brief (2/3) + Number of Creatives (1/3) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Creative Brief — primary control, gets full breathing room */}
-        <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3 sm:col-span-2">
+        <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-5 space-y-3 sm:col-span-2">
           <div>
-            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">
+            <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">
               Creative Brief{" "}
-              <span className="text-[var(--sf-text-muted)] font-normal">(optional)</span>
+              <span className="normal-case">(optional)</span>
             </h2>
             <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
               Specific guidance for Claude: promo, season, product…
@@ -483,7 +484,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             placeholder={"e.g. Summer collection, 30% off, target women 25–35\ne.g. New product launch, emphasize eco-friendly packaging"}
             value={creativeBrief}
             onChange={(e) => setCreativeBrief(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-black transition-colors resize-none min-h-[120px]"
+            className="w-full px-3 py-2.5 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-[var(--sf-accent)] transition-colors resize-none min-h-[120px]"
           />
           {creativeBrief.length > 200 && (
             <p className="text-xs text-[var(--sf-text-muted)] text-right">{creativeBrief.length} chars</p>
@@ -491,9 +492,9 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         </div>
 
         {/* Number of Creatives — quick-select chips + variants toggle */}
-        <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3">
+        <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-5 space-y-3">
           <div>
-            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Quantity</h2>
+            <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Quantity</h2>
             <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Up to {BATCH_MAX}</p>
           </div>
           {/* Quick-select chips */}
@@ -509,7 +510,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                 }}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   batchSize === n
-                    ? "bg-black text-white"
+                    ? "bg-[var(--sf-accent)] text-white"
                     : "bg-[var(--sf-bg-elevated)] text-[var(--sf-text-primary)] hover:bg-[var(--sf-border)]"
                 }`}
               >
@@ -539,7 +540,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                 setBatchSizeInput(String(n));
                 if (n > 1) setVariantsMode(false);
               }}
-              className="w-full px-3 py-2 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm focus:outline-none focus:border-black transition-colors"
+              className="w-full px-3 py-2 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm focus:outline-none focus:border-[var(--sf-accent)] transition-colors"
               placeholder="Custom…"
             />
           )}
@@ -569,7 +570,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                 aria-checked={variantsMode}
                 onClick={() => setVariantsMode((v) => !v)}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-                  variantsMode ? "bg-black" : "bg-[var(--sf-bg-elevated)]"
+                  variantsMode ? "bg-[var(--sf-accent)]" : "bg-[var(--sf-bg-elevated)]"
                 }`}
               >
                 <span
@@ -586,9 +587,9 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
       {/* Row 2: Image Quality (1/2) + Ad Format (1/2) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Image Quality — segmented control */}
-        <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3">
+        <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-5 space-y-3">
           <div>
-            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Image Quality</h2>
+            <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Image Quality</h2>
             <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Gemini model — quality vs. cost</p>
           </div>
           {/* Segmented control */}
@@ -622,17 +623,17 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         </div>
 
         {/* Ad Format — horizontal icon pills */}
-        <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Ad Format</h2>
+        <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-5 space-y-3">
+          <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Ad Format</h2>
           <div className="flex gap-2">
             {FORMAT_OPTIONS.map((f) => (
               <button
                 key={f.value}
                 type="button"
                 onClick={() => setFormat(f.value)}
-                className={`flex-1 flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl border text-sm transition-colors ${
+                className={`flex-1 flex flex-col items-center gap-1.5 px-2 py-3 rounded-lg border text-sm transition-colors ${
                   format === f.value
-                    ? "border-black bg-black text-white"
+                    ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
                     : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] hover:border-gray-400"
                 }`}
               >
@@ -670,7 +671,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
           type="button"
           onClick={generate}
           disabled={generating}
-          className="w-full py-4 bg-black text-white text-sm font-bold rounded-xl hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          className="w-full py-4 bg-[var(--sf-accent)] text-white text-sm font-bold rounded-xl hover:bg-[var(--sf-accent-hover)] disabled:opacity-50 transition-colors"
         >
           {generating ? (
             <span className="flex items-center justify-center gap-2">
@@ -692,7 +693,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
             </div>
             <div className="h-1.5 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
               <div
-                className="h-full bg-black rounded-full transition-all duration-[2000ms] ease-out"
+                className="h-full bg-[var(--sf-accent)] rounded-full transition-all duration-[2000ms] ease-out"
                 style={{ width: `${SINGLE_STEPS[stepIndex]?.pct ?? 0}%` }}
               />
             </div>
@@ -701,7 +702,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                 <div
                   key={i}
                   className={`h-1 flex-1 rounded-full transition-colors duration-500 ${
-                    i <= stepIndex ? "bg-black" : "bg-[var(--sf-bg-elevated)]"
+                    i <= stepIndex ? "bg-[var(--sf-accent)]" : "bg-[var(--sf-bg-elevated)]"
                   }`}
                 />
               ))}
@@ -720,7 +721,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
       <div className="space-y-6">
           {/* Batch progress */}
           {batchData && (
-            <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-4">
+            <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Batch Progress</h2>
@@ -740,7 +741,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                   <button
                     type="button"
                     onClick={downloadBatchZip}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[var(--sf-accent)] text-white rounded-lg hover:bg-[var(--sf-accent-hover)] transition-colors"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -754,7 +755,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
               <div className="h-2 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
-                    batchData.status === "FAILED" ? "bg-red-400" : "bg-black"
+                    batchData.status === "FAILED" ? "bg-red-400" : "bg-[var(--sf-accent)]"
                   }`}
                   style={{ width: `${batchData.totalCount > 0 ? (batchData.completedCount / batchData.totalCount) * 100 : 0}%` }}
                 />
@@ -773,7 +774,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
 
           {/* Variants result */}
           {variantResults && variantResults.length > 0 && (
-            <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] overflow-hidden">
+            <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] overflow-hidden">
               <div className="px-6 py-4 border-b border-[var(--sf-border)]">
                 <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">3 Variants Generated</h2>
                 <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Variant A · Variant B · Social Proof</p>
@@ -822,7 +823,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
 
           {/* Single result */}
           {singleResult && (
-            <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] overflow-hidden">
+            <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] overflow-hidden">
               <div className="px-6 py-4 border-b border-[var(--sf-border)] flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Generated Creative</h2>
@@ -839,7 +840,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
                   <a
                     href={singleResult.creative.imageUrl}
                     download={`creative-${singleResult.creative.id}.png`}
-                    className="px-3 py-1.5 text-xs font-medium bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium bg-[var(--sf-accent)] text-white rounded-lg hover:bg-[var(--sf-accent-hover)] transition-colors"
                   >
                     Download
                   </a>
@@ -870,7 +871,7 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
 
           {/* Previous creatives gallery */}
           {creatives.length > 0 && !batchData && (
-            <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6">
+            <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-6">
               <h2 className="text-sm font-semibold text-[var(--sf-text-primary)] mb-4">
                 Previous Creatives ({creatives.length})
               </h2>
