@@ -11,6 +11,10 @@ import { qaReviewCreative } from "@/lib/qa-reviewer";
 import { findMatchingTemplates } from "@/lib/template-matcher";
 import type { AdFormat, CreativeAngle } from "@/types/index";
 
+// Extend Vercel function timeout — generation pipeline (Claude + Gemini + QA) can take 60-120s.
+// Vercel Pro allows up to 300s; default 10s would cause silent timeouts.
+export const maxDuration = 300;
+
 // Deterministic "next best angle" map — used for variant B when Claude doesn't pick
 const NEXT_ANGLE: Record<CreativeAngle, CreativeAngle> = {
   benefit: "pain",
@@ -114,6 +118,21 @@ export async function POST(req: NextRequest) {
   const anthropicKey = user?.anthropicApiKey ?? undefined;
   const geminiKey = user?.geminiApiKey ?? undefined;
 
+  // Guard: require both BYOK keys before attempting generation.
+  // Without them, Claude and Gemini calls will throw unhelpful errors.
+  if (!anthropicKey) {
+    return NextResponse.json(
+      { error: "Claude (Anthropic) API key is not set. Go to Settings → API Keys to add it." },
+      { status: 400 }
+    );
+  }
+  if (!geminiKey) {
+    return NextResponse.json(
+      { error: "Gemini (Google) API key is not set. Go to Settings → API Keys to add it." },
+      { status: 400 }
+    );
+  }
+
   if (!variants) {
     // Single creative (original behaviour)
     const singleUserId = session.user.id as string;
@@ -129,9 +148,10 @@ export async function POST(req: NextRequest) {
       );
       return NextResponse.json(result, { status: 201 });
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       console.error("[creatives/generate]", err);
       return NextResponse.json(
-        { error: "Creative generation failed. Check your API keys and try again." },
+        { error: `Creative generation failed: ${message}` },
         { status: 500 }
       );
     }
@@ -160,8 +180,12 @@ export async function POST(req: NextRequest) {
     .map((r) => r.value);
 
   if (successfulVariants.length === 0) {
+    const firstFailure = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+    const message = firstFailure?.reason instanceof Error
+      ? firstFailure.reason.message
+      : "All variant generations failed";
     return NextResponse.json(
-      { error: "All variant generations failed. Check your API keys and try again." },
+      { error: `Creative generation failed: ${message}` },
       { status: 500 }
     );
   }

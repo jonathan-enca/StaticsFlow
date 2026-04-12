@@ -248,31 +248,45 @@ Return ONLY a valid JSON object with this exact structure:
 /**
  * Gemini generates the ad image from the creative brief.
  * This is THE ONLY image generation model (SPECS.md §1.5 §4.1 step 5).
+ *
+ * responseModalities must be set at model instantiation (not per-request) in
+ * @google/generative-ai >=0.21. Passing it only in generateContent is silently
+ * ignored in some SDK versions, causing Gemini to return text only.
  */
 async function generateImageWithGemini(
   brief: CreativeBrief,
   apiKey?: string
 ): Promise<string> {
   const client = createGeminiClient(apiKey);
-  const model = client.getGenerativeModel({ model: GEMINI_IMAGE_MODEL });
 
-  // responseModalities is required for image generation but not yet in SDK types.
-  // Must use uppercase "IMAGE" and include "TEXT" as Gemini returns both.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const model = client.getGenerativeModel({
+    model: GEMINI_IMAGE_MODEL,
+    // responseModalities is not yet in the SDK's GenerationConfig types but is
+    // required for the image generation model — cast to any.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    generationConfig: { responseModalities: ["IMAGE", "TEXT"] } as any,
+  });
+
   const response = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: brief.imagePrompt }] }],
-    generationConfig: { responseModalities: ["IMAGE", "TEXT"] } as any,
-  } as any);
+  });
 
   const candidate = response.response.candidates?.[0];
   if (!candidate) throw new Error("Gemini returned no candidates");
 
-  // Extract base64 image data
+  // Extract base64 image data from the inline image part
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parts = (candidate.content?.parts ?? []) as any[];
   const imagePart = parts.find((p) => p.inlineData?.data);
   if (!imagePart) {
-    throw new Error("Gemini response did not contain an image");
+    // Surface Gemini's finish reason to make debugging easier
+    const finishReason = candidate.finishReason ?? "unknown";
+    const textPart = parts.find((p) => typeof p.text === "string");
+    const detail = textPart ? ` Gemini said: "${textPart.text}"` : "";
+    throw new Error(
+      `Gemini response did not contain an image (finishReason=${finishReason}).${detail}`
+    );
   }
 
   return imagePart.inlineData.data as string;
