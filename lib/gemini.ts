@@ -20,4 +20,6 @@ export function createGeminiClient(apiKey?: string): GoogleGenerativeAI {
 }
 
 // Gemini model for image generation (requires responseModalities: ["IMAGE", "TEXT"])
-export const GEMINI_IMAGE_MODEL = "gemini-2.0-flash-preview-image-generation";
+// Updated from "gemini-2.0-flash-preview-image-generation" which was removed from v1beta.
+// Use the experimental image generation model available on v1beta.
+export const GEMINI_IMAGE_MODEL = "gemini-2.0-flash-exp-image-generation";
