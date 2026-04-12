@@ -290,9 +290,9 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
     : "Generate Creative →";
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10">
+    <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
       {/* Header */}
-      <div className="mb-8">
+      <div>
         <p className="text-sm text-[var(--sf-text-secondary)] mb-1">
           <a href="/dashboard" className="hover:underline">Dashboard</a>
           {" / "}
@@ -305,201 +305,196 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left: Controls */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Batch size + variants */}
-          <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-4">
-            <div>
-              <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Number of Creatives</h2>
-              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Enter any number from 1 to {BATCH_MAX}</p>
-            </div>
-            <input
-              type="number"
-              min={BATCH_MIN}
-              max={BATCH_MAX}
-              value={batchSizeInput}
-              onChange={(e) => {
-                const raw = e.target.value;
-                setBatchSizeInput(raw);
-                const n = parseInt(raw, 10);
-                if (!isNaN(n) && n >= BATCH_MIN && n <= BATCH_MAX) {
-                  setBatchSize(n);
-                  if (n > 1) setVariantsMode(false);
-                }
-              }}
-              onBlur={() => {
-                // Clamp and normalise on blur
-                const n = Math.min(BATCH_MAX, Math.max(BATCH_MIN, parseInt(batchSizeInput, 10) || 1));
+      {/* Controls — horizontal grid so everything is visible at a glance */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 1. Number of Creatives */}
+        <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Number of Creatives</h2>
+            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">1 to {BATCH_MAX}</p>
+          </div>
+          <input
+            type="number"
+            min={BATCH_MIN}
+            max={BATCH_MAX}
+            value={batchSizeInput}
+            onChange={(e) => {
+              const raw = e.target.value;
+              setBatchSizeInput(raw);
+              const n = parseInt(raw, 10);
+              if (!isNaN(n) && n >= BATCH_MIN && n <= BATCH_MAX) {
                 setBatchSize(n);
-                setBatchSizeInput(String(n));
                 if (n > 1) setVariantsMode(false);
-              }}
-              className="w-full px-4 py-3 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm focus:outline-none focus:border-black transition-colors"
-            />
-
-            {/* Variants toggle — only in single mode */}
-            {batchSize === 1 && (
-              <label className="flex items-center justify-between cursor-pointer pt-1">
-                <div>
-                  <span className="text-sm font-medium text-[var(--sf-text-primary)]">Generate variants</span>
-                  <p className="text-xs text-[var(--sf-text-secondary)]">3 hooks: A · B · Social Proof</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={variantsMode}
-                  onClick={() => setVariantsMode((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    variantsMode ? "bg-black" : "bg-[var(--sf-bg-elevated)]"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-[var(--sf-bg-secondary)] transition-transform ${
-                      variantsMode ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
-              </label>
-            )}
-          </div>
-
-          {/* Creative brief (optional guidance) */}
-          <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-3">
-            <div>
-              <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Creative Brief <span className="text-[var(--sf-text-muted)] font-normal">(optional)</span></h2>
-              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
-                Give Claude specific guidance: product to feature, seasonal theme, promo, target audience…
-              </p>
-            </div>
-            <textarea
-              rows={3}
-              placeholder="e.g. Focus on our new summer collection, highlight the 30% off promo, target women 25-35…"
-              value={creativeBrief}
-              onChange={(e) => setCreativeBrief(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-black transition-colors resize-none"
-            />
-          </div>
-
-          {/* Image quality picker */}
-          <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-3">
-            <div>
-              <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Image Quality</h2>
-              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
-                Choose quality vs. cost for Gemini image generation
-              </p>
-            </div>
-            <div className="space-y-2">
-              {QUALITY_OPTIONS.map((q) => (
-                <button
-                  key={q.value}
-                  type="button"
-                  onClick={() => setImageQuality(q.value)}
-                  className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
-                    imageQuality === q.value
-                      ? "border-black bg-black text-white"
-                      : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-sm font-medium">{q.label}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                      imageQuality === q.value
-                        ? "bg-white/20 text-white"
-                        : q.badgeColor === "amber"
-                          ? "bg-amber-50 text-amber-700"
-                          : "bg-green-50 text-green-700"
-                    }`}>
-                      {q.badge}
-                    </span>
-                  </div>
-                  <p className={`text-xs leading-snug ${
-                    imageQuality === q.value ? "text-white/70" : "text-[var(--sf-text-secondary)]"
-                  }`}>
-                    {q.model} · {q.desc}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Format picker */}
-          <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-4">
-            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Ad Format</h2>
-            <div className="space-y-2">
-              {FORMAT_OPTIONS.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  onClick={() => setFormat(f.value)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-colors ${
-                    format === f.value
-                      ? "border-black bg-black text-white"
-                      : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
-                  }`}
-                >
-                  <span className="font-medium">{f.label}</span>
-                  <span className={format === f.value ? "text-[var(--sf-text-muted)]" : "text-[var(--sf-text-muted)]"}>{f.desc}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Angle is auto-selected: single/variants use "benefit", batch auto-distributes */}
-
-          {/* Generate button */}
-          <button
-            type="button"
-            onClick={generate}
-            disabled={generating}
-            className="w-full py-4 bg-black text-white text-sm font-bold rounded-xl hover:bg-gray-800 disabled:opacity-50 transition-colors"
-          >
-            {generating ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                {isBatchMode ? "Generating batch…" : variantsMode ? "Generating variants…" : "Generating…"}
-              </span>
-            ) : buttonLabel}
-          </button>
-
-          {/* Step progress bar — single / variants mode only */}
-          {generating && !isBatchMode && stepIndex >= 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-[var(--sf-text-secondary)]">
-                <span>{SINGLE_STEPS[stepIndex]?.label}</span>
-                <span>{SINGLE_STEPS[stepIndex]?.pct ?? 0}%</span>
+              }
+            }}
+            onBlur={() => {
+              const n = Math.min(BATCH_MAX, Math.max(BATCH_MIN, parseInt(batchSizeInput, 10) || 1));
+              setBatchSize(n);
+              setBatchSizeInput(String(n));
+              if (n > 1) setVariantsMode(false);
+            }}
+            className="w-full px-4 py-3 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm focus:outline-none focus:border-black transition-colors"
+          />
+          {/* Variants toggle — only in single mode */}
+          {batchSize === 1 && (
+            <label className="flex items-center justify-between cursor-pointer pt-1">
+              <div>
+                <span className="text-sm font-medium text-[var(--sf-text-primary)]">Variants</span>
+                <p className="text-xs text-[var(--sf-text-secondary)]">3 hooks A · B · SP</p>
               </div>
-              <div className="h-1.5 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-black rounded-full transition-all duration-[2000ms] ease-out"
-                  style={{ width: `${SINGLE_STEPS[stepIndex]?.pct ?? 0}%` }}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={variantsMode}
+                onClick={() => setVariantsMode((v) => !v)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  variantsMode ? "bg-black" : "bg-[var(--sf-bg-elevated)]"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-[var(--sf-bg-secondary)] transition-transform ${
+                    variantsMode ? "translate-x-6" : "translate-x-1"
+                  }`}
                 />
-              </div>
-              <div className="flex gap-1 pt-0.5">
-                {SINGLE_STEPS.map((s, i) => (
-                  <div
-                    key={i}
-                    className={`h-1 flex-1 rounded-full transition-colors duration-500 ${
-                      i <= stepIndex ? "bg-black" : "bg-[var(--sf-bg-elevated)]"
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
-              {error}
-            </div>
+              </button>
+            </label>
           )}
         </div>
 
-        {/* Right: Results */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* 2. Creative Brief */}
+        <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3 sm:col-span-1 lg:col-span-1">
+          <div>
+            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Creative Brief <span className="text-[var(--sf-text-muted)] font-normal">(optional)</span></h2>
+            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
+              Specific guidance for Claude: promo, season, product…
+            </p>
+          </div>
+          <textarea
+            rows={4}
+            placeholder="e.g. Summer collection, 30% off, target women 25–35…"
+            value={creativeBrief}
+            onChange={(e) => setCreativeBrief(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-black transition-colors resize-none"
+          />
+        </div>
+
+        {/* 3. Image Quality */}
+        <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Image Quality</h2>
+            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Gemini model — quality vs. cost</p>
+          </div>
+          <div className="space-y-2">
+            {QUALITY_OPTIONS.map((q) => (
+              <button
+                key={q.value}
+                type="button"
+                onClick={() => setImageQuality(q.value)}
+                className={`w-full text-left px-3 py-2.5 rounded-xl border transition-colors ${
+                  imageQuality === q.value
+                    ? "border-black bg-black text-white"
+                    : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-sm font-medium">{q.label}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    imageQuality === q.value
+                      ? "bg-white/20 text-white"
+                      : q.badgeColor === "amber"
+                        ? "bg-amber-50 text-amber-700"
+                        : "bg-green-50 text-green-700"
+                  }`}>
+                    {q.badge}
+                  </span>
+                </div>
+                <p className={`text-xs leading-snug ${
+                  imageQuality === q.value ? "text-white/70" : "text-[var(--sf-text-secondary)]"
+                }`}>
+                  {q.desc}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 4. Ad Format */}
+        <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Ad Format</h2>
+          <div className="space-y-2">
+            {FORMAT_OPTIONS.map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setFormat(f.value)}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-colors ${
+                  format === f.value
+                    ? "border-black bg-black text-white"
+                    : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-[var(--sf-text-primary)] hover:border-[var(--sf-border)]"
+                }`}
+              >
+                <span className="font-medium">{f.label}</span>
+                <span className={`text-xs ${format === f.value ? "text-white/70" : "text-[var(--sf-text-muted)]"}`}>{f.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Generate button + progress */}
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={generate}
+          disabled={generating}
+          className="w-full py-4 bg-black text-white text-sm font-bold rounded-xl hover:bg-gray-800 disabled:opacity-50 transition-colors"
+        >
+          {generating ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              {isBatchMode ? "Generating batch…" : variantsMode ? "Generating variants…" : "Generating…"}
+            </span>
+          ) : buttonLabel}
+        </button>
+
+        {/* Step progress bar — single / variants mode only */}
+        {generating && !isBatchMode && stepIndex >= 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-[var(--sf-text-secondary)]">
+              <span>{SINGLE_STEPS[stepIndex]?.label}</span>
+              <span>{SINGLE_STEPS[stepIndex]?.pct ?? 0}%</span>
+            </div>
+            <div className="h-1.5 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-black rounded-full transition-all duration-[2000ms] ease-out"
+                style={{ width: `${SINGLE_STEPS[stepIndex]?.pct ?? 0}%` }}
+              />
+            </div>
+            <div className="flex gap-1 pt-0.5">
+              {SINGLE_STEPS.map((s, i) => (
+                <div
+                  key={i}
+                  className={`h-1 flex-1 rounded-full transition-colors duration-500 ${
+                    i <= stepIndex ? "bg-black" : "bg-[var(--sf-bg-elevated)]"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+            {error}
+          </div>
+        )}
+      </div>
+
+      {/* Results */}
+      <div className="space-y-6">
           {/* Batch progress */}
           {batchData && (
             <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6 space-y-4">
@@ -671,12 +666,11 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
               </div>
               <h2 className="text-lg font-semibold text-[var(--sf-text-primary)] mb-2">No creatives yet</h2>
               <p className="text-sm text-[var(--sf-text-secondary)]">
-                Pick a format and angle, then hit Generate.
+                Configure the options above and hit Generate.
               </p>
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }

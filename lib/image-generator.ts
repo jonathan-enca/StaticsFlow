@@ -9,6 +9,60 @@ import { uploadToR2, creativeKey } from "@/lib/r2";
 import type { AdFormat, CreativeAngle, ImageQuality } from "@/types/index";
 import type { Template } from "@prisma/client";
 
+/**
+ * State-machine JSON repair: escapes any literal control characters
+ * (newline, carriage-return, tab) that appear INSIDE JSON string values.
+ * Claude occasionally emits these bare, which is technically invalid JSON
+ * and causes JSON.parse to throw "Unterminated string".
+ */
+function repairJsonStrings(raw: string): string {
+  let inString = false;
+  let escaped = false;
+  let result = "";
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (escaped) {
+      result += ch;
+      escaped = false;
+    } else if (ch === "\\" && inString) {
+      result += ch;
+      escaped = true;
+    } else if (ch === '"') {
+      result += ch;
+      inString = !inString;
+    } else if (inString && ch === "\n") {
+      result += "\\n";
+    } else if (inString && ch === "\r") {
+      result += "\\r";
+    } else if (inString && ch === "\t") {
+      result += "\\t";
+    } else {
+      result += ch;
+    }
+  }
+  return result;
+}
+
+/**
+ * Fetch a remote image URL and return it as a base64 string with its MIME type.
+ * Used to send BDD template images to Claude (vision) and Gemini.
+ * Silently returns null on network errors so a failed image fetch never
+ * blocks the generation pipeline.
+ */
+async function fetchImageBase64(
+  url: string
+): Promise<{ data: string; mimeType: string } | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    const ct = res.headers.get("content-type") ?? "image/jpeg";
+    return { data: buf.toString("base64"), mimeType: ct.split(";")[0].trim() };
+  } catch {
+    return null;
+  }
+}
+
 export interface CreativeBrief {
   headline: string;
   subheadline: string;
@@ -52,8 +106,8 @@ export async function generateCreative(
 ): Promise<GeneratedCreative> {
   const { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief } = options ?? {};
 
-  // Step 1: Generate the creative brief via Claude
-  const brief = await generateCreativeBrief(
+  // Step 1: Generate the creative brief via Claude (also fetches BDD template images for vision)
+  const { brief, templateImages } = await generateCreativeBrief(
     brandDna,
     format,
     angle,
@@ -62,8 +116,8 @@ export async function generateCreative(
     creativeBrief
   );
 
-  // Step 2: Generate the image via Gemini
-  const imageData = await generateImageWithGemini(brief, geminiApiKey ?? undefined, imageQuality);
+  // Step 2: Generate the image via Gemini (pass template images so Gemini can replicate their style)
+  const imageData = await generateImageWithGemini(brief, geminiApiKey ?? undefined, imageQuality, templateImages);
 
   // Step 3: Upload to R2 (skip if R2 not configured in dev)
   let imageUrl: string;
@@ -124,6 +178,8 @@ export async function regenerateImageWithFeedback(
  * Claude generates a structured creative brief calibrated to the Brand DNA.
  * This is the "Creative Briefing" step (SPECS.md §4.1 step 4).
  */
+type FetchedImage = { data: string; mimeType: string };
+
 async function generateCreativeBrief(
   brandDna: ExtractedBrandDNA,
   format: AdFormat,
@@ -131,7 +187,7 @@ async function generateCreativeBrief(
   apiKey?: string,
   inspirationTemplates?: Template[],
   creativeBrief?: string
-): Promise<CreativeBrief> {
+): Promise<{ brief: CreativeBrief; templateImages: FetchedImage[] }> {
   const client = createClaudeClient(apiKey);
 
   const [width, height] = format.split("x").map(Number);
@@ -175,27 +231,52 @@ CUSTOMER VOCABULARY (real words your customers use — mirror this language in c
       ? `\n- Custom brand assets available: ${brandDna.customAssets.map((a) => `${a.type} (${a.url})`).join(", ")}`
       : "";
 
+  // Valid MIME types for Claude vision API
+  type ClaudeImageMime = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+  function toClaudeMime(mime: string): ClaudeImageMime {
+    if (mime === "image/png") return "image/png";
+    if (mime === "image/gif") return "image/gif";
+    if (mime === "image/webp") return "image/webp";
+    return "image/jpeg"; // default fallback
+  }
+
+  // Fetch template images for Claude vision (top 3, using thumbnail when available)
+  const templateImages: { data: string; mimeType: string; label: string }[] = [];
+  if (inspirationTemplates && inspirationTemplates.length > 0) {
+    const toFetch = inspirationTemplates.slice(0, 3);
+    const fetched = await Promise.all(
+      toFetch.map(async (t, i) => {
+        const url = t.thumbnailUrl ?? t.sourceImageUrl;
+        const img = await fetchImageBase64(url);
+        return img ? { ...img, label: `Ad ${i + 1}` } : null;
+      })
+    );
+    for (const img of fetched) {
+      if (img) templateImages.push(img);
+    }
+  }
+
   // Build BDD inspiration section (STA-58)
   const inspirationSection =
     inspirationTemplates && inspirationTemplates.length > 0
-      ? `\nBDD INSPIRATION (${inspirationTemplates.length} high-performing ad creatives from our database that match this angle and category):
+      ? `\nBDD INSPIRATION — You have been shown ${templateImages.length > 0 ? `${templateImages.length} actual winning ad images above` : "the following winning ad metadata"}. These are high-performing creatives for this angle and category. Study them carefully: understand the visual composition, copywriting style, layout structure, and why they win. Then create a brief that adapts these winning principles to ${brandDna.name}'s brand DNA.
 ${inspirationTemplates
   .map((t, i) => {
     const analysis = t.analysisJson as Record<string, unknown>;
-    return `Creative ${i + 1}: type=${t.type}, layout=${t.layout}, hookType=${t.hookType}, palette=[${t.palette.join(", ")}]${
-      analysis.headline ? `, example headline="${analysis.headline}"` : ""
+    return `Ad ${i + 1}: type=${t.type}, layout=${t.layout}, hookType=${t.hookType}, palette=[${t.palette.join(", ")}]${
+      analysis.headline ? `, headline="${analysis.headline}"` : ""
     }${analysis.copyStyle ? `, copyStyle="${analysis.copyStyle}"` : ""}`;
   })
   .join("\n")}
 
-Use these as creative direction — not to copy, but to understand what structures and visual approaches work for this angle and category. Create a unique brief that achieves the same strategic effect for this brand.\n`
+Do NOT copy these ads. Adapt their winning structure and visual DNA to ${brandDna.name}'s brand.\n`
       : "";
 
   const userBriefSection = creativeBrief
     ? `\n\nUSER BRIEF (mandatory — these instructions OVERRIDE defaults and must be reflected in every field below):\n${creativeBrief}\n`
     : "";
 
-  const prompt = `You are a senior creative director at a top DTC advertising agency. Create a detailed creative brief for a static Meta Ad that is unmistakably "on brand" for this brand.${inspirationSection}${userBriefSection}
+  const textPrompt = `You are a senior creative director at a top DTC advertising agency. Create a detailed creative brief for a static Meta Ad that is unmistakably "on brand" for this brand.${inspirationSection}${userBriefSection}
 
 BRAND DNA:
 - Brand: ${brandDna.name}
@@ -231,10 +312,23 @@ Return ONLY a valid JSON object with this exact structure. CRITICAL: do not use 
   "imagePrompt": "A detailed image generation prompt for Gemini. Keep this as a single continuous string — no line breaks. Include: exact layout, product placement, background color (${brandDna.colors.primary}), text positions, visual style. The ad must look like it was made by the brand's in-house design team. Make it specific to ${brandDna.productCategory}. Format: ${format}. Style: photorealistic, professional ad quality, no watermarks."
 }`;
 
+  // Build multimodal message: template images first (vision), then text prompt
+  const messageContent = [
+    ...templateImages.map((img) => ({
+      type: "image" as const,
+      source: {
+        type: "base64" as const,
+        media_type: toClaudeMime(img.mimeType),
+        data: img.data,
+      },
+    })),
+    { type: "text" as const, text: textPrompt },
+  ];
+
   const response = await client.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 4096, // imagePrompt can be 400-600 tokens alone — 1500 caused truncation
-    messages: [{ role: "user", content: prompt }],
+    max_tokens: 4096,
+    messages: [{ role: "user", content: messageContent }],
   });
 
   const text =
@@ -244,35 +338,22 @@ Return ONLY a valid JSON object with this exact structure. CRITICAL: do not use 
     .replace(/\n?```$/m, "")
     .trim();
 
-  // Robust parse: Claude occasionally emits literal newlines/tabs inside JSON string
-  // values, which makes JSON.parse throw "Unterminated string". Repair by escaping
-  // any unescaped control characters that appear inside quoted string tokens.
-  function parseWithRepair(raw: string): Record<string, unknown> {
-    try {
-      return JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      // Escape literal newlines/CRs/tabs inside JSON string values only
-      // Use [\s\S] instead of . with /s flag for broader TS target compat
-      const repaired = raw.replace(
-        /"(?:[^"\\]|\\.)*"/g,
-        (match) =>
-          match
-            .replace(/\n/g, "\\n")
-            .replace(/\r/g, "\\r")
-            .replace(/\t/g, "\\t")
-      );
-      return JSON.parse(repaired) as Record<string, unknown>;
-    }
+  // Robust parse: try direct first, then use state-machine repair for literal
+  // control chars that Claude sometimes emits inside string values.
+  let parsed: Omit<CreativeBrief, "brandDnaRef" | "inspirationTemplateIds">;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    parsed = JSON.parse(repairJsonStrings(cleaned));
   }
-
-  const parsed = parseWithRepair(cleaned) as Omit<CreativeBrief, "brandDnaRef" | "inspirationTemplateIds">;
-  return {
+  const brief: CreativeBrief = {
     ...parsed,
     brandDnaRef: brandDna,
     ...(inspirationTemplates?.length
       ? { inspirationTemplateIds: inspirationTemplates.map((t) => t.id) }
       : {}),
   };
+  return { brief, templateImages };
 }
 
 /**
@@ -286,7 +367,8 @@ Return ONLY a valid JSON object with this exact structure. CRITICAL: do not use 
 async function generateImageWithGemini(
   brief: CreativeBrief,
   apiKey?: string,
-  quality?: ImageQuality
+  quality?: ImageQuality,
+  referenceImages?: { data: string; mimeType: string }[]
 ): Promise<string> {
   const client = createGeminiClient(apiKey);
   const modelName = getGeminiImageModel(quality);
@@ -300,8 +382,22 @@ async function generateImageWithGemini(
     generationConfig: { responseModalities: ["IMAGE", "TEXT"] } as any,
   });
 
+  // Build multimodal prompt: reference images first, then text instruction
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parts: any[] = [];
+  if (referenceImages && referenceImages.length > 0) {
+    for (const img of referenceImages) {
+      parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+    }
+    parts.push({
+      text: `You are shown ${referenceImages.length} reference ad image(s) above as creative inspiration. Study their visual composition, layout, and style. Now generate a NEW static ad image that captures the same structural quality and visual impact, but adapted for this brand. ${brief.imagePrompt}`,
+    });
+  } else {
+    parts.push({ text: brief.imagePrompt });
+  }
+
   const response = await model.generateContent({
-    contents: [{ role: "user", parts: [{ text: brief.imagePrompt }] }],
+    contents: [{ role: "user", parts }],
   });
 
   const candidate = response.response.candidates?.[0];
@@ -309,12 +405,12 @@ async function generateImageWithGemini(
 
   // Extract base64 image data from the inline image part
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parts = (candidate.content?.parts ?? []) as any[];
-  const imagePart = parts.find((p) => p.inlineData?.data);
+  const responseParts = (candidate.content?.parts ?? []) as any[];
+  const imagePart = responseParts.find((p: any) => p.inlineData?.data);
   if (!imagePart) {
     // Surface Gemini's finish reason to make debugging easier
     const finishReason = candidate.finishReason ?? "unknown";
-    const textPart = parts.find((p) => typeof p.text === "string");
+    const textPart = responseParts.find((p: any) => typeof p.text === "string");
     const detail = textPart ? ` Gemini said: "${textPart.text}"` : "";
     throw new Error(
       `Gemini response did not contain an image (finishReason=${finishReason}).${detail}`
