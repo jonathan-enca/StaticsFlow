@@ -114,6 +114,10 @@ interface Analysis {
   language: string;
 }
 
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function analyzeTemplate(
   claude: Anthropic,
   templateId: string,
@@ -121,24 +125,40 @@ async function analyzeTemplate(
 ): Promise<void> {
   const presigned = await getPresignedUrl(imageUrl);
 
-  const message = await claude.messages.create({
-    model: "claude-opus-4-5",
-    max_tokens: 512,
-    system: SYSTEM_PROMPT,
-    messages: [{
-      role: "user",
-      content: [
-        {
-          type: "image",
-          source: { type: "url", url: presigned },
-        },
-        {
-          type: "text",
-          text: "Analyse this ad creative and return the JSON classification.",
-        },
-      ],
-    }],
-  });
+  // Retry with exponential backoff on 429 rate-limit errors
+  let message;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      message = await claude.messages.create({
+        model: "claude-opus-4-5",
+        max_tokens: 512,
+        system: SYSTEM_PROMPT,
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "url", url: presigned },
+            },
+            {
+              type: "text",
+              text: "Analyse this ad creative and return the JSON classification.",
+            },
+          ],
+        }],
+      });
+      break; // success
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (status === 429 && attempt < 5) {
+        const waitMs = Math.min(4000 * Math.pow(2, attempt), 60000); // 4s, 8s, 16s, 32s, 60s
+        await sleep(waitMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  if (!message) throw new Error("Failed after retries");
 
   const rawText = message.content[0].type === "text" ? message.content[0].text : "";
   const cleaned = rawText.replace(/```(?:json)?\n?/g, "").trim();
@@ -150,7 +170,7 @@ async function analyzeTemplate(
     layout:   VALID_LAYOUTS.includes(analysis.layout) ? analysis.layout : "other",
     hookType: VALID_HOOKS.includes(analysis.hookType) ? analysis.hookType : "benefice_direct",
     palette:  Array.isArray(analysis.palette)
-      ? analysis.palette.slice(0, 3).filter((c: string) => /^#[0-9a-fA-F]{6}$/.test(c))
+      ? analysis.palette.slice(0, 4).filter((c: string) => /^#[0-9a-fA-F]{6}$/.test(c))
       : [],
     language: VALID_LANGUAGES.includes(analysis.language) ? analysis.language : "other",
   };
