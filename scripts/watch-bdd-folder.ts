@@ -4,12 +4,14 @@
  * Watches a local folder for new ad creative images and uploads them to the
  * BDD Manager API. Two modes:
  *
- *   --once   Process all images in the folder then exit (initial 4,000 import)
- *   default  Watch for new files added to the folder (ongoing ingestion)
+ *   --once        Process all images in the folder then exit (initial 4,000 import)
+ *   --limit N     Stop after uploading N new files (pilot runs, token budgeting)
+ *   default       Watch for new files added to the folder (ongoing ingestion)
  *
  * Usage:
  *   npx tsx scripts/watch-bdd-folder.ts --folder /path/to/creatives --api-url http://localhost:3000
  *   npx tsx scripts/watch-bdd-folder.ts --folder /path/to/creatives --once
+ *   npx tsx scripts/watch-bdd-folder.ts --folder "/path/to/templates copie" --once --limit 100
  *
  * Auth:
  *   Set ADMIN_SESSION_TOKEN env var, or pass --token <value>.
@@ -46,6 +48,7 @@ const { values } = parseArgs({
     "api-url": { type: "string", default: "http://localhost:3000" },
     token: { type: "string" },
     once: { type: "boolean", default: false },
+    limit: { type: "string" }, // parsed as number below
   },
   strict: true,
 });
@@ -54,6 +57,13 @@ const folderArg = values["folder"];
 const apiUrl = (values["api-url"] as string).replace(/\/$/, "");
 const token = values["token"] ?? process.env.ADMIN_SESSION_TOKEN;
 const onceMode = Boolean(values["once"]);
+
+const limitArg = values["limit"];
+const uploadLimit: number | null = limitArg != null ? parseInt(limitArg, 10) : null;
+if (uploadLimit !== null && (isNaN(uploadLimit) || uploadLimit < 1)) {
+  console.error("Error: --limit must be a positive integer");
+  process.exit(1);
+}
 
 if (!folderArg) {
   console.error("Error: --folder <path> is required");
@@ -159,6 +169,7 @@ async function main(): Promise<void> {
   console.log(`  Folder  : ${folder}`);
   console.log(`  API     : ${apiUrl}`);
   console.log(`  Mode    : ${onceMode ? "one-shot (--once)" : "watch"}`);
+  if (uploadLimit !== null) console.log(`  Limit   : ${uploadLimit} file(s)`);
   console.log(`  Skipping: ${processed.size} already-processed file(s)`);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
@@ -170,28 +181,41 @@ async function main(): Promise<void> {
       .map((f) => path.join(folder, f));
 
     const remaining = allFiles.filter((f) => !processed.has(f));
+    const toUpload =
+      uploadLimit !== null ? remaining.slice(0, uploadLimit) : remaining;
     console.log(
-      `Found ${allFiles.length} image(s) — ${remaining.length} to upload, ${allFiles.length - remaining.length} already done.\n`
+      `Found ${allFiles.length} image(s) — ${remaining.length} to upload` +
+        (uploadLimit !== null ? ` (capped at ${uploadLimit} by --limit)` : "") +
+        `, ${allFiles.length - remaining.length} already done.\n`
     );
 
-    let count = 0;
-    for (const filePath of allFiles) {
+    let uploaded = 0;
+    for (const filePath of toUpload) {
       await uploadFile(filePath, processed);
-      count++;
-      if (count % 100 === 0) {
+      uploaded++;
+      if (uploaded % 100 === 0) {
         console.log(
-          `\n  ── Progress: ${count} / ${allFiles.length} (${Math.round((count / allFiles.length) * 100)}%) ──\n`
+          `\n  ── Progress: ${uploaded} / ${toUpload.length} (${Math.round((uploaded / toUpload.length) * 100)}%) ──\n`
         );
       }
     }
 
     console.log(
-      `\nDone! ${allFiles.length} file(s) processed (${processed.size} total in sidecar).`
+      `\nDone! ${uploaded} file(s) uploaded this run (${processed.size} total in sidecar).`
     );
+    if (uploadLimit !== null && remaining.length > uploadLimit) {
+      console.log(
+        `  ${remaining.length - uploadLimit} file(s) remain — re-run without changes to continue from file ${uploadLimit + 1}.`
+      );
+    }
     process.exit(0);
   } else {
     // ── Watch mode: upload new files as they appear ──────────────
-    console.log("Watching for new images… (Ctrl+C to stop)\n");
+    console.log(
+      `Watching for new images…${uploadLimit !== null ? ` (stops after ${uploadLimit} upload(s))` : ""} (Ctrl+C to stop)\n`
+    );
+
+    let watchUploaded = 0;
 
     const watcher = chokidar.watch(folder, {
       ignored: [
@@ -203,9 +227,22 @@ async function main(): Promise<void> {
     });
 
     watcher.on("add", (filePath: string) => {
-      uploadFile(filePath, processed).catch((err) =>
-        console.error(`Unhandled error for ${filePath}:`, err)
-      );
+      if (uploadLimit !== null && watchUploaded >= uploadLimit) return;
+      const beforeSize = processed.size;
+      uploadFile(filePath, processed)
+        .then(() => {
+          if (processed.size > beforeSize) {
+            // a new file was successfully uploaded
+            watchUploaded++;
+            if (uploadLimit !== null && watchUploaded >= uploadLimit) {
+              console.log(
+                `\n  Limit of ${uploadLimit} reached — stopping watcher.`
+              );
+              watcher.close().then(() => process.exit(0));
+            }
+          }
+        })
+        .catch((err) => console.error(`Unhandled error for ${filePath}:`, err));
     });
 
     watcher.on("error", (err: unknown) => {
