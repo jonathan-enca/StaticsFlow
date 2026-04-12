@@ -24,6 +24,34 @@ interface BrandDNA {
   personas: string[];
   brandVoice: string;
   productCategory: string;
+  // Identity & Positioning (STA-55)
+  brandArchetype?: string;
+  pricePositioning?: string;
+  targetMarkets?: string[];
+  competitorBrands?: string[];
+  differentiators?: string[];
+  // Voice & Messaging (STA-55)
+  brandVoiceAdjectives?: string[];
+  forbiddenWords?: string[];
+  mandatoryMentions?: string[];
+  messagingHierarchy?: string[];
+  callToActionExamples?: string[];
+  // Creative Direction (STA-55)
+  visualStyleKeywords?: string[];
+  creativeDoList?: string[];
+  creativeDontList?: string[];
+  preferredHooks?: string[];
+  avoidedHooks?: string[];
+  // Customer Intelligence (STA-55)
+  customerReviewsVerbatim?: string[];
+  customerPainPoints?: string[];
+  customerDesiredOutcome?: string;
+  customerObjections?: string[];
+  // Campaign Context (STA-55)
+  currentCampaignObjective?: string;
+  currentPromotion?: string;
+  seasonalConstraints?: string[];
+  legalConstraints?: string[];
 }
 
 interface GeneratedCreative {
@@ -147,6 +175,389 @@ function Stepper({ step, onNavigate }: { step: Step; onNavigate: (s: Step) => vo
         </div>
       </div>
     </>
+  );
+}
+
+// ── DNA Review Step (STA-55): grouped editable fields ────────────────────────
+function DnaReviewStep({
+  dna,
+  onDnaChange,
+  isDemo,
+  geminiKey,
+  onGeminiKeyChange,
+  generating,
+  generateError,
+  onGenerate,
+  onBack,
+}: {
+  dna: BrandDNA;
+  onDnaChange: (dna: BrandDNA) => void;
+  isDemo: boolean;
+  geminiKey: string;
+  onGeminiKeyChange: (key: string) => void;
+  generating: boolean;
+  generateError: string | null;
+  onGenerate: () => void;
+  onBack: () => void;
+}) {
+  const [campaignOpen, setCampaignOpen] = useState(false);
+
+  const set = <K extends keyof BrandDNA>(key: K, value: BrandDNA[K]) =>
+    onDnaChange({ ...dna, [key]: value });
+
+  const setTags = (key: keyof BrandDNA) => (tags: string[]) =>
+    onDnaChange({ ...dna, [key]: tags });
+
+  return (
+    <div>
+      {/* Brand header */}
+      <div className="flex items-center gap-3 mb-6">
+        <div
+          className="w-10 h-10 rounded-md border flex items-center justify-center overflow-hidden"
+          style={{ backgroundColor: dna.colors.primary, borderColor: 'var(--sf-border)' }}
+        >
+          {dna.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={dna.logoUrl} alt={dna.name} className="w-8 h-8 object-contain" />
+          ) : (
+            <span className="text-white font-bold text-sm">{dna.name.charAt(0)}</span>
+          )}
+        </div>
+        <div>
+          <h2 className="font-bold" style={{ color: 'var(--sf-text-primary)' }}>{dna.name}</h2>
+          <p className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{dna.url}</p>
+        </div>
+        <span
+          className="ml-auto text-xs font-medium px-2.5 py-1 rounded-full"
+          style={{ background: 'rgba(52,199,89,0.15)', color: 'var(--sf-success)' }}
+        >
+          ✓ Brand DNA extracted
+        </span>
+      </div>
+
+      <h1
+        className="text-3xl font-bold mb-2 font-display"
+        style={{ color: 'var(--sf-text-primary)', letterSpacing: '-0.02em' }}
+      >
+        Your Brand DNA is ready
+      </h1>
+      <p className="mb-8" style={{ color: 'var(--sf-text-secondary)' }}>
+        Review and edit the extracted brand profile before generating your first creative.
+      </p>
+
+      <div className="space-y-4 mb-8">
+
+        {/* ── Visuals ──────────────────────────────────────────────── */}
+        <div className="rounded-md p-5 border" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
+          <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--sf-text-primary)' }}>Brand Colors</h3>
+          <div className="flex gap-3">
+            {(["primary", "secondary", "accent"] as const).map((key) => (
+              <div key={key} className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={dna.colors[key]}
+                  onChange={(e) => set("colors", { ...dna.colors, [key]: e.target.value })}
+                  className="w-8 h-8 rounded-md border cursor-pointer p-0.5"
+                  style={{ borderColor: 'var(--sf-border)' }}
+                />
+                <div>
+                  <div className="text-xs capitalize" style={{ color: 'var(--sf-text-muted)' }}>{key}</div>
+                  <div className="text-xs font-mono" style={{ color: 'var(--sf-text-primary)' }}>{dna.colors[key]}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Identity & Positioning ────────────────────────────────── */}
+        <div className="rounded-md p-5 border space-y-4" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--sf-text-primary)' }}>Identity & Positioning</h3>
+
+          {dna.brandArchetype && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium" style={{ color: 'var(--sf-text-muted)' }}>Archetype</span>
+              <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--sf-bg-elevated)', color: 'var(--sf-text-primary)' }}>{dna.brandArchetype}</span>
+              {dna.pricePositioning && (
+                <>
+                  <span className="text-xs font-medium ml-2" style={{ color: 'var(--sf-text-muted)' }}>Positioning</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full capitalize" style={{ background: 'var(--sf-bg-elevated)', color: 'var(--sf-text-primary)' }}>{dna.pricePositioning}</span>
+                </>
+              )}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Key Benefits</label>
+            <ul className="space-y-1 mb-2">
+              {(dna.keyBenefits ?? []).slice(0, 3).map((b, i) => (
+                <li key={i} className="text-sm flex gap-2" style={{ color: 'var(--sf-text-secondary)' }}>
+                  <span className="font-bold" style={{ color: 'var(--sf-success)' }}>✓</span>{b}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {(dna.differentiators ?? []).length > 0 && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Differentiators</label>
+              <div className="flex flex-wrap gap-1.5">
+                {(dna.differentiators ?? []).map((d, i) => (
+                  <span key={i} className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--sf-bg-elevated)', color: 'var(--sf-text-secondary)' }}>{d}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {dna.personas.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Target Personas</label>
+              <p className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{dna.personas[0]}</p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Voice & Messaging ─────────────────────────────────────── */}
+        <div className="rounded-md p-5 border space-y-4" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--sf-text-primary)' }}>Voice & Messaging</h3>
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Tone of Voice</label>
+            <textarea
+              value={dna.toneOfVoice ?? ""}
+              onChange={(e) => set("toneOfVoice", e.target.value)}
+              rows={2}
+              className="w-full px-3 py-2 text-sm rounded-md border focus:outline-none resize-none"
+              style={{ background: 'var(--sf-bg-elevated)', borderColor: 'var(--sf-border)', color: 'var(--sf-text-primary)' }}
+            />
+          </div>
+
+          {(dna.brandVoiceAdjectives ?? []).length > 0 && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Voice Adjectives</label>
+              <div className="flex flex-wrap gap-1.5">
+                {(dna.brandVoiceAdjectives ?? []).map((adj, i) => (
+                  <span key={i} className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--sf-bg-elevated)', color: 'var(--sf-text-secondary)' }}>{adj}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(dna.forbiddenWords ?? []).length > 0 && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Forbidden Words</label>
+              <div className="flex flex-wrap gap-1.5">
+                {(dna.forbiddenWords ?? []).map((w, i) => (
+                  <span key={i} className="text-xs px-2 py-0.5 rounded-full line-through" style={{ background: 'rgba(255,69,58,0.1)', color: 'var(--sf-error)' }}>{w}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(dna.messagingHierarchy ?? []).length > 0 && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Messaging Hierarchy</label>
+              <ol className="space-y-1 list-decimal list-inside">
+                {(dna.messagingHierarchy ?? []).map((m, i) => (
+                  <li key={i} className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{m}</li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
+
+        {/* ── Creative Direction ────────────────────────────────────── */}
+        {((dna.visualStyleKeywords ?? []).length > 0 || (dna.preferredHooks ?? []).length > 0 || (dna.creativeDoList ?? []).length > 0) && (
+          <div className="rounded-md p-5 border space-y-4" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--sf-text-primary)' }}>Creative Direction</h3>
+
+            {(dna.visualStyleKeywords ?? []).length > 0 && (
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Visual Style</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(dna.visualStyleKeywords ?? []).map((k, i) => (
+                    <span key={i} className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--sf-bg-elevated)', color: 'var(--sf-text-secondary)' }}>{k}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(dna.preferredHooks ?? []).length > 0 && (
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Preferred Hooks</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(dna.preferredHooks ?? []).map((h, i) => (
+                    <span key={i} className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(52,199,89,0.12)', color: 'var(--sf-success)' }}>{h}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(dna.creativeDoList ?? []).length > 0 && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>✓ Do</label>
+                  <ul className="space-y-0.5">
+                    {(dna.creativeDoList ?? []).slice(0, 3).map((d, i) => (
+                      <li key={i} className="text-xs" style={{ color: 'var(--sf-text-secondary)' }}>• {d}</li>
+                    ))}
+                  </ul>
+                </div>
+                {(dna.creativeDontList ?? []).length > 0 && (
+                  <div>
+                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>✗ Don&apos;t</label>
+                    <ul className="space-y-0.5">
+                      {(dna.creativeDontList ?? []).slice(0, 3).map((d, i) => (
+                        <li key={i} className="text-xs" style={{ color: 'var(--sf-text-secondary)' }}>• {d}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Customer Intelligence ─────────────────────────────────── */}
+        {((dna.customerPainPoints ?? []).length > 0 || dna.customerDesiredOutcome) && (
+          <div className="rounded-md p-5 border space-y-4" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--sf-text-primary)' }}>Customer Intelligence</h3>
+
+            {dna.customerDesiredOutcome && (
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Desired Outcome</label>
+                <p className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{dna.customerDesiredOutcome}</p>
+              </div>
+            )}
+
+            {(dna.customerPainPoints ?? []).length > 0 && (
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Pain Points</label>
+                <ul className="space-y-0.5">
+                  {(dna.customerPainPoints ?? []).slice(0, 3).map((p, i) => (
+                    <li key={i} className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>• {p}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Campaign Context (collapsible) ────────────────────────── */}
+        <div className="rounded-md border overflow-hidden" style={{ borderColor: 'var(--sf-border)' }}>
+          <button
+            type="button"
+            onClick={() => setCampaignOpen((v) => !v)}
+            className="w-full px-5 py-3.5 flex items-center justify-between text-left"
+            style={{ background: 'var(--sf-bg-secondary)' }}
+          >
+            <span className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--sf-text-primary)' }}>
+              Campaign Context
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--sf-bg-elevated)', color: 'var(--sf-text-muted)' }}>Advanced</span>
+            </span>
+            <span className="text-xs" style={{ color: 'var(--sf-text-muted)' }}>{campaignOpen ? "▲" : "▼"}</span>
+          </button>
+          {campaignOpen && (
+            <div className="p-5 space-y-4 border-t" style={{ background: 'var(--sf-bg-secondary)', borderColor: 'var(--sf-border)' }}>
+              <div>
+                <label className="block text-xs font-medium mb-2" style={{ color: 'var(--sf-text-secondary)' }}>Campaign Objective</label>
+                <div className="flex flex-wrap gap-2">
+                  {(["awareness", "consideration", "conversion", "retention"] as const).map((obj) => (
+                    <button
+                      key={obj}
+                      type="button"
+                      onClick={() => set("currentCampaignObjective", dna.currentCampaignObjective === obj ? undefined : obj)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors capitalize ${
+                        dna.currentCampaignObjective === obj
+                          ? "text-white border-transparent"
+                          : "border-current"
+                      }`}
+                      style={dna.currentCampaignObjective === obj
+                        ? { background: 'var(--sf-accent)', borderColor: 'var(--sf-accent)', color: '#fff' }
+                        : { color: 'var(--sf-text-secondary)', borderColor: 'var(--sf-border)' }}
+                    >
+                      {obj}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--sf-text-secondary)' }}>Current Promotion (optional)</label>
+                <input
+                  type="text"
+                  value={dna.currentPromotion ?? ""}
+                  onChange={(e) => set("currentPromotion", e.target.value || undefined)}
+                  placeholder="e.g. Summer Sale — 20% off"
+                  className="w-full px-3 py-2 text-sm rounded-md border focus:outline-none"
+                  style={{ background: 'var(--sf-bg-elevated)', borderColor: 'var(--sf-border)', color: 'var(--sf-text-primary)' }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* Gemini key reminder — hidden in demo mode */}
+      {!isDemo && !geminiKey && (
+        <div
+          className="mb-4 p-4 rounded-md border"
+          style={{ background: 'rgba(255,159,10,0.1)', borderColor: 'rgba(255,159,10,0.25)' }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--sf-warning)' }}>
+              <Key className="w-4 h-4" />
+              Gemini API key needed
+            </p>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-xs font-medium hover:opacity-80" style={{ color: 'var(--sf-warning)' }}>Get key →</a>
+          </div>
+          <input
+            type="password"
+            value={geminiKey}
+            onChange={(e) => onGeminiKeyChange(e.target.value)}
+            placeholder="AIza..."
+            autoComplete="off"
+            className="w-full px-3 py-2 text-sm rounded-md border focus:outline-none font-mono"
+            style={{ background: 'var(--sf-bg-elevated)', borderColor: 'var(--sf-border)', color: 'var(--sf-text-primary)' }}
+          />
+        </div>
+      )}
+
+      {generateError && (
+        <p
+          className="text-sm px-4 py-3 rounded-md border mb-4"
+          style={{ color: 'var(--sf-error)', background: 'rgba(255,69,58,0.1)', borderColor: 'rgba(255,69,58,0.2)' }}
+        >
+          {generateError}
+        </p>
+      )}
+
+      <button
+        onClick={onGenerate}
+        disabled={generating}
+        className="w-full py-3.5 px-6 text-white font-semibold rounded-md hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+        style={{ background: 'var(--sf-accent)' }}
+      >
+        {generating ? (
+          <>
+            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            {isDemo ? "Generating demo creative…" : "Generating your first ad… (~30s)"}
+          </>
+        ) : (
+          "Generate First Ad Creative →"
+        )}
+      </button>
+
+      <button
+        onClick={onBack}
+        className="mt-3 w-full py-2.5 text-sm hover:opacity-80"
+        style={{ color: 'var(--sf-text-secondary)' }}
+      >
+        ← Try a different URL
+      </button>
+    </div>
   );
 }
 
@@ -438,147 +849,17 @@ export default function OnboardingPage() {
 
         {/* ── Step 2: Brand DNA review ───────────────────────────────── */}
         {step === "dna" && dna && (
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <div
-                className="w-10 h-10 rounded-md border flex items-center justify-center overflow-hidden"
-                style={{ backgroundColor: dna.colors.primary, borderColor: 'var(--sf-border)' }}
-              >
-                {dna.logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={dna.logoUrl} alt={dna.name} className="w-8 h-8 object-contain" />
-                ) : (
-                  <span className="text-white font-bold text-sm">{dna.name.charAt(0)}</span>
-                )}
-              </div>
-              <div>
-                <h2 className="font-bold" style={{ color: 'var(--sf-text-primary)' }}>{dna.name}</h2>
-                <p className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{dna.url}</p>
-              </div>
-              <span
-                className="ml-auto text-xs font-medium px-2.5 py-1 rounded-full"
-                style={{ background: 'rgba(52,199,89,0.15)', color: 'var(--sf-success)' }}
-              >
-                ✓ Brand DNA extracted
-              </span>
-            </div>
-
-            <h1
-              className="text-3xl font-bold mb-2 font-display"
-              style={{ color: 'var(--sf-text-primary)', letterSpacing: '-0.02em' }}
-            >
-              Your Brand DNA is ready
-            </h1>
-            <p className="mb-8" style={{ color: 'var(--sf-text-secondary)' }}>
-              Review and validate the extracted brand profile before generating your first creative.
-            </p>
-
-            <div className="space-y-4 mb-8">
-              {/* Colors */}
-              <div className="rounded-md p-5 border" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--sf-text-primary)' }}>Brand Colors</h3>
-                <div className="flex gap-3">
-                  {(["primary", "secondary", "accent"] as const).map((key) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-md border" style={{ backgroundColor: dna.colors[key], borderColor: 'var(--sf-border)' }} />
-                      <div>
-                        <div className="text-xs capitalize" style={{ color: 'var(--sf-text-muted)' }}>{key}</div>
-                        <div className="text-xs font-mono" style={{ color: 'var(--sf-text-primary)' }}>{dna.colors[key]}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tone & Voice */}
-              <div className="rounded-md p-5 border" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
-                <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--sf-text-primary)' }}>Tone of Voice</h3>
-                <p className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{dna.toneOfVoice}</p>
-              </div>
-
-              {/* Key Benefits */}
-              <div className="rounded-md p-5 border" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--sf-text-primary)' }}>Key Benefits</h3>
-                <ul className="space-y-1">
-                  {dna.keyBenefits.slice(0, 3).map((benefit, i) => (
-                    <li key={i} className="text-sm flex gap-2" style={{ color: 'var(--sf-text-secondary)' }}>
-                      <span className="font-bold" style={{ color: 'var(--sf-success)' }}>✓</span>
-                      {benefit}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Personas */}
-              {dna.personas.length > 0 && (
-                <div className="rounded-md p-5 border" style={{ borderColor: 'var(--sf-border)', background: 'var(--sf-bg-secondary)' }}>
-                  <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--sf-text-primary)' }}>Target Personas</h3>
-                  <p className="text-sm" style={{ color: 'var(--sf-text-secondary)' }}>{dna.personas[0]}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Gemini key reminder — hidden in demo mode */}
-            {!isDemo && !geminiKey && (
-              <div
-                className="mb-4 p-4 rounded-md border"
-                style={{ background: 'rgba(255,159,10,0.1)', borderColor: 'rgba(255,159,10,0.25)' }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--sf-warning)' }}>
-                    <Key className="w-4 h-4" />
-                    Gemini API key needed
-                  </p>
-                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-xs font-medium hover:opacity-80" style={{ color: 'var(--sf-warning)' }}>Get key →</a>
-                </div>
-                <input
-                  type="password"
-                  value={geminiKey}
-                  onChange={(e) => setGeminiKey(e.target.value)}
-                  placeholder="AIza..."
-                  autoComplete="off"
-                  className="w-full px-3 py-2 text-sm rounded-md border focus:outline-none font-mono"
-                  style={{ background: 'var(--sf-bg-elevated)', borderColor: 'var(--sf-border)', color: 'var(--sf-text-primary)' }}
-                />
-              </div>
-            )}
-
-            {generateError && (
-              <p
-                className="text-sm px-4 py-3 rounded-md border mb-4"
-                style={{ color: 'var(--sf-error)', background: 'rgba(255,69,58,0.1)', borderColor: 'rgba(255,69,58,0.2)' }}
-              >
-                {generateError}
-              </p>
-            )}
-
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="w-full py-3.5 px-6 text-white font-semibold rounded-md hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ background: 'var(--sf-accent)' }}
-            >
-              {generating ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  {isDemo ? "Generating demo creative…" : "Generating your first ad… (~30s)"}
-                </>
-              ) : (
-                "Generate First Ad Creative →"
-              )}
-            </button>
-
-            <button
-              onClick={() => navigateTo("url")}
-              className="mt-3 w-full py-2.5 text-sm hover:opacity-80"
-              style={{ color: 'var(--sf-text-secondary)' }}
-            >
-              ← Try a different URL
-            </button>
-          </div>
+          <DnaReviewStep
+            dna={dna}
+            onDnaChange={setDna}
+            isDemo={isDemo}
+            geminiKey={geminiKey}
+            onGeminiKeyChange={setGeminiKey}
+            generating={generating}
+            generateError={generateError}
+            onGenerate={handleGenerate}
+            onBack={() => navigateTo("url")}
+          />
         )}
 
         {/* ── Step 3: Generated creative ────────────────────────────── */}

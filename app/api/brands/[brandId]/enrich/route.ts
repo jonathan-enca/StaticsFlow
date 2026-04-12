@@ -10,19 +10,49 @@ import type { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
 import type { Persona, CommunicationAngles } from "@/types/index";
 
 interface EnrichPayload {
-  // Auto-extracted fields (editable by user)
+  // Visuals & Identity
   colors?: { primary: string; secondary: string; accent: string };
   fonts?: string[];
   logoUrl?: string | null;
-  toneOfVoice?: string;
-  brandVoice?: string;
-  keyBenefits?: string[];
-  personas?: string[];
   productImages?: string[];
   lifestyleImages?: string[];
-  // Manual enrichment fields
+  // Identity & Positioning
+  brandArchetype?: string;
+  pricePositioning?: string;
+  targetMarkets?: string[];
+  competitorBrands?: string[];
+  differentiators?: string[];
+  productCategory?: string;
+  keyBenefits?: string[];
+  personas?: string[];
+  // Voice & Messaging
+  toneOfVoice?: string;
+  brandVoice?: string;
+  brandVoiceAdjectives?: string[];
   forbiddenWords?: string[];
+  mandatoryMentions?: string[];
   requiredWording?: string[];
+  messagingHierarchy?: string[];
+  callToActionExamples?: string[];
+  // Creative Direction
+  visualStyleKeywords?: string[];
+  moodboardUrls?: string[];
+  creativeDoList?: string[];
+  creativeDontList?: string[];
+  preferredHooks?: string[];
+  avoidedHooks?: string[];
+  referenceAdUrls?: string[];
+  // Customer Intelligence
+  customerReviewsVerbatim?: string[];
+  customerPainPoints?: string[];
+  customerDesiredOutcome?: string;
+  customerObjections?: string[];
+  // Campaign Context
+  currentCampaignObjective?: string;
+  currentPromotion?: string;
+  seasonalConstraints?: string[];
+  legalConstraints?: string[];
+  // Manual enrichment
   brandBrief?: string;
   structuredPersonas?: Persona[];
   communicationAngles?: CommunicationAngles;
@@ -56,25 +86,60 @@ export async function PUT(
 
   // Merge enrichment fields into existing DNA (non-destructive — only update provided fields)
   const existingDna = (brand.brandDnaJson ?? {}) as Partial<ExtractedBrandDNA>;
+
+  // Helper to only spread if field is present in payload
+  const pick = <K extends keyof typeof payload>(key: K) =>
+    payload[key] !== undefined ? { [key]: payload[key] } : {};
+
   const merged: Partial<ExtractedBrandDNA> = {
     ...existingDna,
-    // Auto-extracted (user-editable overrides)
-    ...(payload.colors !== undefined && { colors: payload.colors }),
-    ...(payload.fonts !== undefined && { fonts: payload.fonts }),
-    ...(payload.logoUrl !== undefined && { logoUrl: payload.logoUrl }),
-    ...(payload.toneOfVoice !== undefined && { toneOfVoice: payload.toneOfVoice }),
-    ...(payload.brandVoice !== undefined && { brandVoice: payload.brandVoice }),
-    ...(payload.keyBenefits !== undefined && { keyBenefits: payload.keyBenefits }),
-    ...(payload.personas !== undefined && { personas: payload.personas }),
-    ...(payload.productImages !== undefined && { productImages: payload.productImages }),
-    ...(payload.lifestyleImages !== undefined && { lifestyleImages: payload.lifestyleImages }),
+    // Visuals & Identity
+    ...pick("colors"),
+    ...pick("fonts"),
+    ...pick("logoUrl"),
+    ...pick("productImages"),
+    ...pick("lifestyleImages"),
+    // Identity & Positioning
+    ...pick("brandArchetype"),
+    ...pick("pricePositioning"),
+    ...pick("targetMarkets"),
+    ...pick("competitorBrands"),
+    ...pick("differentiators"),
+    ...pick("productCategory"),
+    ...pick("keyBenefits"),
+    ...pick("personas"),
+    // Voice & Messaging
+    ...pick("toneOfVoice"),
+    ...pick("brandVoice"),
+    ...pick("brandVoiceAdjectives"),
+    ...pick("forbiddenWords"),
+    ...pick("mandatoryMentions"),
+    ...pick("requiredWording"),
+    ...pick("messagingHierarchy"),
+    ...pick("callToActionExamples"),
+    // Creative Direction
+    ...pick("visualStyleKeywords"),
+    ...pick("moodboardUrls"),
+    ...pick("creativeDoList"),
+    ...pick("creativeDontList"),
+    ...pick("preferredHooks"),
+    ...pick("avoidedHooks"),
+    ...pick("referenceAdUrls"),
+    // Customer Intelligence
+    ...pick("customerReviewsVerbatim"),
+    ...pick("customerPainPoints"),
+    ...pick("customerDesiredOutcome"),
+    ...pick("customerObjections"),
+    // Campaign Context
+    ...pick("currentCampaignObjective"),
+    ...pick("currentPromotion"),
+    ...pick("seasonalConstraints"),
+    ...pick("legalConstraints"),
     // Manual enrichment
-    ...(payload.forbiddenWords !== undefined && { forbiddenWords: payload.forbiddenWords }),
-    ...(payload.requiredWording !== undefined && { requiredWording: payload.requiredWording }),
-    ...(payload.brandBrief !== undefined && { brandBrief: payload.brandBrief }),
-    ...(payload.structuredPersonas !== undefined && { structuredPersonas: payload.structuredPersonas }),
-    ...(payload.communicationAngles !== undefined && { communicationAngles: payload.communicationAngles }),
-  };
+    ...pick("brandBrief"),
+    ...pick("structuredPersonas"),
+    ...pick("communicationAngles"),
+  } as Partial<ExtractedBrandDNA>;
 
   const updated = await prisma.brand.update({
     where: { id: brandId },

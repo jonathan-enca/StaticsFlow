@@ -1,12 +1,17 @@
 "use client";
 
 // Brand DNA Enrichment UI — auto-extracted + manual enrichment
-// Layout: two-column desktop (auto-extracted | manual enrichment)
-// C3/C4/M5: auto-extracted section editable, color pickers, tag lists, galleries
+// STA-55: complete senior creative strategist fields + full editability
+// Layout: grouped sections covering all Brand DNA dimensions
 
 import { useState, useRef } from "react";
 import type { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
 import type { Persona, CommunicationAngles, CustomAsset } from "@/types/index";
+
+const BRAND_ARCHETYPES = ["Hero", "Outlaw", "Sage", "Lover", "Jester", "Innocent", "Creator", "Caregiver", "Ruler", "Explorer", "Magician", "Regular"] as const;
+const PRICE_POSITIONS = ["budget", "mid-range", "premium", "ultra-premium"] as const;
+const HOOK_OPTIONS = ["pain", "curiosite", "social_proof", "fomo", "benefice_direct", "autorite", "urgence"] as const;
+const CAMPAIGN_OBJECTIVES = ["awareness", "consideration", "conversion", "retention"] as const;
 
 interface Props {
   brandId: string;
@@ -160,6 +165,65 @@ function ImageGallery({
   );
 }
 
+// ── Shared: Checkbox pill group ───────────────────────────────────────────────
+function PillSelect<T extends string>({
+  label,
+  options,
+  selected,
+  onChange,
+  max,
+}: {
+  label: string;
+  options: readonly T[];
+  selected: T[];
+  onChange: (selected: T[]) => void;
+  max?: number;
+}) {
+  const toggle = (opt: T) => {
+    if (selected.includes(opt)) {
+      onChange(selected.filter((s) => s !== opt));
+    } else if (!max || selected.length < max) {
+      onChange([...selected, opt]);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-700">{label}{max ? ` (max ${max})` : ""}</label>
+      <div className="flex flex-wrap gap-2">
+        {options.map((opt) => (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => toggle(opt)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+              selected.includes(opt)
+                ? "bg-black text-white border-black"
+                : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+            }`}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Section group header ──────────────────────────────────────────────────────
+function GroupHeader({ label, badge }: { label: string; badge?: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <h2 className="text-lg font-bold text-gray-900">{label}</h2>
+      {badge && (
+        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--sf-accent-muted)', color: 'var(--sf-accent)' }}>
+          {badge}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function BrandDnaClient({ brandId, initialDna, brandName }: Props) {
   const [dna, setDna] = useState<ExtractedBrandDNA>(initialDna);
@@ -169,38 +233,76 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // ── Auto-extracted fields (editable) ───────────────────────────────────────
+  // ── Visuals & Identity ──────────────────────────────────────────────────────
   const [colors, setColors] = useState(dna.colors);
   const [fonts, setFonts] = useState<string[]>(dna.fonts ?? []);
   const [logoUrl, setLogoUrl] = useState(dna.logoUrl ?? "");
-  const [toneOfVoice, setToneOfVoice] = useState(dna.toneOfVoice ?? "");
-  const [brandVoice, setBrandVoice] = useState(dna.brandVoice ?? "");
-  const [keyBenefits, setKeyBenefits] = useState<string[]>(dna.keyBenefits ?? []);
-  const [personas, setPersonas] = useState<string[]>(dna.personas ?? []);
   const [productImages, setProductImages] = useState<string[]>(dna.productImages ?? []);
   const [lifestyleImages, setLifestyleImages] = useState<string[]>(dna.lifestyleImages ?? []);
 
-  // ── Manual enrichment fields ────────────────────────────────────────────────
+  // ── Identity & Positioning ──────────────────────────────────────────────────
+  const [brandArchetype, setBrandArchetype] = useState<typeof BRAND_ARCHETYPES[number] | "">(
+    (dna.brandArchetype as typeof BRAND_ARCHETYPES[number]) ?? ""
+  );
+  const [pricePositioning, setPricePositioning] = useState<typeof PRICE_POSITIONS[number] | "">(
+    (dna.pricePositioning as typeof PRICE_POSITIONS[number]) ?? ""
+  );
+  const [targetMarkets, setTargetMarkets] = useState<string[]>(dna.targetMarkets ?? []);
+  const [competitorBrands, setCompetitorBrands] = useState<string[]>(dna.competitorBrands ?? []);
+  const [differentiators, setDifferentiators] = useState<string[]>(dna.differentiators ?? []);
+  const [productCategory, setProductCategory] = useState(dna.productCategory ?? "");
+  const [keyBenefits, setKeyBenefits] = useState<string[]>(dna.keyBenefits ?? []);
+  const [personas, setPersonas] = useState<string[]>(dna.personas ?? []);
+
+  // ── Voice & Messaging ───────────────────────────────────────────────────────
+  const [toneOfVoice, setToneOfVoice] = useState(dna.toneOfVoice ?? "");
+  const [brandVoice, setBrandVoice] = useState(dna.brandVoice ?? "");
+  const [brandVoiceAdjectives, setBrandVoiceAdjectives] = useState<string[]>(dna.brandVoiceAdjectives ?? []);
+  const [forbiddenWords, setForbiddenWords] = useState<string[]>(dna.forbiddenWords ?? []);
+  const [mandatoryMentions, setMandatoryMentions] = useState<string[]>(dna.mandatoryMentions ?? []);
+  const [requiredWording, setRequiredWording] = useState<string[]>(dna.requiredWording ?? []);
+  const [messagingHierarchy, setMessagingHierarchy] = useState<string[]>(dna.messagingHierarchy ?? []);
+  const [callToActionExamples, setCallToActionExamples] = useState<string[]>(dna.callToActionExamples ?? []);
+
+  // ── Creative Direction ──────────────────────────────────────────────────────
+  const [visualStyleKeywords, setVisualStyleKeywords] = useState<string[]>(dna.visualStyleKeywords ?? []);
+  const [moodboardUrls, setMoodboardUrls] = useState<string[]>(dna.moodboardUrls ?? []);
+  const [creativeDoList, setCreativeDoList] = useState<string[]>(dna.creativeDoList ?? []);
+  const [creativeDontList, setCreativeDontList] = useState<string[]>(dna.creativeDontList ?? []);
+  const [preferredHooks, setPreferredHooks] = useState<Array<typeof HOOK_OPTIONS[number]>>(
+    (dna.preferredHooks ?? []) as Array<typeof HOOK_OPTIONS[number]>
+  );
+  const [avoidedHooks, setAvoidedHooks] = useState<string[]>(dna.avoidedHooks ?? []);
+  const [referenceAdUrls, setReferenceAdUrls] = useState<string[]>(dna.referenceAdUrls ?? []);
+
+  // ── Customer Intelligence ───────────────────────────────────────────────────
+  const [customerReviewsVerbatim, setCustomerReviewsVerbatim] = useState<string[]>(dna.customerReviewsVerbatim ?? []);
+  const [customerPainPoints, setCustomerPainPoints] = useState<string[]>(dna.customerPainPoints ?? []);
+  const [customerDesiredOutcome, setCustomerDesiredOutcome] = useState(dna.customerDesiredOutcome ?? "");
+  const [customerObjections, setCustomerObjections] = useState<string[]>(dna.customerObjections ?? []);
+
+  // ── Campaign Context ────────────────────────────────────────────────────────
+  const [currentCampaignObjective, setCurrentCampaignObjective] = useState<typeof CAMPAIGN_OBJECTIVES[number] | "">(
+    (dna.currentCampaignObjective as typeof CAMPAIGN_OBJECTIVES[number]) ?? ""
+  );
+  const [currentPromotion, setCurrentPromotion] = useState(dna.currentPromotion ?? "");
+  const [seasonalConstraints, setSeasonalConstraints] = useState<string[]>(dna.seasonalConstraints ?? []);
+  const [legalConstraints, setLegalConstraints] = useState<string[]>(dna.legalConstraints ?? []);
+  const [campaignOpen, setCampaignOpen] = useState(false);
+
+  // ── Manual enrichment (Phase 2 legacy) ─────────────────────────────────────
   const [reviewsUrl, setReviewsUrl] = useState(dna.reviewsUrl ?? "");
   const [extractingReviews, setExtractingReviews] = useState(false);
   const [reviewsError, setReviewsError] = useState<string | null>(null);
-  const [forbiddenWords, setForbiddenWords] = useState<string[]>(dna.forbiddenWords ?? []);
-  const [requiredWording, setRequiredWording] = useState<string[]>(dna.requiredWording ?? []);
   const [assets, setAssets] = useState<CustomAsset[]>(dna.customAssets ?? []);
   const [uploadingAsset, setUploadingAsset] = useState(false);
   const [assetError, setAssetError] = useState<string | null>(null);
   const [assetType, setAssetType] = useState<"packshot" | "studio" | "ugc" | "other">("packshot");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [brandBrief, setBrandBrief] = useState(dna.brandBrief ?? "");
-  const [structuredPersonas, setStructuredPersonas] = useState<Persona[]>(
-    dna.structuredPersonas ?? []
-  );
-  const [preferredAngles, setPreferredAngles] = useState<string[]>(
-    dna.communicationAngles?.preferred ?? []
-  );
-  const [forbiddenAngles, setForbiddenAngles] = useState<string[]>(
-    dna.communicationAngles?.forbidden ?? []
-  );
+  const [structuredPersonas, setStructuredPersonas] = useState<Persona[]>(dna.structuredPersonas ?? []);
+  const [preferredAngles, setPreferredAngles] = useState<string[]>(dna.communicationAngles?.preferred ?? []);
+  const [forbiddenAngles, setForbiddenAngles] = useState<string[]>(dna.communicationAngles?.forbidden ?? []);
 
   // ── Persona helpers ─────────────────────────────────────────────────────────
   const addPersona = () =>
@@ -223,19 +325,49 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // Auto-extracted overrides
+          // Visuals & Identity
           colors,
           fonts,
           logoUrl: logoUrl || null,
-          toneOfVoice,
-          brandVoice,
-          keyBenefits,
-          personas,
           productImages,
           lifestyleImages,
-          // Manual enrichment
+          // Identity & Positioning
+          brandArchetype: brandArchetype || undefined,
+          pricePositioning: pricePositioning || undefined,
+          targetMarkets,
+          competitorBrands,
+          differentiators,
+          productCategory,
+          keyBenefits,
+          personas,
+          // Voice & Messaging
+          toneOfVoice,
+          brandVoice,
+          brandVoiceAdjectives,
           forbiddenWords,
+          mandatoryMentions,
           requiredWording,
+          messagingHierarchy,
+          callToActionExamples,
+          // Creative Direction
+          visualStyleKeywords,
+          moodboardUrls,
+          creativeDoList,
+          creativeDontList,
+          preferredHooks,
+          avoidedHooks,
+          referenceAdUrls,
+          // Customer Intelligence
+          customerReviewsVerbatim,
+          customerPainPoints,
+          customerDesiredOutcome: customerDesiredOutcome || undefined,
+          customerObjections,
+          // Campaign Context
+          currentCampaignObjective: currentCampaignObjective || undefined,
+          currentPromotion: currentPromotion || undefined,
+          seasonalConstraints,
+          legalConstraints,
+          // Manual enrichment
           brandBrief,
           structuredPersonas,
           communicationAngles: { preferred: preferredAngles, forbidden: forbiddenAngles } as CommunicationAngles,
@@ -324,20 +456,14 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
         </div>
       )}
 
-      {/* Two-column layout: auto-extracted (left) | manual enrichment (right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div className="space-y-10">
 
-        {/* ── LEFT: Auto-Extracted Brand DNA ─────────────────────────── */}
+        {/* ══ GROUP 1: Visuals & Identity ════════════════════════════════ */}
         <div className="space-y-6">
-          <div className="flex items-center gap-2 mb-2">
-            <h2 className="text-lg font-bold text-gray-900">Auto-Extracted</h2>
-            <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'var(--sf-accent-muted)', color: 'var(--sf-accent)' }}>
-              Editable
-            </span>
-          </div>
+          <GroupHeader label="Visuals & Identity" badge="Auto-extracted · Editable" />
 
           {/* Colors */}
-          <Section title="Brand Colors" subtitle="Edit directly — changes are applied to all future creatives.">
+          <Section title="Brand Colors" subtitle="Edit directly — applied to all future creatives.">
             <div className="space-y-3">
               {(["primary", "secondary", "accent"] as const).map((key) => (
                 <div key={key} className="flex items-center gap-3">
@@ -396,7 +522,98 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
             <TagInput label="Font names" tags={fonts} onChange={setFonts} placeholder="e.g. Inter, Playfair Display…" />
           </Section>
 
-          {/* Tone of Voice */}
+          {/* Product images */}
+          <Section title="Product Images" subtitle="Packshots and product photos.">
+            <ImageGallery label="Product image URLs" urls={productImages} onChange={setProductImages} />
+          </Section>
+
+          {/* Lifestyle images */}
+          <Section title="Lifestyle Images" subtitle="Editorial and lifestyle photos from the brand website.">
+            <ImageGallery label="Lifestyle image URLs" urls={lifestyleImages} onChange={setLifestyleImages} />
+          </Section>
+        </div>
+
+        {/* ══ GROUP 2: Identity & Positioning ════════════════════════════ */}
+        <div className="space-y-6">
+          <GroupHeader label="Identity & Positioning" />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Section title="Brand Archetype" subtitle="The personality archetype that best fits this brand.">
+              <div className="flex flex-wrap gap-2">
+                {BRAND_ARCHETYPES.map((arch) => (
+                  <button
+                    key={arch}
+                    type="button"
+                    onClick={() => setBrandArchetype(brandArchetype === arch ? "" : arch)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+                      brandArchetype === arch
+                        ? "bg-black text-white border-black"
+                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                    }`}
+                  >
+                    {arch}
+                  </button>
+                ))}
+              </div>
+            </Section>
+
+            <Section title="Price Positioning" subtitle="Where this brand sits in the market.">
+              <div className="flex flex-wrap gap-2">
+                {PRICE_POSITIONS.map((pos) => (
+                  <button
+                    key={pos}
+                    type="button"
+                    onClick={() => setPricePositioning(pricePositioning === pos ? "" : pos)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors capitalize ${
+                      pricePositioning === pos
+                        ? "bg-black text-white border-black"
+                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                    }`}
+                  >
+                    {pos}
+                  </button>
+                ))}
+              </div>
+            </Section>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Section title="Target Markets" subtitle="Countries or regions this brand targets.">
+              <TagInput label="Markets" tags={targetMarkets} onChange={setTargetMarkets} placeholder="e.g. France, US, Europe…" />
+            </Section>
+
+            <Section title="Competitor Brands" subtitle="Direct competitors to be aware of.">
+              <TagInput label="Competitors" tags={competitorBrands} onChange={setCompetitorBrands} placeholder="e.g. L'Oréal, Sephora…" />
+            </Section>
+          </div>
+
+          <Section title="Differentiators" subtitle="What makes this brand unique vs. competitors — be specific.">
+            <TagInput label="Differentiators" tags={differentiators} onChange={setDifferentiators} placeholder="e.g. ethically sourced, made in France…" />
+          </Section>
+
+          <Section title="Product Category">
+            <input
+              type="text"
+              value={productCategory}
+              onChange={(e) => setProductCategory(e.target.value)}
+              placeholder="e.g. skincare, fashion, food…"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+            />
+          </Section>
+
+          <Section title="Key Benefits" subtitle="Core product benefits used in ad copy.">
+            <TagInput label="Benefits" tags={keyBenefits} onChange={setKeyBenefits} placeholder="e.g. 100% natural, dermatologist-tested…" />
+          </Section>
+
+          <Section title="Target Personas" subtitle="Simple persona descriptions (one per tag).">
+            <TagInput label="Personas" tags={personas} onChange={setPersonas} placeholder="e.g. Women 28-40, urban, health-conscious…" />
+          </Section>
+        </div>
+
+        {/* ══ GROUP 3: Voice & Messaging ══════════════════════════════════ */}
+        <div className="space-y-6">
+          <GroupHeader label="Voice & Messaging" />
+
           <Section title="Tone of Voice" subtitle="How the brand communicates. Injected into every Claude brief.">
             <textarea
               value={toneOfVoice}
@@ -407,7 +624,6 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
             />
           </Section>
 
-          {/* Brand Voice */}
           <Section title="Brand Voice" subtitle="What makes this brand's communication unique.">
             <textarea
               value={brandVoice}
@@ -418,39 +634,96 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
             />
           </Section>
 
-          {/* Key Benefits */}
-          <Section title="Key Benefits" subtitle="Core product benefits used in ad copy.">
-            <TagInput label="Benefits" tags={keyBenefits} onChange={setKeyBenefits} placeholder="e.g. 100% natural, dermatologist-tested…" />
+          <Section title="Voice Adjectives" subtitle="Up to 6 adjectives that define the brand voice (e.g. bold, playful, trustworthy).">
+            <TagInput label="Adjectives (max 6)" tags={brandVoiceAdjectives} onChange={(tags) => setBrandVoiceAdjectives(tags.slice(0, 6))} placeholder="e.g. bold, warm, direct…" />
           </Section>
 
-          {/* Personas */}
-          <Section title="Target Personas" subtitle="Auto-extracted customer profiles.">
-            <TagInput label="Personas" tags={personas} onChange={setPersonas} placeholder="e.g. Women 28-40, urban, health-conscious…" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Section title="Forbidden Words" subtitle="Claude will never use these words.">
+              <TagInput label="Never say" tags={forbiddenWords} onChange={setForbiddenWords} placeholder="e.g. cheap, diet, anti-aging…" />
+            </Section>
+
+            <Section title="Mandatory Mentions" subtitle="Must always be included (legal, core promise).">
+              <TagInput label="Always include" tags={mandatoryMentions} onChange={setMandatoryMentions} placeholder="e.g. dermatologist-tested…" />
+            </Section>
+          </div>
+
+          <Section title="Required Wording" subtitle="Exact phrases required by brand or legal guidelines.">
+            <TagInput label="Required phrases" tags={requiredWording} onChange={setRequiredWording} placeholder="e.g. 100% natural ingredients…" />
           </Section>
 
-          {/* Product images */}
-          <Section title="Product Images" subtitle="Packshots and product photos. Added as visual context.">
-            <ImageGallery label="Product image URLs" urls={productImages} onChange={setProductImages} />
+          <Section title="Messaging Hierarchy" subtitle="Ordered from most to least important — Claude follows this priority.">
+            <TagInput label="Messages (ordered)" tags={messagingHierarchy} onChange={setMessagingHierarchy} placeholder="e.g. Primary: transform your routine…" />
           </Section>
 
-          {/* Lifestyle images */}
-          <Section title="Lifestyle Images" subtitle="Editorial and lifestyle photos from the brand website.">
-            <ImageGallery label="Lifestyle image URLs" urls={lifestyleImages} onChange={setLifestyleImages} />
+          <Section title="Call-to-Action Examples" subtitle="CTAs that fit this brand's tone.">
+            <TagInput label="CTA examples" tags={callToActionExamples} onChange={setCallToActionExamples} placeholder="e.g. Shop the collection, Discover now…" />
           </Section>
         </div>
 
-        {/* ── RIGHT: Manual Enrichment ────────────────────────────────── */}
+        {/* ══ GROUP 4: Creative Direction ═════════════════════════════════ */}
         <div className="space-y-6">
-          <div className="flex items-center gap-2 mb-2">
-            <h2 className="text-lg font-bold text-gray-900">Manual Enrichment</h2>
-            <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full font-medium">
-              Add depth
-            </span>
-          </div>
+          <GroupHeader label="Creative Direction" />
 
-          {/* Customer Reviews */}
+          <Section title="Visual Style Keywords" subtitle="Keywords describing the brand's visual aesthetic.">
+            <TagInput label="Style keywords" tags={visualStyleKeywords} onChange={setVisualStyleKeywords} placeholder="e.g. minimalist, editorial, raw UGC, luxury…" />
+          </Section>
+
+          <Section title="Creative Do's & Don'ts">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <TagInput label="✓ Do's" tags={creativeDoList} onChange={setCreativeDoList} placeholder="e.g. use natural lighting…" />
+              <TagInput label="✗ Don'ts" tags={creativeDontList} onChange={setCreativeDontList} placeholder="e.g. avoid stock photo feel…" />
+            </div>
+          </Section>
+
+          <Section title="Ad Hooks" subtitle="Hook types to use or avoid in creative briefs.">
+            <PillSelect
+              label="Preferred hooks"
+              options={HOOK_OPTIONS}
+              selected={preferredHooks}
+              onChange={setPreferredHooks}
+            />
+            <TagInput label="Hooks to avoid" tags={avoidedHooks} onChange={setAvoidedHooks} placeholder="e.g. fomo, urgence…" />
+          </Section>
+
+          <Section title="Moodboard URLs" subtitle="Reference images for visual direction.">
+            <ImageGallery label="Moodboard image URLs" urls={moodboardUrls} onChange={setMoodboardUrls} />
+          </Section>
+
+          <Section title="Reference Ad URLs" subtitle="Example ads that match the desired creative direction.">
+            <TagInput label="Ad URLs" tags={referenceAdUrls} onChange={setReferenceAdUrls} placeholder="https://..." />
+          </Section>
+        </div>
+
+        {/* ══ GROUP 5: Customer Intelligence ══════════════════════════════ */}
+        <div className="space-y-6">
+          <GroupHeader label="Customer Intelligence" />
+
+          <Section title="Customer Reviews Verbatim" subtitle="Real customer quotes — max 10. Used directly in ad copy.">
+            <TagInput label="Verbatim quotes (max 10)" tags={customerReviewsVerbatim} onChange={(tags) => setCustomerReviewsVerbatim(tags.slice(0, 10))} placeholder="Exact customer quote…" />
+          </Section>
+
+          <Section title="Customer Pain Points" subtitle="Problems customers had before finding this brand.">
+            <TagInput label="Pain points" tags={customerPainPoints} onChange={setCustomerPainPoints} placeholder="e.g. struggled to find ethical alternatives…" />
+          </Section>
+
+          <Section title="Customer Desired Outcome" subtitle="The single most important outcome customers want.">
+            <input
+              type="text"
+              value={customerDesiredOutcome}
+              onChange={(e) => setCustomerDesiredOutcome(e.target.value)}
+              placeholder="e.g. feel confident and put-together without effort…"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+            />
+          </Section>
+
+          <Section title="Customer Objections" subtitle="Reasons someone might hesitate to buy.">
+            <TagInput label="Objections" tags={customerObjections} onChange={setCustomerObjections} placeholder="e.g. too expensive, not sure if it works…" />
+          </Section>
+
+          {/* Customer Reviews extraction (Phase 2 legacy) */}
           <Section
-            title="Customer Reviews"
+            title="Extract from Reviews Page"
             subtitle="Paste a Trustpilot or reviews page URL — Claude extracts the real vocabulary your customers use."
           >
             <div className="flex gap-2">
@@ -490,19 +763,138 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
               </div>
             )}
           </Section>
+        </div>
 
-          {/* Wording Rules */}
-          <Section
-            title="Wording Rules"
-            subtitle="These are injected into every creative brief — Claude will never violate them."
+        {/* ══ GROUP 6: Campaign Context (collapsible) ══════════════════════ */}
+        <div className="space-y-6">
+          <button
+            type="button"
+            onClick={() => setCampaignOpen((v) => !v)}
+            className="flex items-center gap-3 w-full text-left"
           >
-            <TagInput label="Forbidden words (never say)" tags={forbiddenWords} onChange={setForbiddenWords} placeholder="e.g. cheap, diet, anti-aging…" />
-            <TagInput label="Required wording (always include)" tags={requiredWording} onChange={setRequiredWording} placeholder="e.g. dermatologist-tested, 100% natural…" />
+            <h2 className="text-lg font-bold text-gray-900">Campaign Context</h2>
+            <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full font-medium">Advanced</span>
+            <span className="ml-auto text-gray-400 text-sm">{campaignOpen ? "▲ Collapse" : "▼ Expand"}</span>
+          </button>
+
+          {campaignOpen && (
+            <>
+              <Section title="Campaign Objective" subtitle="Current marketing objective for creative generation.">
+                <div className="flex flex-wrap gap-2">
+                  {CAMPAIGN_OBJECTIVES.map((obj) => (
+                    <button
+                      key={obj}
+                      type="button"
+                      onClick={() => setCurrentCampaignObjective(currentCampaignObjective === obj ? "" : obj)}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors capitalize ${
+                        currentCampaignObjective === obj
+                          ? "bg-black text-white border-black"
+                          : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                      }`}
+                    >
+                      {obj}
+                    </button>
+                  ))}
+                </div>
+              </Section>
+
+              <Section title="Current Promotion" subtitle="Active promotion to highlight (optional).">
+                <input
+                  type="text"
+                  value={currentPromotion}
+                  onChange={(e) => setCurrentPromotion(e.target.value)}
+                  placeholder="e.g. Summer Sale — 20% off all skincare…"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+                />
+              </Section>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Section title="Seasonal Constraints" subtitle="Dates, seasons, or events limiting creative choices.">
+                  <TagInput label="Constraints" tags={seasonalConstraints} onChange={setSeasonalConstraints} placeholder="e.g. no summer imagery in Dec…" />
+                </Section>
+
+                <Section title="Legal Constraints" subtitle="Legal or compliance requirements for this campaign.">
+                  <TagInput label="Constraints" tags={legalConstraints} onChange={setLegalConstraints} placeholder="e.g. must include disclaimer…" />
+                </Section>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ══ GROUP 7: Brand Charter (deep enrichment) ════════════════════ */}
+        <div className="space-y-6">
+          <GroupHeader label="Brand Charter" badge="Manual enrichment" />
+
+          <Section
+            title="Brand Brief"
+            subtitle="Free text: who you are, who you're not, your obsession."
+          >
+            <textarea
+              value={brandBrief}
+              onChange={(e) => setBrandBrief(e.target.value)}
+              rows={4}
+              placeholder="We want to be perceived as X. Our brand is never Y. Our obsession is Z…"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black resize-none"
+            />
           </Section>
 
-          {/* Custom Assets */}
           <Section
-            title="Custom Brand Assets"
+            title="Buyer Personas (Structured)"
+            subtitle="Detailed personas with pain points and aspirations."
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700">Personas</label>
+                <button
+                  type="button"
+                  onClick={addPersona}
+                  className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+                >
+                  + Add persona
+                </button>
+              </div>
+              {structuredPersonas.map((p, i) => (
+                <div key={i} className="border border-gray-200 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-700">Persona {i + 1}</p>
+                    <button type="button" onClick={() => removePersona(i)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Name</label>
+                      <input type="text" value={p.name} onChange={(e) => updatePersona(i, { name: e.target.value })} placeholder="e.g. Sarah" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Age range</label>
+                      <input type="text" value={p.ageRange} onChange={(e) => updatePersona(i, { ageRange: e.target.value })} placeholder="e.g. 28-40" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Description</label>
+                    <textarea value={p.description} onChange={(e) => updatePersona(i, { description: e.target.value })} rows={2} placeholder="Who is this person? Lifestyle, habits, values…" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black resize-none" />
+                  </div>
+                  <TagInput label="Pain points" tags={p.painPoints} onChange={(tags) => updatePersona(i, { painPoints: tags })} placeholder="e.g. feels invisible, dry skin…" />
+                  <TagInput label="Aspirations" tags={p.aspirations} onChange={(tags) => updatePersona(i, { aspirations: tags })} placeholder="e.g. feel confident, look effortless…" />
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section
+            title="Communication Angles"
+            subtitle="Preferred and forbidden communication approaches."
+          >
+            <TagInput label="Preferred angles" tags={preferredAngles} onChange={setPreferredAngles} placeholder="e.g. transformation, authenticity, expertise…" />
+            <TagInput label="Forbidden angles" tags={forbiddenAngles} onChange={setForbiddenAngles} placeholder="e.g. fear-based, aggressive discounts…" />
+          </Section>
+        </div>
+
+        {/* ══ GROUP 8: Custom Assets ══════════════════════════════════════ */}
+        <div className="space-y-6">
+          <GroupHeader label="Custom Brand Assets" badge="Manual enrichment" />
+
+          <Section
+            title="Upload Assets"
             subtitle="Upload packshots, studio photos, or UGC. Passed to Gemini as reference images."
           >
             <div className="flex gap-2">
@@ -556,67 +948,8 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
               </div>
             )}
           </Section>
-
-          {/* Brand Charter */}
-          <Section
-            title="Brand Charter"
-            subtitle="Define your brand's personality, target personas, and preferred communication angles."
-          >
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Brand brief <span className="text-gray-400 font-normal">(free text)</span>
-              </label>
-              <textarea
-                value={brandBrief}
-                onChange={(e) => setBrandBrief(e.target.value)}
-                rows={4}
-                placeholder="We want to be perceived as X. Our brand is never Y. Our obsession is Z…"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black resize-none"
-              />
-            </div>
-
-            {/* Structured personas */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-700">Buyer personas</label>
-                <button
-                  type="button"
-                  onClick={addPersona}
-                  className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
-                >
-                  + Add persona
-                </button>
-              </div>
-              {structuredPersonas.map((p, i) => (
-                <div key={i} className="border border-gray-200 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-700">Persona {i + 1}</p>
-                    <button type="button" onClick={() => removePersona(i)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Name</label>
-                      <input type="text" value={p.name} onChange={(e) => updatePersona(i, { name: e.target.value })} placeholder="e.g. Sarah" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black" />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Age range</label>
-                      <input type="text" value={p.ageRange} onChange={(e) => updatePersona(i, { ageRange: e.target.value })} placeholder="e.g. 28-40" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Description</label>
-                    <textarea value={p.description} onChange={(e) => updatePersona(i, { description: e.target.value })} rows={2} placeholder="Who is this person? Lifestyle, habits, values…" className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black resize-none" />
-                  </div>
-                  <TagInput label="Pain points" tags={p.painPoints} onChange={(tags) => updatePersona(i, { painPoints: tags })} placeholder="e.g. feels invisible, dry skin…" />
-                  <TagInput label="Aspirations" tags={p.aspirations} onChange={(tags) => updatePersona(i, { aspirations: tags })} placeholder="e.g. feel confident, look effortless…" />
-                </div>
-              ))}
-            </div>
-
-            <TagInput label="Preferred communication angles" tags={preferredAngles} onChange={setPreferredAngles} placeholder="e.g. transformation, authenticity, expertise…" />
-            <TagInput label="Forbidden communication angles" tags={forbiddenAngles} onChange={setForbiddenAngles} placeholder="e.g. fear-based, aggressive discounts…" />
-          </Section>
         </div>
+
       </div>
 
       {/* Bottom save bar */}
