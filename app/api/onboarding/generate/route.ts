@@ -41,8 +41,7 @@ export async function POST(req: NextRequest) {
       "guest",
       "guest",
       "onboarding-preview",
-      anthropicApiKey,
-      geminiApiKey
+      { anthropicApiKey, geminiApiKey }
     );
 
     const qaResult = await qaReviewCreative(generated, dna, anthropicApiKey);

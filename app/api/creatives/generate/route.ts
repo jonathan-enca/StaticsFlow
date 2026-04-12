@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateCreative } from "@/lib/image-generator";
 import { qaReviewCreative } from "@/lib/qa-reviewer";
+import { findMatchingTemplates } from "@/lib/template-matcher";
 import type { AdFormat, CreativeAngle } from "@/types/index";
 
 export async function POST(req: NextRequest) {
@@ -54,7 +55,11 @@ export async function POST(req: NextRequest) {
   try {
     const brandDna = brand.brandDnaJson as unknown as Parameters<typeof generateCreative>[0];
 
-    // Step 1 + 2: Claude brief → Gemini image
+    // Fetch BDD inspiration templates (SPECS.md §4.1 step 3 — STA-58)
+    // Graceful degradation: if BDD is empty, generation continues without templates
+    const inspirationTemplates = await findMatchingTemplates(brandDna, angle, format);
+
+    // Step 1 + 2: Claude brief → Gemini image (with BDD inspiration)
     const generated = await generateCreative(
       brandDna,
       format,
@@ -62,8 +67,11 @@ export async function POST(req: NextRequest) {
       session.user.id,
       brandId,
       creative.id,
-      user?.anthropicApiKey ?? undefined,
-      user?.geminiApiKey ?? undefined
+      {
+        anthropicApiKey: user?.anthropicApiKey ?? undefined,
+        geminiApiKey: user?.geminiApiKey ?? undefined,
+        inspirationTemplates,
+      }
     );
 
     // Step 3: QA review loop (Claude reviews, Gemini regenerates if score < 0.7)

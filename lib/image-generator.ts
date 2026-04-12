@@ -7,6 +7,7 @@ import { createClaudeClient, CLAUDE_MODEL } from "@/lib/claude";
 import { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
 import { uploadToR2, creativeKey } from "@/lib/r2";
 import type { AdFormat, CreativeAngle } from "@/types/index";
+import type { Template } from "@prisma/client";
 
 export interface CreativeBrief {
   headline: string;
@@ -20,6 +21,7 @@ export interface CreativeBrief {
   fontGuidance: string;
   imagePrompt: string; // The Gemini image generation prompt
   brandDnaRef: ExtractedBrandDNA;
+  inspirationTemplateIds?: string[]; // BDD template IDs used as inspiration (STA-58)
 }
 
 export interface GeneratedCreative {
@@ -40,19 +42,25 @@ export async function generateCreative(
   userId: string,
   brandId: string,
   creativeId: string,
-  anthropicApiKey?: string,
-  geminiApiKey?: string
+  options?: {
+    anthropicApiKey?: string;
+    geminiApiKey?: string;
+    inspirationTemplates?: Template[];
+  }
 ): Promise<GeneratedCreative> {
+  const { anthropicApiKey, geminiApiKey, inspirationTemplates } = options ?? {};
+
   // Step 1: Generate the creative brief via Claude
   const brief = await generateCreativeBrief(
     brandDna,
     format,
     angle,
-    anthropicApiKey
+    anthropicApiKey,
+    inspirationTemplates
   );
 
   // Step 2: Generate the image via Gemini
-  const imageData = await generateImageWithGemini(brief, geminiApiKey);
+  const imageData = await generateImageWithGemini(brief, geminiApiKey ?? undefined);
 
   // Step 3: Upload to R2 (skip if R2 not configured in dev)
   let imageUrl: string;
@@ -116,7 +124,8 @@ async function generateCreativeBrief(
   brandDna: ExtractedBrandDNA,
   format: AdFormat,
   angle: CreativeAngle,
-  apiKey?: string
+  apiKey?: string,
+  inspirationTemplates?: Template[]
 ): Promise<CreativeBrief> {
   const client = createClaudeClient(apiKey);
 
@@ -161,7 +170,23 @@ CUSTOMER VOCABULARY (real words your customers use — mirror this language in c
       ? `\n- Custom brand assets available: ${brandDna.customAssets.map((a) => `${a.type} (${a.url})`).join(", ")}`
       : "";
 
-  const prompt = `You are a senior creative director at a top DTC advertising agency. Create a detailed creative brief for a static Meta Ad that is unmistakably "on brand" for this brand.
+  // Build BDD inspiration section (STA-58)
+  const inspirationSection =
+    inspirationTemplates && inspirationTemplates.length > 0
+      ? `\nBDD INSPIRATION (${inspirationTemplates.length} high-performing ad creatives from our database that match this angle and category):
+${inspirationTemplates
+  .map((t, i) => {
+    const analysis = t.analysisJson as Record<string, unknown>;
+    return `Creative ${i + 1}: type=${t.type}, layout=${t.layout}, hookType=${t.hookType}, palette=[${t.palette.join(", ")}]${
+      analysis.headline ? `, example headline="${analysis.headline}"` : ""
+    }${analysis.copyStyle ? `, copyStyle="${analysis.copyStyle}"` : ""}`;
+  })
+  .join("\n")}
+
+Use these as creative direction — not to copy, but to understand what structures and visual approaches work for this angle and category. Create a unique brief that achieves the same strategic effect for this brand.\n`
+      : "";
+
+  const prompt = `You are a senior creative director at a top DTC advertising agency. Create a detailed creative brief for a static Meta Ad that is unmistakably "on brand" for this brand.${inspirationSection}
 
 BRAND DNA:
 - Brand: ${brandDna.name}
@@ -210,8 +235,14 @@ Return ONLY a valid JSON object with this exact structure:
     .replace(/\n?```$/m, "")
     .trim();
 
-  const parsed = JSON.parse(cleaned) as Omit<CreativeBrief, "brandDnaRef">;
-  return { ...parsed, brandDnaRef: brandDna };
+  const parsed = JSON.parse(cleaned) as Omit<CreativeBrief, "brandDnaRef" | "inspirationTemplateIds">;
+  return {
+    ...parsed,
+    brandDnaRef: brandDna,
+    ...(inspirationTemplates?.length
+      ? { inspirationTemplateIds: inspirationTemplates.map((t) => t.id) }
+      : {}),
+  };
 }
 
 /**
