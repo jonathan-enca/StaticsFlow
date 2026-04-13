@@ -89,31 +89,64 @@ model Brand {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  creatives Creative[]
-  batches   Batch[]
-  products  Product[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creatives    Creative[]
+  batches      Batch[]
+  products     Product[]
+  inspirations Inspiration[]
 
   @@unique([userId, url])
 }
 
-// Per-brand product entity — a brand can have multiple products
-// Each product owns its own images, icons/UI elements, and moodboard assets
+// Per-brand product entity — v2 — rich Product DNA model
+// Each product is a first-class entity with URL extraction + full asset library
 model Product {
   id              String   @id @default(cuid())
   brandId         String
   name            String
   description     String?  @db.Text
-  // R2 URLs for product images (packshots, lifestyle shots)
-  productImages   String[] @default([])
-  // R2 URLs for icons and UI element assets
-  iconsAndUiElements String[] @default([])
-  // R2 URLs for moodboard assets (drag-and-drop upload, replaces URL input)
-  moodboardAssets String[] @default([])
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
 
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  // === Product DNA v2 fields ===
+  sourceUrl             String?   // URL used for auto-extraction (mandatory if extracted)
+  tagline               String?   // Short product promise
+  price                 String?   // e.g. "€49.90"
+  currency              String?   // EUR, USD, GBP, etc.
+
+  // Structured data arrays
+  benefits              String[]  @default([]) // Product-specific benefits
+  claims                String[]  @default([]) // "Dermatologist tested", "SPF50", etc.
+  ingredients           String[]  @default([]) // Key ingredients/components
+  specsJson             Json?                  // Key-value specs {"Volume": "50ml"}
+
+  // Image asset libraries (R2 URLs)
+  productImages         String[]  @default([]) // Packshots — min 3 for generation
+  lifestyleImages       String[]  @default([]) // In-context shots
+  packagingImages       String[]  @default([]) // Packaging-focused shots
+  ugcImages             String[]  @default([]) // User-generated content images
+  icons                 String[]  @default([]) // Product-specific badges/icons
+
+  // Product-specific copy intelligence
+  reviewsVerbatim       String[]  @default([]) // Real customer quotes (max 10)
+  reviewsSummary        String?   @db.Text      // AI-synthesized sentiment
+  productSpecificCTAs   String[]  @default([]) // Overrides Brand DNA CTAs
+  productSpecificHooks  String[]  @default([]) // Overrides Brand DNA hooks
+  avoidForThisProduct   String[]  @default([]) // Product-specific don'ts
+
+  // Legacy fields (kept for backward compat, not written to by new code)
+  iconsAndUiElements    String[]  @default([])
+  moodboardAssets       String[]  @default([])
+
+  // Status + defaults
+  isActive              Boolean   @default(true)
+  isDefault             Boolean   @default(false) // One per brand — auto-selected in wizard
+  extractionStatus      String    @default("pending") // pending | extracting | done | failed
+  extractedAt           DateTime?
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  brand     Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  creatives Creative[]
 
   @@index([brandId])
 }
@@ -128,11 +161,41 @@ model Creative {
   score     Float?         // QA score (0–1)
   format    String         @default("1080x1080") // AdFormat
   angle     String         @default("benefit")   // CreativeAngle
+
+  // Generation provenance (Phase A/B/C)
+  productId      String? // FK → Product (nullable for backward compat)
+  inspirationId  String? // FK → Inspiration (nullable for backward compat)
+  generationMode String? // "auto" | "manual" | "reference" | null (legacy)
+
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
-  brand Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  brand       Brand        @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  batch       Batch?       @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  product     Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  inspiration Inspiration? @relation(fields: [inspirationId], references: [id], onDelete: SetNull)
+}
+
+// Per-brand visual inspirations library — uploaded ad screenshots analyzed by Claude
+// Used as structural references for creative cloning (Phase B)
+model Inspiration {
+  id           String    @id @default(cuid())
+  brandId      String
+  imageUrl     String    // R2 URL of the original uploaded image
+  thumbnailUrl String?   // R2 URL of resized thumbnail
+  imageHash    String?   // SHA-256 hash for deduplication
+  analysisJson Json      @default("{}") // InspirationAnalysis schema (see spec Section 3.2)
+  isActive     Boolean   @default(true)
+  uploadedAt   DateTime  @default(now())
+  analyzedAt   DateTime? // null until Claude analysis completes
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brand     Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  creatives Creative[]
+
+  @@index([brandId])
 }
 
 // Batch generation job — tracks progress of a multi-creative generation request
