@@ -70,12 +70,20 @@ export async function qaReviewCreative(
     lastResult = await runQAReview(currentCreative, brandDna, anthropicApiKey, inspirationBase64);
 
     // Composite score: fidelity (0.6) + brand consistency (0.4) when inspiration present
-    const effectiveScore =
+    let effectiveScore =
       inspirationBase64 &&
       lastResult.fidelityScore !== undefined &&
       lastResult.brandScore !== undefined
         ? 0.6 * lastResult.fidelityScore + 0.4 * lastResult.brandScore
         : lastResult.score;
+
+    // STA-110: If brand has a logoUrl but the QA agent flagged LOGO_MISSING,
+    // cap the score at 0.60 (below the 0.75 approval threshold) to force a retry
+    // or at minimum prevent auto-approval of logo-less creatives.
+    const logoMissing = lastResult.brandImprovements.includes("LOGO_MISSING");
+    if (logoMissing && brandDna.logoUrl) {
+      effectiveScore = Math.min(effectiveScore, 0.60);
+    }
 
     if (effectiveScore >= 0.7) {
       // Inject the composite score so the result reflects dual scoring
@@ -299,7 +307,13 @@ EVALUATION CRITERIA:
    - No watermarks, logos of third parties, or competitor branding
    - No low-quality, blurry, or pixelated elements
    - CTA button text is platform-appropriate (e.g., "Shop Now", not just "Buy")
-   - Image would not be flagged by Meta's automated review system` : ""}${additionalComplianceSection}
+   - Image would not be flagged by Meta's automated review system
+
+8. LOGO PRESENCE (CRITICAL CHECK)${brandDna.logoUrl ? `
+   - A brand logo element MUST be visible in the image (bottom-right or consistent brand placement)
+   - If NO logo-like element is visible: add exactly "LOGO_MISSING" to brandImprovements
+   - A creative without a brand logo scores a maximum of 0.60 regardless of other criteria` : `
+   - No logoUrl is set for this brand — skip this check`}` : ""}${additionalComplianceSection}
 
 SCORING GUIDE:
 - 0.9–1.0: Premium agency quality. Upload-ready for a top DTC brand's Meta campaign.
@@ -403,7 +417,7 @@ Call the submit_qa_review tool with your full assessment.`;
             brandImprovements: {
               type: "array",
               items: { type: "string" },
-              description: "Brand alignment fixes — what needs to change to make this look like the brand's own work",
+              description: "Brand alignment fixes — what needs to change to make this look like the brand's own work. Use exactly 'LOGO_MISSING' (no other text) when no brand logo is visible and a logoUrl is set.",
             },
             metaComplianceIssues: {
               type: "array",

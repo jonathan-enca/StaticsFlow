@@ -237,15 +237,23 @@ export async function POST(req: NextRequest) {
     referenceImageUrl = ins.imageUrl;
     generationMode = generationMode ?? "manual";
   } else {
-    // No inspiration provided — check if brand has enough to use
-    const activeInspirationCount = await prisma.inspiration.count({
-      where: { brandId, isActive: true },
-    });
-    if (activeInspirationCount < 5) {
-      inspirationGateWarning =
-        activeInspirationCount === 0
-          ? "No inspirations in your library — falling back to the global template library. Upload 5+ creatives for better results."
-          : `Only ${activeInspirationCount} inspiration${activeInspirationCount === 1 ? "" : "s"} in your library (5 required for inspiration-driven generation) — falling back to global templates.`;
+    // No inspiration provided — check if brand has enough to activate brand-style generation.
+    // STA-109: gate lowered from 5 → 2. Also bypass entirely when brand has logo + product images
+    // (compositing provides brand identity even without inspiration-driven templates).
+    const hasLogoAndProduct =
+      !!(brandDna as { logoUrl?: string }).logoUrl &&
+      (brandDna.products?.some((p) => p.images.length > 0) ?? false);
+
+    if (!hasLogoAndProduct) {
+      const activeInspirationCount = await prisma.inspiration.count({
+        where: { brandId, isActive: true },
+      });
+      if (activeInspirationCount < 2) {
+        inspirationGateWarning =
+          activeInspirationCount === 0
+            ? "No inspirations in your library — falling back to the global template library. Upload 2+ creatives for brand-style generation."
+            : `Only ${activeInspirationCount} inspiration in your library (2 required for brand-style generation) — falling back to global templates.`;
+      }
     }
   }
 
