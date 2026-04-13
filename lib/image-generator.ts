@@ -2,6 +2,7 @@
 // Takes a creative brief from Claude and generates the ad image via Gemini
 // Gemini is THE ONLY image model — no fallback (SPECS.md §1.5)
 
+import sharp from "sharp";
 import { createGeminiClient, getGeminiImageModel } from "@/lib/gemini";
 import { createClaudeClient, CLAUDE_MODEL } from "@/lib/claude";
 import { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
@@ -112,6 +113,63 @@ export interface GeneratedCreative {
 }
 
 /**
+ * STA-107: Composite the brand logo onto a generated image buffer using Sharp.js.
+ * - Fetches logoUrl, resizes to ~15% of the image width
+ * - Overlays at bottom-right with 20px safe-zone padding
+ * - Returns the composited buffer. On any failure (null logoUrl, fetch error,
+ *   Sharp error) returns the original buffer so generation never hard-fails.
+ */
+async function compositeAssets(
+  imageBuffer: Buffer,
+  brandDna: ExtractedBrandDNA
+): Promise<Buffer> {
+  const logoUrl = brandDna.logoUrl;
+  if (!logoUrl) return imageBuffer;
+
+  let logoBuffer: Buffer;
+  try {
+    const res = await fetch(logoUrl, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return imageBuffer;
+    logoBuffer = Buffer.from(await res.arrayBuffer());
+  } catch {
+    console.warn("[compositeAssets] Failed to fetch logo — skipping overlay");
+    return imageBuffer;
+  }
+
+  try {
+    // Get base image dimensions
+    const baseMeta = await sharp(imageBuffer).metadata();
+    const baseWidth = baseMeta.width ?? 1080;
+    const baseHeight = baseMeta.height ?? 1080;
+
+    // Resize logo to ~15% of image width, preserving aspect ratio
+    const logoTargetWidth = Math.round(baseWidth * 0.15);
+    const resizedLogo = await sharp(logoBuffer)
+      .resize({ width: logoTargetWidth, withoutEnlargement: true })
+      .toBuffer();
+
+    const logoMeta = await sharp(resizedLogo).metadata();
+    const logoW = logoMeta.width ?? logoTargetWidth;
+    const logoH = logoMeta.height ?? logoTargetWidth;
+
+    // Bottom-right safe-zone: 20px padding from edges
+    const padding = 20;
+    const left = baseWidth - logoW - padding;
+    const top = baseHeight - logoH - padding;
+
+    const composited = await sharp(imageBuffer)
+      .composite([{ input: resizedLogo, left, top, blend: "over" }])
+      .png()
+      .toBuffer();
+
+    return composited;
+  } catch (err) {
+    console.warn("[compositeAssets] Sharp compositing failed — returning original:", err);
+    return imageBuffer;
+  }
+}
+
+/**
  * Step 1: Claude generates a creative brief from Brand DNA.
  * Step 2: Gemini generates the image from the brief.
  * Step 3: Image is uploaded to R2 and the URL is returned.
@@ -166,18 +224,23 @@ export async function generateCreative(
     productImages.length > 0 ? productImages : undefined
   );
 
-  // Step 3: Upload to R2 (skip if R2 not configured in dev)
+  // Step 3: STA-107 — composite brand logo onto the generated image before storage
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let finalBuffer: Buffer = Buffer.from(imageData, "base64") as any;
+  finalBuffer = await compositeAssets(finalBuffer, brandDna) as any;
+
+  // Step 4: Upload to R2 (skip if R2 not configured in dev)
   let imageUrl: string;
   let imageBase64: string | undefined;
 
   if (process.env.R2_ACCOUNT_ID && process.env.R2_ACCOUNT_ID !== "YOUR_CLOUDFLARE_ACCOUNT_ID") {
     const key = creativeKey(userId, brandId, creativeId);
-    const buffer = Buffer.from(imageData, "base64");
-    imageUrl = await uploadToR2(key, buffer, "image/png");
+    imageUrl = await uploadToR2(key, finalBuffer, "image/png");
   } else {
     // Dev fallback: store full data URL so the image is displayable without R2
-    imageBase64 = imageData;
-    imageUrl = `data:image/png;base64,${imageData}`;
+    const finalBase64 = finalBuffer.toString("base64");
+    imageBase64 = finalBase64;
+    imageUrl = `data:image/png;base64,${finalBase64}`;
     console.warn("[image-generator] R2 not configured — image stored as data URL (dev only)");
   }
 
@@ -202,6 +265,11 @@ export async function regenerateImageWithFeedback(
 
   const imageData = await generateImageWithGemini(enhancedBrief, geminiApiKey, imageQuality);
 
+  // STA-107: composite logo onto regenerated image as well
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let finalBuffer: Buffer = Buffer.from(imageData, "base64") as any;
+  finalBuffer = await compositeAssets(finalBuffer, previous.brief.brandDnaRef) as any;
+
   let imageUrl: string;
   let imageBase64: string | undefined;
 
@@ -211,14 +279,74 @@ export async function regenerateImageWithFeedback(
     userId && brandId && creativeId
   ) {
     const key = creativeKey(userId, brandId, `${creativeId}_v2`);
-    const buffer = Buffer.from(imageData, "base64");
-    imageUrl = await uploadToR2(key, buffer, "image/png");
+    imageUrl = await uploadToR2(key, finalBuffer, "image/png");
   } else {
-    imageBase64 = imageData;
-    imageUrl = `data:image/png;base64,${imageData}`;
+    const finalBase64 = finalBuffer.toString("base64");
+    imageBase64 = finalBase64;
+    imageUrl = `data:image/png;base64,${finalBase64}`;
   }
 
   return { brief: enhancedBrief, imageUrl, imageBase64 };
+}
+
+/**
+ * STA-108: Map a hex color to a short human-readable semantic name.
+ * Used to pair hex codes with descriptive names in the imagePrompt so
+ * Gemini can apply them more accurately than hex alone.
+ */
+function colorSemanticName(hex: string): string {
+  const h = hex.replace("#", "").toLowerCase();
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  if (isNaN(r)) return "brand color";
+  // Simple hue-based classification
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lightness = (max + min) / 2 / 255;
+  if (lightness > 0.9) return "near-white";
+  if (lightness < 0.1) return "near-black";
+  if (max === min) return lightness > 0.5 ? "light grey" : "dark grey";
+  const hue = (() => {
+    if (max === r) return ((g - b) / (max - min) + (g < b ? 6 : 0)) / 6;
+    if (max === g) return ((b - r) / (max - min) + 2) / 6;
+    return ((r - g) / (max - min) + 4) / 6;
+  })();
+  if (hue < 1 / 12) return "warm red";
+  if (hue < 2 / 12) return "orange-red";
+  if (hue < 3 / 12) return "warm orange";
+  if (hue < 4 / 12) return "golden yellow";
+  if (hue < 5 / 12) return "yellow-green";
+  if (hue < 6 / 12) return "fresh green";
+  if (hue < 7 / 12) return "teal-green";
+  if (hue < 8 / 12) return "teal";
+  if (hue < 9 / 12) return "sky blue";
+  if (hue < 10 / 12) return "medium blue";
+  if (hue < 11 / 12) return "blue-violet";
+  if (hue < 11.5 / 12) return "deep violet";
+  return "warm red";
+}
+
+/**
+ * STA-108: Return category-specific visual constraints to inject into Claude's
+ * imagePrompt guidance so Gemini produces more targeted, less generic imagery.
+ */
+function getCategoryConstraints(productCategory: string): string {
+  const cat = (productCategory ?? "").toLowerCase();
+  if (/skincare|beauty|cosmetic|serum|moisturi|perfume|fragrance/.test(cat)) {
+    return "clean white or soft neutral background, product hero centered at 55–65% height, no busy environment, clinical or soft-luxe aesthetic";
+  }
+  if (/fashion|clothing|apparel|wear|dress|shirt|shoe|bag|accessory/.test(cat)) {
+    return "model or flat lay, product fills 40% of frame, studio lighting, aspirational styling, no props that distract from the garment";
+  }
+  if (/food|beverage|drink|coffee|tea|snack|supplement|nutrition/.test(cat)) {
+    return "appetizing close-up lighting, product in natural context, warm inviting tones unless brand is minimal, no artificial-looking colours";
+  }
+  if (/tech|software|app|saas|digital|device|electronic/.test(cat)) {
+    return "clean minimal background, device or screen as hero, subtle depth-of-field, modern flat-lay or perspective shot";
+  }
+  // Default for all other categories
+  return "product as primary hero subject, no unrelated objects in frame, clean modern background";
 }
 
 /**
@@ -323,6 +451,22 @@ CUSTOMER VOCABULARY (real words your customers use — mirror this language in c
       : "";
   })();
 
+  // STA-108: Category-specific visual language — injected into imagePrompt guidance
+  const categoryConstraints = getCategoryConstraints(brandDna.productCategory ?? "");
+  const categorySection = `\n\nCATEGORY VISUAL CONSTRAINTS (inject verbatim into imagePrompt):\n- ${categoryConstraints}`;
+
+  // STA-108: Color mandate — hex codes MUST appear in caps with semantic description
+  const colorMandateSection = `\n\nCOLOR SPECIFICITY MANDATE: In the imagePrompt field, always specify brand colors with BOTH the uppercase hex code AND a semantic name. Example: "CTA button fill: exact color ${brandDna.colors.primary.toUpperCase()} (${colorSemanticName(brandDna.colors.primary)}), NOT approximated". Do this for every color reference.`;
+
+  // STA-108: Product framing — explicit placement instruction when real product images exist
+  const productFramingSection =
+    (brandDna.products?.length ?? 0) > 0
+      ? `\n\nPRODUCT FRAMING (mandatory when product images are provided): Include in imagePrompt: "Primary product should occupy the center-lower third of the frame. Product must be fully recognizable, not abstracted, cropped, or replaced by a generic substitute."`
+      : "";
+
+  // STA-108: Negative prompt — always appended at end of imagePrompt
+  const negativePromptInstruction = `\n\nNEGATIVE PROMPT (required at end of imagePrompt): Always end the imagePrompt with: "AVOID: generic stock imagery, watermarks, unrelated products, cluttered backgrounds, low-quality textures, cartoon style unless brand uses it."`;
+
   // Valid MIME types for Claude vision API
   type ClaudeImageMime = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
   function toClaudeMime(mime: string): ClaudeImageMime {
@@ -405,7 +549,7 @@ BRAND DNA:
 - Secondary Color: ${brandDna.colors.secondary}
 - Accent Color: ${brandDna.colors.accent}
 - Fonts: ${brandDna.fonts?.join(", ") ?? ""}
-- Forbidden Words: ${brandDna.forbiddenWords?.join(", ") ?? ""}${requiredWording}${brandBriefSection}${anglesSection}${customAssetsSection}${vocabSection}${customerPainPointsSection}${customerDesiredOutcomeSection}${messagingHierarchySection}${ctaExamplesSection}${preferredHooksSection}${avoidedHooksSection}${productsPromptSection}${visualDirectivesSection}
+- Forbidden Words: ${brandDna.forbiddenWords?.join(", ") ?? ""}${requiredWording}${brandBriefSection}${anglesSection}${customAssetsSection}${vocabSection}${customerPainPointsSection}${customerDesiredOutcomeSection}${messagingHierarchySection}${ctaExamplesSection}${preferredHooksSection}${avoidedHooksSection}${productsPromptSection}${visualDirectivesSection}${categorySection}${colorMandateSection}${productFramingSection}${negativePromptInstruction}
 
 AD PARAMETERS:
 - Format: ${format} (${isPortrait ? "vertical portrait" : isLandscape ? "horizontal landscape" : "square"})
@@ -449,7 +593,7 @@ Call the submit_creative_brief tool with the completed brief. For imagePrompt: w
             layout:        { type: "string", description: "Visual layout: product placement, text zones, hierarchy" },
             colorGuidance: { type: "string", description: `brand colors — primary ${brandDna.colors.primary} as dominant brand color (use contextually based on inspiration layout: CTA fill, overlay strip, text — do NOT force it as background if inspiration shows a different approach), accent ${brandDna.colors.accent} for CTA` },
             fontGuidance:  { type: "string", description: `Font hierarchy — ${brandDna.fonts?.[0] ?? "sans-serif"} bold for headline, regular for body` },
-            imagePrompt:   { type: "string", description: `Gemini image generation prompt — single continuous paragraph, no line breaks. MUST incorporate all Visual Style Directives above verbatim. Include: layout, product placement, use ${brandDna.colors.primary} as primary brand color placed contextually (CTA button, overlay, text), text positions, visual style${brandDna.visualStyleKeywords?.length ? ` (${brandDna.visualStyleKeywords.slice(0, 3).join(", ")})` : ""}${brandDna.creativeDoList?.length ? `, DO: ${brandDna.creativeDoList.slice(0, 2).join("; ")}` : ""}${brandDna.creativeDontList?.length ? `, NEVER: ${brandDna.creativeDontList.slice(0, 2).join("; ")}` : ""}. Must look like ${brandDna.name}'s in-house design team. Category: ${brandDna.productCategory}. Format: ${format}. Photorealistic, professional ad quality, no watermarks.` },
+            imagePrompt:   { type: "string", description: `Gemini image generation prompt — single continuous paragraph, no line breaks. Rules: (1) MUST incorporate all Visual Style Directives and Category Visual Constraints verbatim. (2) Specify every brand color with BOTH its uppercase hex code AND a semantic name, e.g. "CTA button fill: exact color ${brandDna.colors.primary.toUpperCase()} (${colorSemanticName(brandDna.colors.primary)}), NOT approximated". (3) ${(brandDna.products?.length ?? 0) > 0 ? "Include explicit product framing: primary product occupies center-lower third of frame, fully recognizable, not abstracted." : "Product as primary hero subject."} (4) Include layout, text positions, visual style${brandDna.visualStyleKeywords?.length ? ` (${brandDna.visualStyleKeywords.slice(0, 3).join(", ")})` : ""}${brandDna.creativeDoList?.length ? `, DO: ${brandDna.creativeDoList.slice(0, 2).join("; ")}` : ""}${brandDna.creativeDontList?.length ? `, NEVER: ${brandDna.creativeDontList.slice(0, 2).join("; ")}` : ""}. Must look like ${brandDna.name}'s in-house design team. Category: ${brandDna.productCategory}. Format: ${format}. Photorealistic professional ad quality. (5) ALWAYS end with: "AVOID: generic stock imagery, watermarks, unrelated products, cluttered backgrounds, low-quality textures, cartoon style unless brand uses it."` },
           },
           required: ["headline", "subheadline", "copy", "callToAction", "angle", "format", "layout", "colorGuidance", "fontGuidance", "imagePrompt"],
         },
