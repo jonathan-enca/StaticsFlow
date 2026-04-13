@@ -329,6 +329,9 @@ export default function GenerateClient({
   const [canSaveAsInspiration, setCanSaveAsInspiration] = useState(false);
   const [inspirationPromptDismissed, setInspirationPromptDismissed] = useState(false);
 
+  // STA-111: soft nudge when selected product has no images (dismissable, non-blocking)
+  const [productNudgeDismissed, setProductNudgeDismissed] = useState(false);
+
   // Creative history
   const [creatives, setCreatives] = useState<ExistingCreative[]>(existingCreatives);
 
@@ -913,7 +916,11 @@ export default function GenerateClient({
     </div>
   );
 
-  const renderStep2 = () => (
+  const renderStep2 = () => {
+    // STA-111: true when any product has at least one image (acceptance criterion #3)
+    const hasProductWithImages = products.some((p) => p.productImages.length > 0);
+
+    return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-[var(--sf-text-primary)] mb-1">
@@ -923,6 +930,28 @@ export default function GenerateClient({
           Final options before we send it to Claude &amp; Gemini.
         </p>
       </div>
+
+      {/* STA-111: soft nudge when no product images exist */}
+      {!hasProductWithImages && !productNudgeDismissed && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start justify-between gap-4">
+          <p className="text-sm text-amber-800">
+            Add a product photo to make your ad more on-brand.{" "}
+            <a
+              href={`/dashboard/brands/${brandId}/products`}
+              className="font-medium underline hover:no-underline"
+            >
+              Add Product
+            </a>
+          </p>
+          <button
+            type="button"
+            onClick={() => setProductNudgeDismissed(true)}
+            className="flex-shrink-0 text-xs text-amber-600 hover:text-amber-800 transition-colors"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Batch count — batch mode only */}
       {inspirationMode === "batch" && (
@@ -1266,6 +1295,7 @@ export default function GenerateClient({
       </div>
     </div>
   );
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
 
