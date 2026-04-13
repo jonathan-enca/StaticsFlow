@@ -88,6 +88,8 @@ export default async function BrandDnaPage({ params }: PageProps) {
     communicationAngles: dna.communicationAngles,
     // Phase E: unified asset library
     brandAssets: dna.brandAssets ?? [],
+    // Products tab (BrandProduct[] stored in brandDnaJson)
+    products: dna.products ?? [],
   };
 
   return (
