@@ -12,6 +12,7 @@
 import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import type { Inspiration } from "@prisma/client";
+import { Sparkles, X, Check, Loader2 } from "lucide-react";
 
 const MIN_FOR_GENERATION = 5;
 const MAX_PER_BRAND = 50;
@@ -360,12 +361,265 @@ function UploadZone({
   );
 }
 
+// ── Starter pack picker ───────────────────────────────────────────────────────
+
+interface TemplateSummary {
+  id: string;
+  category: string;
+  type: string;
+  hookType: string;
+  thumbnailUrl: string | null;
+  sourceImageUrl: string;
+}
+
+interface CategoryPreview {
+  category: string;
+  preview: { id: string; thumbnailUrl: string | null; sourceImageUrl: string } | null;
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  skincare: "Skincare", food: "Food & Beverage", fashion: "Fashion",
+  tech: "Tech", fitness: "Fitness & Wellness", home: "Home & Living",
+  beauty: "Beauty", health: "Health", pet: "Pet", other: "Other",
+};
+
+function StarterPackPicker({
+  brandId,
+  onAdded,
+  onClose,
+}: {
+  brandId: string;
+  onAdded: (count: number) => void;
+  onClose: () => void;
+}) {
+  const [categories, setCategories] = useState<CategoryPreview[] | null>(null);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<TemplateSummary[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  // Load categories on mount
+  useState(() => {
+    setLoadingCategories(true);
+    fetch("/api/starter-packs")
+      .then((r) => r.json())
+      .then((d) => setCategories(d.categories ?? []))
+      .catch(() => setCategories([]))
+      .finally(() => setLoadingCategories(false));
+  });
+
+  async function selectCategory(cat: string) {
+    setSelectedCategory(cat);
+    setLoadingTemplates(true);
+    setSelectedIds(new Set());
+    try {
+      const res = await fetch(`/api/starter-packs?category=${cat}`);
+      const d = await res.json();
+      setTemplates(d.templates ?? []);
+    } catch {
+      setTemplates([]);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }
+
+  function toggleTemplate(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleAdd() {
+    if (selectedIds.size === 0) return;
+    setAdding(true);
+    setAddError(null);
+    try {
+      const res = await fetch(`/api/brands/${brandId}/starter-pack`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateIds: Array.from(selectedIds) }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "Failed to add starter pack");
+      onAdded(d.added);
+    } catch (e) {
+      setAddError((e as Error).message);
+      setAdding(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.5)" }}>
+      <div className="w-full max-w-2xl rounded-2xl border overflow-hidden shadow-2xl"
+        style={{ background: "var(--sf-bg-secondary)", borderColor: "var(--sf-border)", maxHeight: "90vh" }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b"
+          style={{ borderColor: "var(--sf-border)" }}>
+          <div>
+            <h2 className="font-bold text-[var(--sf-text-primary)]">Starter inspiration pack</h2>
+            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
+              Pick a category and select up to 12 pre-curated creatives to add to your library.
+            </p>
+          </div>
+          <button type="button" onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-[var(--sf-bg-elevated)] transition-colors">
+            <X className="w-5 h-5 text-[var(--sf-text-muted)]" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto" style={{ maxHeight: "calc(90vh - 140px)" }}>
+          {!selectedCategory ? (
+            /* Category grid */
+            <div className="p-6">
+              {loadingCategories ? (
+                <div className="flex items-center justify-center py-12 gap-2 text-[var(--sf-text-muted)]">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Loading categories…</span>
+                </div>
+              ) : !categories || categories.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-sm text-[var(--sf-text-muted)]">
+                    No starter packs available yet — upload your own creatives above.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {categories.map((c) => (
+                    <button
+                      key={c.category}
+                      type="button"
+                      onClick={() => selectCategory(c.category)}
+                      className="relative rounded-xl border-2 border-[var(--sf-border)] overflow-hidden text-left hover:border-[var(--sf-accent)] transition-colors group"
+                    >
+                      <div className="aspect-video bg-[var(--sf-bg-primary)] overflow-hidden">
+                        {c.preview && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={c.preview.thumbnailUrl ?? c.preview.sourceImageUrl}
+                            alt=""
+                            className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity"
+                          />
+                        )}
+                      </div>
+                      <div className="px-3 py-2">
+                        <p className="text-sm font-semibold text-[var(--sf-text-primary)]">
+                          {CATEGORY_LABELS[c.category] ?? c.category}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Template grid */
+            <div className="p-6 space-y-4">
+              <button
+                type="button"
+                onClick={() => setSelectedCategory(null)}
+                className="text-sm text-[var(--sf-accent)] hover:underline"
+              >
+                ← Back to categories
+              </button>
+              <p className="text-sm text-[var(--sf-text-secondary)]">
+                Select creatives to add · {selectedIds.size} selected
+              </p>
+              {loadingTemplates ? (
+                <div className="flex items-center justify-center py-12 gap-2 text-[var(--sf-text-muted)]">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Loading templates…</span>
+                </div>
+              ) : templates.length === 0 ? (
+                <p className="text-sm text-[var(--sf-text-muted)] text-center py-8">
+                  No templates found for this category.
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {templates.map((t) => {
+                    const sel = selectedIds.has(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => toggleTemplate(t.id)}
+                        className={`relative rounded-xl border-2 overflow-hidden transition-all ${
+                          sel
+                            ? "border-[var(--sf-accent)] ring-2 ring-[var(--sf-accent)]/20"
+                            : "border-[var(--sf-border)] hover:border-gray-400"
+                        }`}
+                      >
+                        <div className="aspect-square bg-[var(--sf-bg-primary)] overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={t.thumbnailUrl ?? t.sourceImageUrl}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        {sel && (
+                          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[var(--sf-accent)] flex items-center justify-center">
+                            <Check className="w-3 h-3 text-white" />
+                          </div>
+                        )}
+                        <div className="px-2 py-1 bg-[var(--sf-bg-secondary)] border-t border-[var(--sf-border)]">
+                          <p className="text-xs text-[var(--sf-text-muted)] truncate capitalize">{t.hookType}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t"
+          style={{ borderColor: "var(--sf-border)" }}>
+          {addError && (
+            <p className="text-xs text-[var(--sf-error)] flex-1 mr-4">{addError}</p>
+          )}
+          <div className="ml-auto flex gap-2">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm font-medium border border-[var(--sf-border)] text-[var(--sf-text-secondary)] hover:border-gray-400 transition-colors">
+              Cancel
+            </button>
+            {selectedCategory && (
+              <button
+                type="button"
+                onClick={handleAdd}
+                disabled={selectedIds.size === 0 || adding}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white flex items-center gap-1.5 disabled:opacity-40 transition-opacity"
+                style={{ background: "var(--sf-accent)" }}
+              >
+                {adding ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding…</>
+                ) : (
+                  <><Sparkles className="w-3.5 h-3.5" /> Add {selectedIds.size > 0 ? selectedIds.size : ""} to library</>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function InspirationLibraryClient({ brandId, initialInspirations }: Props) {
   const [inspirations, setInspirations] = useState<Inspiration[]>(initialInspirations);
   const [filterHook, setFilterHook] = useState<string>("all");
   const [filterFormat, setFilterFormat] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [showStarterPack, setShowStarterPack] = useState(false);
 
   const activeCount = inspirations.filter((i) => i.isActive).length;
 
@@ -419,6 +673,18 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
 
   return (
     <div>
+      {/* Starter pack modal */}
+      {showStarterPack && (
+        <StarterPackPicker
+          brandId={brandId}
+          onAdded={(count) => {
+            // Reload the page to show newly added inspirations (simplest approach — server data)
+            window.location.reload();
+          }}
+          onClose={() => setShowStarterPack(false)}
+        />
+      )}
+
       {/* Soft gate banner — fewer than MIN_FOR_GENERATION active inspirations */}
       {activeCount < MIN_FOR_GENERATION && (
         <div className="mb-6 flex items-start gap-3 rounded-xl border px-4 py-3"
@@ -428,7 +694,7 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
             color: "var(--sf-warning)",
           }}>
           <span className="mt-0.5 text-lg">⚠</span>
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-semibold">
               {activeCount === 0
                 ? "No inspirations yet"
@@ -438,6 +704,15 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
               Upload at least {MIN_FOR_GENERATION} ad creatives to enable inspiration-driven generation.
               Below that threshold, generation will fall back to the global template library.
             </p>
+            <button
+              type="button"
+              onClick={() => setShowStarterPack(true)}
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
+              style={{ background: "var(--sf-accent)", color: "#fff" }}
+            >
+              <Sparkles className="w-3 h-3" />
+              Start with a starter pack
+            </button>
           </div>
         </div>
       )}
