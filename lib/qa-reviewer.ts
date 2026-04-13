@@ -444,5 +444,23 @@ Call the submit_qa_review tool with your full assessment.`;
   if (!toolUseBlock || toolUseBlock.type !== "tool_use") {
     throw new Error("Claude did not return a QA review via tool_use");
   }
-  return toolUseBlock.input as QAReviewResponse;
+  // Normalize: Claude occasionally omits array fields even when listed as required.
+  // Default them to [] so .length checks in buildRegenerationFeedback never throw.
+  const raw = toolUseBlock.input as Partial<QAReviewResponse>;
+  return {
+    score: raw.score ?? 0,
+    approved: raw.approved ?? false,
+    feedback: raw.feedback ?? "",
+    brandConsistency: raw.brandConsistency ?? "",
+    textQuality: raw.textQuality ?? "",
+    visualQuality: raw.visualQuality ?? "",
+    metaReady: raw.metaReady ?? false,
+    improvements: raw.improvements ?? [],
+    visualImprovements: raw.visualImprovements ?? [],
+    copyImprovements: raw.copyImprovements ?? [],
+    brandImprovements: raw.brandImprovements ?? [],
+    metaComplianceIssues: raw.metaComplianceIssues ?? [],
+    fidelityScore: raw.fidelityScore,
+    brandScore: raw.brandScore,
+  };
 }
