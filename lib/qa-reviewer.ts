@@ -153,6 +153,39 @@ interface QAReviewResponse {
   brandScore?: number;
 }
 
+/**
+ * Detect the true MIME type from a base64-encoded image string.
+ * Gemini often returns WebP despite what the caller assumes is PNG.
+ */
+type ClaudeImageMime = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+
+function detectMimeTypeFromBase64(b64: string): ClaudeImageMime {
+  const buf = Buffer.from(b64.slice(0, 16), "base64");
+  // PNG magic bytes
+  if (buf.length >= 8 &&
+      buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+      buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a) {
+    return "image/png";
+  }
+  // JPEG magic bytes
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return "image/jpeg";
+  }
+  // WebP: RIFF....WEBP
+  const buf12 = Buffer.from(b64.slice(0, 20), "base64");
+  if (buf12.length >= 12 &&
+      buf12.subarray(0, 4).toString("binary") === "RIFF" &&
+      buf12.subarray(8, 12).toString("binary") === "WEBP") {
+    return "image/webp";
+  }
+  // GIF
+  if (buf.length >= 6 &&
+      (buf.subarray(0, 6).toString() === "GIF87a" || buf.subarray(0, 6).toString() === "GIF89a")) {
+    return "image/gif";
+  }
+  return "image/jpeg"; // safe fallback
+}
+
 async function runQAReview(
   creative: GeneratedCreative,
   brandDna: ExtractedBrandDNA,
@@ -291,25 +324,27 @@ Call the submit_qa_review tool with your full assessment.`;
   // Phase C: prepend inspiration image first when dual scoring is active
   type ContentBlock =
     | { type: "text"; text: string }
-    | { type: "image"; source: { type: "base64"; media_type: "image/png"; data: string } };
+    | { type: "image"; source: { type: "base64"; media_type: ClaudeImageMime; data: string } };
 
   const content: ContentBlock[] = [];
 
   if (hasInspiration) {
+    const inspirationMime = detectMimeTypeFromBase64(inspirationBase64!);
     content.push({ type: "text", text: "INSPIRATION IMAGE (structural template to clone):" });
     content.push({
       type: "image",
-      source: { type: "base64", media_type: "image/png", data: inspirationBase64! },
+      source: { type: "base64", media_type: inspirationMime, data: inspirationBase64! },
     });
   }
 
   if (hasImage) {
+    const imageMime = detectMimeTypeFromBase64(imageBase64!);
     if (hasInspiration) {
       content.push({ type: "text", text: "GENERATED CREATIVE (what you are reviewing):" });
     }
     content.push({
       type: "image",
-      source: { type: "base64", media_type: "image/png", data: imageBase64! },
+      source: { type: "base64", media_type: imageMime, data: imageBase64! },
     });
   }
   content.push({ type: "text", text: textSection });
