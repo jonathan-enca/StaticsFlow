@@ -146,7 +146,7 @@ export async function generateCreative(
   }
 
   // Step 1: Generate the creative brief via Claude (also fetches BDD template images for vision)
-  const { brief, templateImages } = await generateCreativeBrief(
+  const { brief, templateImages, productImages } = await generateCreativeBrief(
     brandDna,
     format,
     angle,
@@ -157,8 +157,14 @@ export async function generateCreative(
     preloadedImages
   );
 
-  // Step 2: Generate the image via Gemini (pass template images so Gemini can replicate their style)
-  const imageData = await generateImageWithGemini(brief, geminiApiKey ?? undefined, imageQuality, templateImages);
+  // Step 2: Generate the image via Gemini (pass template images for style + product images as real assets)
+  const imageData = await generateImageWithGemini(
+    brief,
+    geminiApiKey ?? undefined,
+    imageQuality,
+    templateImages,
+    productImages.length > 0 ? productImages : undefined
+  );
 
   // Step 3: Upload to R2 (skip if R2 not configured in dev)
   let imageUrl: string;
@@ -229,7 +235,7 @@ async function generateCreativeBrief(
   inspirationTemplates?: Template[],
   creativeBrief?: string,
   preloadedImages?: FetchedImage[] // "From example" mode: bypass BDD fetch with a pre-fetched image
-): Promise<{ brief: CreativeBrief; templateImages: FetchedImage[] }> {
+): Promise<{ brief: CreativeBrief; templateImages: FetchedImage[]; productImages: FetchedImage[] }> {
   const client = createClaudeClient(apiKey);
 
   const [width, height] = format.split("x").map(Number);
@@ -273,6 +279,50 @@ CUSTOMER VOCABULARY (real words your customers use — mirror this language in c
       ? `\n- Custom brand assets available: ${brandDna.customAssets.map((a) => `${a.type} (${a.url})`).join(", ")}`
       : "";
 
+  // STA-84: Customer intelligence — inject real pain points, outcomes, messaging priority, CTAs
+  const customerPainPointsSection = brandDna.customerPainPoints?.length
+    ? `\n- Customer pain points: ${brandDna.customerPainPoints.slice(0, 5).join(" | ")}`
+    : "";
+  const customerDesiredOutcomeSection = brandDna.customerDesiredOutcome
+    ? `\n- Customer desired outcome: ${brandDna.customerDesiredOutcome}`
+    : "";
+  const messagingHierarchySection = brandDna.messagingHierarchy?.length
+    ? `\n- Messaging priority: ${brandDna.messagingHierarchy.map((m, i) => `${i + 1}) ${m}`).join(" → ")}`
+    : "";
+  const ctaExamplesSection = brandDna.callToActionExamples?.length
+    ? `\n- CTA examples (use these, not generic "Shop Now"): ${brandDna.callToActionExamples.slice(0, 4).join(", ")}`
+    : "";
+
+  // STA-85: Hook preferences — guide Claude's angle selection and exclude forbidden hooks
+  const preferredHooksSection = brandDna.preferredHooks?.length
+    ? `\n- PREFERRED hooks (choose from these): ${brandDna.preferredHooks.join(", ")}`
+    : "";
+  const avoidedHooksSection = brandDna.avoidedHooks?.length
+    ? `\n- FORBIDDEN hooks (absolutely never use): ${brandDna.avoidedHooks.join(", ")}`
+    : "";
+
+  // STA-86: Products — tell Claude which products to feature in the ad
+  const productsPromptSection = brandDna.products?.length
+    ? `\n- Featured products: ${brandDna.products.map((p) => `${p.name}${p.description ? ` — ${p.description.slice(0, 100)}` : ""}`).join("; ")}`
+    : "";
+
+  // STA-83: Visual style directives — explicitly injected into the imagePrompt field
+  const visualDirectivesSection = (() => {
+    const parts: string[] = [];
+    if (brandDna.visualStyleKeywords?.length) {
+      parts.push(`Style: ${brandDna.visualStyleKeywords.join(", ")}`);
+    }
+    if (brandDna.creativeDoList?.length) {
+      parts.push(`Always include: ${brandDna.creativeDoList.slice(0, 5).join(" | ")}`);
+    }
+    if (brandDna.creativeDontList?.length) {
+      parts.push(`Never show: ${brandDna.creativeDontList.slice(0, 5).join(" | ")}`);
+    }
+    return parts.length > 0
+      ? `\n\nVISUAL STYLE DIRECTIVES (copy ALL of these verbatim into the imagePrompt field):\n${parts.map((p) => `- ${p}`).join("\n")}`
+      : "";
+  })();
+
   // Valid MIME types for Claude vision API
   type ClaudeImageMime = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
   function toClaudeMime(mime: string): ClaudeImageMime {
@@ -300,6 +350,18 @@ CUSTOMER VOCABULARY (real words your customers use — mirror this language in c
     );
     for (const img of fetched) {
       if (img) templateImages.push(img);
+    }
+  }
+
+  // STA-86: Fetch product images for Gemini (up to 3 images across all products)
+  const productImages: FetchedImage[] = [];
+  if (brandDna.products?.length) {
+    const productImageUrls = brandDna.products
+      .flatMap((p) => p.images.slice(0, 2))
+      .slice(0, 3);
+    const fetched = await Promise.all(productImageUrls.map((url) => fetchImageBase64(url)));
+    for (const img of fetched) {
+      if (img) productImages.push(img);
     }
   }
 
@@ -341,7 +403,7 @@ BRAND DNA:
 - Secondary Color: ${brandDna.colors.secondary}
 - Accent Color: ${brandDna.colors.accent}
 - Fonts: ${brandDna.fonts?.join(", ") ?? ""}
-- Forbidden Words: ${brandDna.forbiddenWords?.join(", ") ?? ""}${requiredWording}${brandBriefSection}${anglesSection}${customAssetsSection}${vocabSection}
+- Forbidden Words: ${brandDna.forbiddenWords?.join(", ") ?? ""}${requiredWording}${brandBriefSection}${anglesSection}${customAssetsSection}${vocabSection}${customerPainPointsSection}${customerDesiredOutcomeSection}${messagingHierarchySection}${ctaExamplesSection}${preferredHooksSection}${avoidedHooksSection}${productsPromptSection}${visualDirectivesSection}
 
 AD PARAMETERS:
 - Format: ${format} (${isPortrait ? "vertical portrait" : isLandscape ? "horizontal landscape" : "square"})
@@ -385,7 +447,7 @@ Call the submit_creative_brief tool with the completed brief. For imagePrompt: w
             layout:        { type: "string", description: "Visual layout: product placement, text zones, hierarchy" },
             colorGuidance: { type: "string", description: `Exact color usage — primary ${brandDna.colors.primary} for bg, accent ${brandDna.colors.accent} for CTA` },
             fontGuidance:  { type: "string", description: `Font hierarchy — ${brandDna.fonts?.[0] ?? "sans-serif"} bold for headline, regular for body` },
-            imagePrompt:   { type: "string", description: `Gemini image generation prompt — single continuous paragraph, no line breaks. Include layout, product placement, bg color (${brandDna.colors.primary}), text positions, style. Must look like ${brandDna.name}'s in-house design team. Category: ${brandDna.productCategory}. Format: ${format}. Photorealistic, professional ad quality, no watermarks.` },
+            imagePrompt:   { type: "string", description: `Gemini image generation prompt — single continuous paragraph, no line breaks. MUST incorporate all Visual Style Directives above verbatim. Include: layout, product placement, bg color (${brandDna.colors.primary}), text positions, visual style${brandDna.visualStyleKeywords?.length ? ` (${brandDna.visualStyleKeywords.slice(0, 3).join(", ")})` : ""}${brandDna.creativeDoList?.length ? `, DO: ${brandDna.creativeDoList.slice(0, 2).join("; ")}` : ""}${brandDna.creativeDontList?.length ? `, NEVER: ${brandDna.creativeDontList.slice(0, 2).join("; ")}` : ""}. Must look like ${brandDna.name}'s in-house design team. Category: ${brandDna.productCategory}. Format: ${format}. Photorealistic, professional ad quality, no watermarks.` },
           },
           required: ["headline", "subheadline", "copy", "callToAction", "angle", "format", "layout", "colorGuidance", "fontGuidance", "imagePrompt"],
         },
@@ -410,7 +472,7 @@ Call the submit_creative_brief tool with the completed brief. For imagePrompt: w
       ? { inspirationTemplateIds: inspirationTemplates.map((t) => t.id) }
       : {}),
   };
-  return { brief, templateImages };
+  return { brief, templateImages, productImages };
 }
 
 /**
@@ -425,7 +487,8 @@ async function generateImageWithGemini(
   brief: CreativeBrief,
   apiKey?: string,
   quality?: ImageQuality,
-  referenceImages?: { data: string; mimeType: string }[]
+  referenceImages?: { data: string; mimeType: string }[],
+  productImages?: { data: string; mimeType: string }[]
 ): Promise<string> {
   const client = createGeminiClient(apiKey);
   const modelName = getGeminiImageModel(quality);
@@ -439,19 +502,35 @@ async function generateImageWithGemini(
     generationConfig: { responseModalities: ["IMAGE", "TEXT"] } as any,
   });
 
-  // Build multimodal prompt: reference images first, then text instruction
+  // Build multimodal prompt: product images first (real assets), then style references, then text
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parts: any[] = [];
+
+  // Product images come first — they are real brand assets to incorporate in the ad (STA-86)
+  if (productImages && productImages.length > 0) {
+    for (const img of productImages) {
+      parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+    }
+  }
+  // Style reference images (BDD templates or user-provided "from example")
   if (referenceImages && referenceImages.length > 0) {
     for (const img of referenceImages) {
       parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
     }
-    parts.push({
-      text: `You are shown ${referenceImages.length} reference ad image(s) above as creative inspiration. Study their visual composition, layout, and style. Now generate a NEW static ad image that captures the same structural quality and visual impact, but adapted for this brand. ${brief.imagePrompt}`,
-    });
-  } else {
-    parts.push({ text: brief.imagePrompt });
   }
+
+  // Build text prompt — clearly distinguish product assets from style references
+  let promptText: string;
+  if (productImages?.length && referenceImages?.length) {
+    promptText = `The first ${productImages.length} image(s) are REAL product photos from the brand — compose the ad using these actual product assets as the hero imagery, do NOT generate fake product imagery. The next ${referenceImages.length} image(s) are style reference ads — use them for layout, composition, and visual style inspiration only. ${brief.imagePrompt}`;
+  } else if (productImages?.length) {
+    promptText = `The ${productImages.length} image(s) shown are REAL product photos from the brand. Compose the ad using these actual product assets as the hero imagery — do NOT generate new product imagery, use these real photos. ${brief.imagePrompt}`;
+  } else if (referenceImages?.length) {
+    promptText = `You are shown ${referenceImages.length} reference ad image(s) above as creative inspiration. Study their visual composition, layout, and style. Now generate a NEW static ad image that captures the same structural quality and visual impact, but adapted for this brand. ${brief.imagePrompt}`;
+  } else {
+    promptText = brief.imagePrompt;
+  }
+  parts.push({ text: promptText });
 
   const response = await model.generateContent({
     contents: [{ role: "user", parts }],

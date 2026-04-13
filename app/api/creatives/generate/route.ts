@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { generateCreative } from "@/lib/image-generator";
 import { qaReviewCreative } from "@/lib/qa-reviewer";
 import { findMatchingTemplates } from "@/lib/template-matcher";
-import type { AdFormat, CreativeAngle, ImageQuality } from "@/types/index";
+import type { AdFormat, CreativeAngle, ImageQuality, BrandProduct } from "@/types/index";
 
 // Extend Vercel function timeout — generation pipeline (Claude + Gemini + QA) can take 60-120s.
 // Vercel Pro allows up to 300s; default 10s would cause silent timeouts.
@@ -151,6 +151,23 @@ export async function POST(req: NextRequest) {
   });
 
   const brandDna = brand.brandDnaJson as unknown as Parameters<typeof generateCreative>[0];
+
+  // STA-86: Fetch Product records and attach to brandDna so the pipeline uses real product images
+  const dbProducts = await prisma.product.findMany({
+    where: { brandId },
+    orderBy: { createdAt: "asc" },
+  });
+  if (dbProducts.length > 0) {
+    brandDna.products = dbProducts.map((p): BrandProduct => ({
+      id: p.id,
+      name: p.name,
+      description: p.description ?? "",
+      images: p.productImages,
+      icons: p.iconsAndUiElements,
+      moodboard: p.moodboardAssets,
+    }));
+  }
+
   const anthropicKey = user?.anthropicApiKey ?? undefined;
   const geminiKey = user?.geminiApiKey ?? undefined;
 

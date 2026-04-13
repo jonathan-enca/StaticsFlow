@@ -135,6 +135,32 @@ async function runQAReview(
 
   const hasImage = Boolean(imageBase64);
 
+  // STA-85 + STA-87: Build additional compliance check block for the QA prompt
+  const additionalComplianceSection = (() => {
+    const lines: string[] = [];
+    if (brandDna.avoidedHooks?.length) {
+      lines.push(`- HOOK VIOLATION CHECK (CRITICAL): Forbidden hook types for this brand: ${brandDna.avoidedHooks.join(", ")}. If the creative uses any of them → add "HOOK VIOLATION: [type]" to brandImprovements and reduce score to ≤ 0.4.`);
+    }
+    if (brandDna.preferredHooks?.length) {
+      lines.push(`- HOOK ALIGNMENT: Preferred hook types: ${brandDna.preferredHooks.join(", ")}. If the creative uses none of these → note in brandImprovements.`);
+    }
+    if (brandDna.legalConstraints?.length) {
+      lines.push(`- LEGAL CONSTRAINTS (CRITICAL): Copy must NOT violate any of these: ${brandDna.legalConstraints.join("; ")}. If violated → add "LEGAL VIOLATION: [details]" to metaComplianceIssues and reduce score to ≤ 0.4.`);
+    }
+    if (brandDna.pricePositioning) {
+      const positioningNote: Record<string, string> = {
+        budget: "accessible and value-driven — never luxury-sounding",
+        "mid-range": "quality + value balanced — neither cheap nor ultra-premium",
+        premium: "aspirational and quality-driven — never discount-driven or cheap-sounding",
+        "ultra-premium": "ultra-luxurious and exclusive — any mass-market tone is a failure",
+      };
+      lines.push(`- PRICE POSITIONING CHECK: Brand is "${brandDna.pricePositioning}" (${positioningNote[brandDna.pricePositioning] ?? brandDna.pricePositioning}). Tone mismatch → flag in brandImprovements.`);
+    }
+    return lines.length > 0
+      ? `\n\nADDITIONAL COMPLIANCE CHECKS (score penalties apply):\n${lines.join("\n")}`
+      : "";
+  })();
+
   const textSection = `You are a senior creative director and Meta Ads specialist reviewing an AI-generated static Meta Ad. Be STRICT — generic creatives, off-brand creatives, and anything that would fail Meta's ad review are ALL failures.${hasImage ? "\nYou have the actual generated image to review alongside the brief." : ""}
 
 BRAND DNA:
@@ -147,7 +173,7 @@ BRAND DNA:
 - Accent Color: ${brandDna.colors.accent}
 - Key Benefits: ${brandDna.keyBenefits?.join(", ") ?? ""}
 - Forbidden Words: ${brandDna.forbiddenWords?.join(", ") ?? ""}
-- Required Wording: ${brandDna.requiredWording?.join(", ") ?? "none"}
+- Required Wording: ${brandDna.requiredWording?.join(", ") ?? "none"}${brandDna.avoidedHooks?.length ? `\n- Avoided hook types (FORBIDDEN): ${brandDna.avoidedHooks.join(", ")}` : ""}${brandDna.preferredHooks?.length ? `\n- Preferred hook types: ${brandDna.preferredHooks.join(", ")}` : ""}${brandDna.legalConstraints?.length ? `\n- Legal constraints (copy must NOT violate): ${brandDna.legalConstraints.join("; ")}` : ""}${brandDna.pricePositioning ? `\n- Price positioning: ${brandDna.pricePositioning}` : ""}
 
 CREATIVE BRIEF:
 - Headline: "${creative.brief.headline}"
@@ -204,7 +230,7 @@ EVALUATION CRITERIA:
    - No watermarks, logos of third parties, or competitor branding
    - No low-quality, blurry, or pixelated elements
    - CTA button text is platform-appropriate (e.g., "Shop Now", not just "Buy")
-   - Image would not be flagged by Meta's automated review system` : ""}
+   - Image would not be flagged by Meta's automated review system` : ""}${additionalComplianceSection}
 
 SCORING GUIDE:
 - 0.9–1.0: Premium agency quality. Upload-ready for a top DTC brand's Meta campaign.

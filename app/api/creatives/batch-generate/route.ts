@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { generateCreative } from "@/lib/image-generator";
 import { qaReviewCreative } from "@/lib/qa-reviewer";
 import { findMatchingTemplates } from "@/lib/template-matcher";
-import type { AdFormat, CreativeAngle, ImageQuality } from "@/types/index";
+import type { AdFormat, CreativeAngle, ImageQuality, BrandProduct } from "@/types/index";
 
 const BATCH_COUNT_MIN = 1;
 const BATCH_COUNT_MAX = 50;
@@ -231,8 +231,24 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Kick off async generation (fire-and-forget — Node.js keeps the event loop alive)
+  // STA-86: Fetch Product records and attach to brandDna so the pipeline uses real product images
   const brandDna = brand.brandDnaJson as unknown as Parameters<typeof generateCreative>[0];
+  const dbProducts = await prisma.product.findMany({
+    where: { brandId },
+    orderBy: { createdAt: "asc" },
+  });
+  if (dbProducts.length > 0) {
+    brandDna.products = dbProducts.map((p): BrandProduct => ({
+      id: p.id,
+      name: p.name,
+      description: p.description ?? "",
+      images: p.productImages,
+      icons: p.iconsAndUiElements,
+      moodboard: p.moodboardAssets,
+    }));
+  }
+
+  // Kick off async generation (fire-and-forget — Node.js keeps the event loop alive)
   const userId = session.user.id as string;
   setImmediate(() => {
     runBatchAsync(
