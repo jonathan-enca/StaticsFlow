@@ -20,7 +20,7 @@ interface EnrichPayload {
   brandArchetype?: string;
   pricePositioning?: string;
   targetMarkets?: string[];
-  competitorBrands?: string[];
+  // competitorBrands removed (STA-79) — had zero impact on generation outputs
   differentiators?: string[];
   productCategory?: string;
   keyBenefits?: string[];
@@ -36,7 +36,7 @@ interface EnrichPayload {
   callToActionExamples?: string[];
   // Creative Direction
   visualStyleKeywords?: string[];
-  moodboardUrls?: string[];
+  // moodboardUrls removed (STA-79) — moved to Product.moodboardAssets (drag-and-drop upload)
   creativeDoList?: string[];
   creativeDontList?: string[];
   preferredHooks?: string[];
@@ -105,7 +105,6 @@ export async function PUT(
     ...pick("brandArchetype"),
     ...pick("pricePositioning"),
     ...pick("targetMarkets"),
-    ...pick("competitorBrands"),
     ...pick("differentiators"),
     ...pick("productCategory"),
     ...pick("keyBenefits"),
@@ -121,7 +120,6 @@ export async function PUT(
     ...pick("callToActionExamples"),
     // Creative Direction
     ...pick("visualStyleKeywords"),
-    ...pick("moodboardUrls"),
     ...pick("creativeDoList"),
     ...pick("creativeDontList"),
     ...pick("preferredHooks"),

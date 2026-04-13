@@ -22,6 +22,16 @@ export interface CommunicationAngles {
   forbidden: string[];   // Angles to never use (e.g. "fear-based", "aggressive")
 }
 
+/** A product entry within Brand DNA */
+export interface BrandProduct {
+  id: string;
+  name: string;
+  description: string;
+  images: string[];   // product packshots / photos
+  icons: string[];    // icons & UI elements
+  moodboard: string[];
+}
+
 /** A custom brand asset uploaded by the user */
 export interface CustomAsset {
   id: string;

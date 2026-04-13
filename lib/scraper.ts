@@ -342,8 +342,14 @@ async function scrapePage(url: string, origin: string): Promise<ScrapedPage> {
 
   // ── Fonts ───────────────────────────────────────────────────
   const fontSet = new Set<string>();
-  const fontPattern = /font-family\s*:\s*([^;}"']+)/gi;
+  const GENERIC_FAMILIES = new Set([
+    "sans-serif", "serif", "monospace", "inherit", "initial", "unset",
+    "cursive", "fantasy", "system-ui", "ui-sans-serif", "ui-serif",
+    "ui-monospace", "ui-rounded",
+  ]);
 
+  // 1) Extract font-family declarations from <style> blocks and inline styles
+  const fontPattern = /font-family\s*:\s*([^;}"']+)/gi;
   const allCssText =
     $("style").map((_, el) => $(el).text()).get().join(" ") +
     " " +
@@ -354,15 +360,26 @@ async function scrapePage(url: string, origin: string): Promise<ScrapedPage> {
     fontMatch[1]
       .split(",")
       .map((f) => f.trim().replace(/['"]/g, ""))
-      .filter(
-        (f) =>
-          f &&
-          !["sans-serif", "serif", "monospace", "inherit", "initial", "unset"].includes(
-            f.toLowerCase()
-          )
-      )
+      .filter((f) => f && !GENERIC_FAMILIES.has(f.toLowerCase()))
       .forEach((f) => fontSet.add(f));
   }
+
+  // 2) Detect Google Fonts / Adobe Typekit loaded via <link href="...fonts.googleapis.com...">
+  //    URL looks like: https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Playfair+Display
+  $('link[href*="fonts.googleapis.com"], link[href*="fonts.adobe.com"], link[href*="use.typekit"]').each((_, el) => {
+    const href = $(el).attr("href") ?? "";
+    // Extract family= params from Google Fonts URL
+    const familyMatches = href.matchAll(/[?&]family=([^&]+)/g);
+    for (const m of familyMatches) {
+      // Each value may be "Inter:wght@400;700" — take only the name part before ":"
+      m[1].split("|").forEach((segment) => {
+        const name = decodeURIComponent(segment.split(":")[0]).replace(/\+/g, " ").trim();
+        if (name && !GENERIC_FAMILIES.has(name.toLowerCase())) {
+          fontSet.add(name);
+        }
+      });
+    }
+  });
 
   // ── Internal links ─────────────────────────────────────────
   const linkSet = new Set<string>();

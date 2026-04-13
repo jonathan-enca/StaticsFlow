@@ -53,7 +53,6 @@ export default async function BrandDnaPage({ params }: PageProps) {
     brandArchetype: dna.brandArchetype,
     pricePositioning: dna.pricePositioning,
     targetMarkets: dna.targetMarkets ?? [],
-    competitorBrands: dna.competitorBrands ?? [],
     differentiators: dna.differentiators ?? [],
     // ── Voice & Messaging (STA-55) ───────────────────────────────────────────
     brandVoiceAdjectives: dna.brandVoiceAdjectives ?? [],
@@ -62,7 +61,6 @@ export default async function BrandDnaPage({ params }: PageProps) {
     callToActionExamples: dna.callToActionExamples ?? [],
     // ── Creative Direction (STA-55) ──────────────────────────────────────────
     visualStyleKeywords: dna.visualStyleKeywords ?? [],
-    moodboardUrls: dna.moodboardUrls ?? [],
     creativeDoList: dna.creativeDoList ?? [],
     creativeDontList: dna.creativeDontList ?? [],
     preferredHooks: dna.preferredHooks ?? [],

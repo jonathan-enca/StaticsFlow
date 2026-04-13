@@ -3,7 +3,7 @@
 
 import { createClaudeClient, CLAUDE_MODEL } from "@/lib/claude";
 import { scrapeWebsite, ScrapeResult } from "@/lib/scraper";
-import type { CustomerVocabulary, Persona, CommunicationAngles, CustomAsset } from "@/types/index";
+import type { CustomerVocabulary, Persona, CommunicationAngles, CustomAsset, BrandProduct } from "@/types/index";
 
 export interface ExtractedBrandDNA {
   // ── Auto-extracted (Phase 1) ───────────────────────────────────────────────
@@ -30,7 +30,7 @@ export interface ExtractedBrandDNA {
   brandArchetype?: "Hero" | "Outlaw" | "Sage" | "Lover" | "Jester" | "Innocent" | "Creator" | "Caregiver" | "Ruler" | "Explorer" | "Magician" | "Regular";
   pricePositioning?: "budget" | "mid-range" | "premium" | "ultra-premium";
   targetMarkets?: string[];
-  competitorBrands?: string[];
+  // competitorBrands removed (STA-79) — had zero impact on generation outputs
   differentiators?: string[];
 
   // ── Voice & Messaging (STA-55) ────────────────────────────────────────────
@@ -41,7 +41,7 @@ export interface ExtractedBrandDNA {
 
   // ── Creative Direction (STA-55) ───────────────────────────────────────────
   visualStyleKeywords?: string[];    // e.g. minimalist, editorial, raw UGC, luxury
-  moodboardUrls?: string[];
+  // moodboardUrls removed (STA-79) — moved to Product.moodboardAssets (drag-and-drop upload)
   creativeDoList?: string[];
   creativeDontList?: string[];
   preferredHooks?: Array<"pain" | "curiosite" | "social_proof" | "fomo" | "benefice_direct" | "autorite" | "urgence">;
@@ -78,6 +78,9 @@ export interface ExtractedBrandDNA {
 
   // ── Scraped assets (STA-63) ───────────────────────────────────────────────
   icons?: string[];             // favicon / icon URLs from the site
+
+  // ── Products (STA-80) ─────────────────────────────────────────────────────
+  products?: BrandProduct[];    // per-product data (images, icons, moodboard)
 }
 
 /**
@@ -243,7 +246,6 @@ Return ONLY a valid JSON object with EXACTLY this structure (omit a field entire
   "brandArchetype": "One of: Hero | Outlaw | Sage | Lover | Jester | Innocent | Creator | Caregiver | Ruler | Explorer | Magician | Regular — choose the single best fit",
   "pricePositioning": "One of: budget | mid-range | premium | ultra-premium",
   "targetMarkets": ["Country or market this brand targets, e.g. France, US, Europe"],
-  "competitorBrands": ["Competitor brand name 1", "Competitor brand name 2"],
   "differentiators": ["What makes this brand unique vs competitors — be specific"],
 
   "brandVoiceAdjectives": ["bold", "playful", "trustworthy — max 6 adjectives describing the brand voice"],

@@ -249,7 +249,6 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
     (dna.pricePositioning as typeof PRICE_POSITIONS[number]) ?? ""
   );
   const [targetMarkets, setTargetMarkets] = useState<string[]>(dna.targetMarkets ?? []);
-  const [competitorBrands, setCompetitorBrands] = useState<string[]>(dna.competitorBrands ?? []);
   const [differentiators, setDifferentiators] = useState<string[]>(dna.differentiators ?? []);
   const [productCategory, setProductCategory] = useState(dna.productCategory ?? "");
   const [keyBenefits, setKeyBenefits] = useState<string[]>(dna.keyBenefits ?? []);
@@ -267,7 +266,6 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
 
   // ── Creative Direction ──────────────────────────────────────────────────────
   const [visualStyleKeywords, setVisualStyleKeywords] = useState<string[]>(dna.visualStyleKeywords ?? []);
-  const [moodboardUrls, setMoodboardUrls] = useState<string[]>(dna.moodboardUrls ?? []);
   const [creativeDoList, setCreativeDoList] = useState<string[]>(dna.creativeDoList ?? []);
   const [creativeDontList, setCreativeDontList] = useState<string[]>(dna.creativeDontList ?? []);
   const [preferredHooks, setPreferredHooks] = useState<Array<typeof HOOK_OPTIONS[number]>>(
@@ -337,7 +335,6 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
           brandArchetype: brandArchetype || undefined,
           pricePositioning: pricePositioning || undefined,
           targetMarkets,
-          competitorBrands,
           differentiators,
           productCategory,
           keyBenefits,
@@ -353,7 +350,6 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
           callToActionExamples,
           // Creative Direction
           visualStyleKeywords,
-          moodboardUrls,
           creativeDoList,
           creativeDontList,
           preferredHooks,
@@ -589,9 +585,6 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
               <TagInput label="Markets" tags={targetMarkets} onChange={setTargetMarkets} placeholder="e.g. France, US, Europe…" />
             </Section>
 
-            <Section title="Competitor Brands" subtitle="Direct competitors to be aware of.">
-              <TagInput label="Competitors" tags={competitorBrands} onChange={setCompetitorBrands} placeholder="e.g. L'Oréal, Sephora…" />
-            </Section>
           </div>
 
           <Section title="Differentiators" subtitle="What makes this brand unique vs. competitors — be specific.">
@@ -691,10 +684,6 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
               onChange={setPreferredHooks}
             />
             <TagInput label="Hooks to avoid" tags={avoidedHooks} onChange={setAvoidedHooks} placeholder="e.g. fomo, urgence…" />
-          </Section>
-
-          <Section title="Moodboard URLs" subtitle="Reference images for visual direction.">
-            <ImageGallery label="Moodboard image URLs" urls={moodboardUrls} onChange={setMoodboardUrls} />
           </Section>
 
           <Section title="Reference Ad URLs" subtitle="Example ads that match the desired creative direction.">

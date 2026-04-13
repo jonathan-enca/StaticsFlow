@@ -102,3 +102,26 @@ export function brandAssetKey(
 ): string {
   return `brands/${userId}/${brandId}/assets/${assetId}.${ext}`;
 }
+
+/**
+ * Generate a storage key for a brand logo.
+ * Format: brands/<userId>/<brandId>/logo.<ext>
+ */
+export function brandLogoKey(userId: string, brandId: string, ext: string): string {
+  return `brands/${userId}/${brandId}/logo.${ext}`;
+}
+
+/**
+ * Generate a storage key for a product asset (images, icons, moodboard).
+ * Format: brands/<userId>/<brandId>/products/<productId>/<category>/<assetId>.<ext>
+ */
+export function productAssetKey(
+  userId: string,
+  brandId: string,
+  productId: string,
+  category: "images" | "icons" | "moodboard",
+  assetId: string,
+  ext: string
+): string {
+  return `brands/${userId}/${brandId}/products/${productId}/${category}/${assetId}.${ext}`;
+}

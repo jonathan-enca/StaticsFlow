@@ -83,7 +83,8 @@ model Brand {
   userId       String
   name         String
   url          String
-  // Full Brand DNA stored as JSON blob for flexibility
+  // Global Brand DNA stored as JSON blob (colors, fonts, tone, personas, etc.)
+  // competitorBrands removed — had zero impact on generation outputs
   brandDnaJson Json     @default("{}")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -91,8 +92,30 @@ model Brand {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   creatives Creative[]
   batches   Batch[]
+  products  Product[]
 
   @@unique([userId, url])
+}
+
+// Per-brand product entity — a brand can have multiple products
+// Each product owns its own images, icons/UI elements, and moodboard assets
+model Product {
+  id              String   @id @default(cuid())
+  brandId         String
+  name            String
+  description     String?  @db.Text
+  // R2 URLs for product images (packshots, lifestyle shots)
+  productImages   String[] @default([])
+  // R2 URLs for icons and UI element assets
+  iconsAndUiElements String[] @default([])
+  // R2 URLs for moodboard assets (drag-and-drop upload, replaces URL input)
+  moodboardAssets String[] @default([])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
 }
 
 model Creative {
