@@ -27,7 +27,7 @@ const NEXT_ANGLE: Record<CreativeAngle, CreativeAngle> = {
 };
 
 interface InspirationSource {
-  type: "template" | "url" | "upload";
+  type: "template" | "url" | "upload" | "brand_inspiration";
   imageUrl: string | null;
   label: string;
 }
@@ -43,10 +43,22 @@ async function generateOne(
   imageQuality?: ImageQuality,
   creativeBrief?: string,
   referenceImageUrl?: string, // "From example" mode via URL — skips BDD template lookup
-  referenceImageData?: { data: string; mimeType: string } // "From example" mode via drag-and-drop
+  referenceImageData?: { data: string; mimeType: string }, // "From example" mode via drag-and-drop
+  inspirationId?: string, // Phase B: brand-library inspiration
+  productId?: string,     // Phase A/B: product DNA FK
+  generationMode?: string // "auto" | "manual" | null (legacy)
 ) {
   const creative = await prisma.creative.create({
-    data: { brandId, format, angle, status: "GENERATING", briefJson: {} },
+    data: {
+      brandId,
+      format,
+      angle,
+      status: "GENERATING",
+      briefJson: {},
+      ...(inspirationId && { inspirationId }),
+      ...(productId && { productId }),
+      ...(generationMode && { generationMode }),
+    },
   });
 
   try {
@@ -58,7 +70,10 @@ async function generateOne(
 
     // Build inspirationSource for the response so the client can show "Inspired by…"
     let inspirationSource: InspirationSource | undefined;
-    if (referenceImageUrl) {
+    if (referenceImageUrl && inspirationId) {
+      // Brand-library inspiration used as reference
+      inspirationSource = { type: "brand_inspiration", imageUrl: referenceImageUrl, label: "Your inspiration library" };
+    } else if (referenceImageUrl) {
       inspirationSource = { type: "url", imageUrl: referenceImageUrl, label: "Your reference image" };
     } else if (referenceImageData) {
       inspirationSource = { type: "upload", imageUrl: null, label: "Your uploaded image" };
@@ -116,7 +131,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let brandId: string, format: AdFormat, angle: CreativeAngle, variants: boolean, imageQuality: ImageQuality, creativeBrief: string | undefined, referenceImageUrl: string | undefined, referenceImageData: { data: string; mimeType: string } | undefined;
+  let brandId: string,
+    format: AdFormat,
+    angle: CreativeAngle,
+    variants: boolean,
+    imageQuality: ImageQuality,
+    creativeBrief: string | undefined,
+    referenceImageUrl: string | undefined,
+    referenceImageData: { data: string; mimeType: string } | undefined,
+    inspirationId: string | undefined,
+    productId: string | undefined,
+    generationMode: string | undefined;
+
   try {
     ({
       brandId,
@@ -127,6 +153,9 @@ export async function POST(req: NextRequest) {
       creativeBrief = undefined,
       referenceImageUrl = undefined,
       referenceImageData = undefined,
+      inspirationId = undefined,
+      productId = undefined,
+      generationMode = undefined,
     } = await req.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -168,6 +197,37 @@ export async function POST(req: NextRequest) {
     }));
   }
 
+  // Phase B: Resolve inspirationId → referenceImageUrl
+  // If inspirationId provided, look up the inspiration and use its imageUrl as reference.
+  // Soft gate: if brand has < 5 active inspirations and no inspirationId provided,
+  // generation falls back to global BDD templates (current behaviour) with a warning.
+  let inspirationGateWarning: string | null = null;
+  if (inspirationId) {
+    const ins = await prisma.inspiration.findFirst({
+      where: { id: inspirationId, brandId, isActive: true },
+      select: { imageUrl: true },
+    });
+    if (!ins) {
+      return NextResponse.json(
+        { error: "Inspiration not found or inactive. Pick another one." },
+        { status: 404 }
+      );
+    }
+    referenceImageUrl = ins.imageUrl;
+    generationMode = generationMode ?? "manual";
+  } else {
+    // No inspiration provided — check if brand has enough to use
+    const activeInspirationCount = await prisma.inspiration.count({
+      where: { brandId, isActive: true },
+    });
+    if (activeInspirationCount < 5) {
+      inspirationGateWarning =
+        activeInspirationCount === 0
+          ? "No inspirations in your library — falling back to the global template library. Upload 5+ creatives for better results."
+          : `Only ${activeInspirationCount} inspiration${activeInspirationCount === 1 ? "" : "s"} in your library (5 required for inspiration-driven generation) — falling back to global templates.`;
+    }
+  }
+
   const anthropicKey = user?.anthropicApiKey ?? undefined;
   const geminiKey = user?.geminiApiKey ?? undefined;
 
@@ -200,9 +260,20 @@ export async function POST(req: NextRequest) {
         imageQuality,
         creativeBrief,
         referenceImageUrl,
-        referenceImageData
+        referenceImageData,
+        inspirationId,
+        productId,
+        generationMode
       );
-      return NextResponse.json({ creative: result.creative, qaResult: result.qaResult, inspirationSource: result.inspirationSource }, { status: 201 });
+      return NextResponse.json(
+        {
+          creative: result.creative,
+          qaResult: result.qaResult,
+          inspirationSource: result.inspirationSource,
+          ...(inspirationGateWarning && { inspirationGateWarning }),
+        },
+        { status: 201 }
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("[creatives/generate]", err);
@@ -227,7 +298,12 @@ export async function POST(req: NextRequest) {
   const userId = session.user.id as string;
   const results = await Promise.allSettled(
     variantAngles.map((a) =>
-      generateOne(brandDna, format, a, userId, brandId, anthropicKey, geminiKey, imageQuality, creativeBrief, referenceImageUrl, referenceImageData)
+      generateOne(
+        brandDna, format, a, userId, brandId,
+        anthropicKey, geminiKey, imageQuality, creativeBrief,
+        referenceImageUrl, referenceImageData,
+        inspirationId, productId, generationMode
+      )
     )
   );
 
@@ -248,5 +324,12 @@ export async function POST(req: NextRequest) {
 
   // Share the inspirationSource (same across all variants since mode is consistent)
   const inspirationSource = successfulVariants[0]?.inspirationSource;
-  return NextResponse.json({ variants: successfulVariants, inspirationSource }, { status: 201 });
+  return NextResponse.json(
+    {
+      variants: successfulVariants,
+      inspirationSource,
+      ...(inspirationGateWarning && { inspirationGateWarning }),
+    },
+    { status: 201 }
+  );
 }

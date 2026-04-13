@@ -125,3 +125,28 @@ export function productAssetKey(
 ): string {
   return `brands/${userId}/${brandId}/products/${productId}/${category}/${assetId}.${ext}`;
 }
+
+/**
+ * Generate a storage key for a brand inspiration image.
+ * Format: brands/<userId>/<brandId>/inspirations/<inspirationId>.<ext>
+ */
+export function inspirationKey(
+  userId: string,
+  brandId: string,
+  inspirationId: string,
+  ext: string
+): string {
+  return `brands/${userId}/${brandId}/inspirations/${inspirationId}.${ext}`;
+}
+
+/**
+ * Generate a storage key for a brand inspiration thumbnail.
+ * Format: brands/<userId>/<brandId>/inspirations/<inspirationId>_thumb.jpg
+ */
+export function inspirationThumbKey(
+  userId: string,
+  brandId: string,
+  inspirationId: string
+): string {
+  return `brands/${userId}/${brandId}/inspirations/${inspirationId}_thumb.jpg`;
+}
