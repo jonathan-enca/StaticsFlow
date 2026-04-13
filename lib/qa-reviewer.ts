@@ -85,6 +85,14 @@ export async function qaReviewCreative(
       effectiveScore = Math.min(effectiveScore, 0.60);
     }
 
+    // STA-114 G2: If the QA agent flagged LOGO_CTA_COLLISION (a CTA/text occupies the
+    // bottom-right safe zone reserved for logo compositing), cap at 0.55 — stricter than
+    // LOGO_MISSING because the collision will corrupt the final composite output.
+    const logoCtaCollision = lastResult.brandImprovements.includes("LOGO_CTA_COLLISION");
+    if (logoCtaCollision && brandDna.logoUrl) {
+      effectiveScore = Math.min(effectiveScore, 0.55);
+    }
+
     if (effectiveScore >= 0.7) {
       // Inject the composite score so the result reflects dual scoring
       lastResult = { ...lastResult, score: effectiveScore };
@@ -134,7 +142,14 @@ function buildRegenerationFeedback(review: QAReviewResponse): string {
     sections.push(`COPY FIXES: ${review.copyImprovements.join(". ")}`);
   }
   if (review.brandImprovements.length > 0) {
-    sections.push(`BRAND ALIGNMENT: ${review.brandImprovements.join(". ")}`);
+    // STA-114 G3: Convert LOGO_CTA_COLLISION flag into a concrete spatial instruction
+    // for Gemini so the regenerated image places the CTA away from the safe zone.
+    const brandFixes = review.brandImprovements.map((item) =>
+      item === "LOGO_CTA_COLLISION"
+        ? "Move the CTA button away from the bottom-right corner. Place CTA at center-bottom or lower-left. Keep the bottom-right 20% x 15% of the frame completely clear for the brand logo overlay."
+        : item
+    );
+    sections.push(`BRAND ALIGNMENT: ${brandFixes.join(". ")}`);
   }
   if (review.metaComplianceIssues.length > 0) {
     sections.push(`META ADS COMPLIANCE: ${review.metaComplianceIssues.join(". ")}`);
@@ -309,10 +324,11 @@ EVALUATION CRITERIA:
    - CTA button text is platform-appropriate (e.g., "Shop Now", not just "Buy")
    - Image would not be flagged by Meta's automated review system
 
-8. LOGO PRESENCE (CRITICAL CHECK)${brandDna.logoUrl ? `
+8. LOGO PRESENCE & SAFE ZONE (CRITICAL CHECK)${brandDna.logoUrl ? `
    - A brand logo element MUST be visible in the image (bottom-right or consistent brand placement)
    - If NO logo-like element is visible: add exactly "LOGO_MISSING" to brandImprovements
-   - A creative without a brand logo scores a maximum of 0.60 regardless of other criteria` : `
+   - A creative without a brand logo scores a maximum of 0.60 regardless of other criteria
+   - LOGO SAFE ZONE: If a CTA button, text overlay, or decorative element occupies the bottom-right corner area (≈20% width × 15% height), add exactly "LOGO_CTA_COLLISION" to brandImprovements — that zone is reserved for logo compositing. A creative with this collision scores a maximum of 0.55.` : `
    - No logoUrl is set for this brand — skip this check`}` : ""}${additionalComplianceSection}
 
 SCORING GUIDE:
@@ -407,17 +423,17 @@ Call the submit_qa_review tool with your full assessment.`;
             visualImprovements: {
               type: "array",
               items: { type: "string" },
-              description: "Specific visual/layout/composition fixes for Gemini. Each item is a concrete instruction (e.g., 'Increase product size to fill 60% of the frame', 'Use #C8A96E as the dominant background color')",
+              description: "Specific visual/layout/composition fixes for Gemini. Each item is a concrete instruction (e.g., 'Increase product size to fill 60% of the frame', 'Use #C8A96E as the dominant background color'). Named flags you may use as items (vocabulary only, no extra text): ELEMENT_OVERLAP (two visual elements overlap and obscure each other), TEXT_ON_PRODUCT (text overlay is placed directly on top of the product making it unreadable).",
             },
             copyImprovements: {
               type: "array",
               items: { type: "string" },
-              description: "Specific copy or text-overlay fixes (e.g., 'Replace headline with shorter, punchier version under 5 words', 'Make CTA button more prominent with higher contrast')",
+              description: "Specific copy or text-overlay fixes (e.g., 'Replace headline with shorter, punchier version under 5 words', 'Make CTA button more prominent with higher contrast'). Named flags you may use as items (vocabulary only, no extra text): CTA_NOT_DISTINCT (CTA button blends into the background and is not immediately identifiable as a button), HEADLINE_TRUNCATED (headline text is cut off or too long to fit within the layout).",
             },
             brandImprovements: {
               type: "array",
               items: { type: "string" },
-              description: "Brand alignment fixes — what needs to change to make this look like the brand's own work. Use exactly 'LOGO_MISSING' (no other text) when no brand logo is visible and a logoUrl is set.",
+              description: "Brand alignment fixes — what needs to change to make this look like the brand's own work. Use exactly 'LOGO_MISSING' (no other text) when no brand logo is visible and a logoUrl is set. Use exactly 'LOGO_CTA_COLLISION' (no other text) when a CTA button or text overlay occupies the bottom-right safe zone reserved for logo compositing.",
             },
             metaComplianceIssues: {
               type: "array",
