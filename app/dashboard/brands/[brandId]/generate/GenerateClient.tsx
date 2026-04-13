@@ -47,6 +47,7 @@ interface InspirationSummary {
 interface Props {
   brandId: string;
   brandName: string;
+  hasLogo: boolean;
   existingCreatives: ExistingCreative[];
   products: ProductSummary[];
   inspirations: InspirationSummary[];
@@ -265,6 +266,7 @@ interface SingleResult {
 export default function GenerateClient({
   brandId,
   brandName,
+  hasLogo,
   existingCreatives,
   products,
   inspirations,
@@ -990,30 +992,37 @@ export default function GenerateClient({
         >
           ← Back
         </button>
-        <button
-          type="button"
-          onClick={generate}
-          disabled={generating}
-          className="px-6 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center gap-2 disabled:opacity-60 transition-opacity"
-          style={{ background: "var(--sf-accent)" }}
-        >
-          {generating ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Generating…
-            </>
-          ) : singleResult ? (
-            <>
-              <Wand2 className="w-4 h-4" />
-              Regenerate
-            </>
-          ) : (
-            <>
-              <Wand2 className="w-4 h-4" />
-              Generate Creative
-            </>
+        <div className="flex flex-col items-end gap-2">
+          {!hasLogo && (
+            <p className="text-xs text-red-500 font-medium">
+              Add your brand logo to continue — required for on-brand creatives.
+            </p>
           )}
-        </button>
+          <button
+            type="button"
+            onClick={generate}
+            disabled={generating || !hasLogo}
+            className="px-6 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center gap-2 disabled:opacity-60 transition-opacity"
+            style={{ background: "var(--sf-accent)" }}
+          >
+            {generating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Generating…
+              </>
+            ) : singleResult ? (
+              <>
+                <Wand2 className="w-4 h-4" />
+                Regenerate
+              </>
+            ) : (
+              <>
+                <Wand2 className="w-4 h-4" />
+                Generate Creative
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

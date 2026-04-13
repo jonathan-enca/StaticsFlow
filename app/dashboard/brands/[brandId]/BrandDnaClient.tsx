@@ -181,6 +181,7 @@ function CollapsibleSection({
 
 // ── BrandAssetManager ─────────────────────────────────────────────────────────
 // Unified typed brand asset library (Phase E): logo | lifestyle | icon | pattern | texture
+// Logo is a mandatory single-slot section; all other types are in "Additional Brand Assets".
 function BrandAssetManager({
   brandId,
   assets,
@@ -190,12 +191,17 @@ function BrandAssetManager({
   assets: BrandAsset[];
   onChange: (assets: BrandAsset[]) => void;
 }) {
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [logoDragOver, setLogoDragOver] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const [uploadingOther, setUploadingOther] = useState(false);
+  const [otherError, setOtherError] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState("");
   const [pendingType, setPendingType] = useState<typeof ASSET_TYPES[number]>("lifestyle");
-  const [dragOver, setDragOver] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [otherDragOver, setOtherDragOver] = useState(false);
+  const otherInputRef = useRef<HTMLInputElement>(null);
 
   const uploadFile = useCallback(async (file: File) => {
     const fd = new FormData();
@@ -207,34 +213,52 @@ function BrandAssetManager({
     return data.asset.url as string;
   }, [brandId]);
 
-  const addAssets = async (urls: string[]) => {
-    const newAssets: BrandAsset[] = urls.map((url) => ({
-      id: crypto.randomUUID(),
-      type: pendingType,
-      url,
-    }));
-    onChange([...assets, ...newAssets]);
+  const logoAsset = assets.find((a) => a.type === "logo") ?? null;
+  const otherAssets = assets.filter((a) => a.type !== "logo");
+
+  const handleLogoFile = async (file: File) => {
+    setUploadingLogo(true);
+    setLogoError(null);
+    try {
+      const url = await uploadFile(file);
+      const newLogo: BrandAsset = { id: crypto.randomUUID(), type: "logo", url };
+      // Replace any existing logo, keep all other assets
+      onChange([newLogo, ...assets.filter((a) => a.type !== "logo")]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      console.error("[BrandAssetManager] logo upload error:", err);
+      setLogoError(message);
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
-  const handleFiles = async (files: File[]) => {
-    setUploading(true);
-    setError(null);
+  const removeLogo = () => onChange(assets.filter((a) => a.type !== "logo"));
+
+  const handleOtherFiles = async (files: File[]) => {
+    setUploadingOther(true);
+    setOtherError(null);
     try {
+      // Accumulate into a local variable to avoid stale closure when uploading multiple files
+      let accumulated = [...assets];
       for (const file of files) {
         const url = await uploadFile(file);
-        onChange([...assets, { id: crypto.randomUUID(), type: pendingType, url }]);
+        accumulated = [...accumulated, { id: crypto.randomUUID(), type: pendingType, url }];
       }
+      onChange(accumulated);
     } catch (err) {
-      setError((err as Error).message);
+      const message = err instanceof Error ? err.message : "Upload failed";
+      console.error("[BrandAssetManager] upload error:", err);
+      setOtherError(message);
     } finally {
-      setUploading(false);
+      setUploadingOther(false);
     }
   };
 
   const addUrl = () => {
     const val = urlInput.trim();
     if (!val) return;
-    addAssets([val]);
+    onChange([...assets, { id: crypto.randomUUID(), type: pendingType, url: val }]);
     setUrlInput("");
   };
 
@@ -244,112 +268,188 @@ function BrandAssetManager({
   const removeAsset = (id: string) => onChange(assets.filter((a) => a.id !== id));
 
   return (
-    <div className="space-y-4">
-      {/* Type selector for new uploads */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-[var(--sf-text-secondary)]">Add as:</span>
-        <div className="flex flex-wrap gap-1.5">
-          {ASSET_TYPES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setPendingType(t)}
-              className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors capitalize ${
-                pendingType === t
-                  ? "bg-black text-white border-black"
-                  : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)]"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
+    <div className="space-y-6">
+      {/* ── Brand Logo (required) ─────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-[var(--sf-text-primary)]">Brand Logo</span>
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">required</span>
         </div>
+        <p className="text-xs text-[var(--sf-text-muted)]">Used in every generated creative. PNG or SVG with transparent background preferred.</p>
+
+        {logoAsset ? (
+          <div className="flex items-center gap-4">
+            <div className="relative w-24 h-24 rounded-xl overflow-hidden border-2 border-[var(--sf-accent)] bg-[var(--sf-bg-elevated)] flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoAsset.url} alt="Brand logo" className="w-full h-full object-contain p-1" onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.3"; }} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => logoInputRef.current?.click()}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] hover:bg-[var(--sf-bg-elevated)] transition-colors"
+              >
+                Replace logo
+              </button>
+              <button
+                type="button"
+                onClick={removeLogo}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            onDragOver={(e) => { e.preventDefault(); setLogoDragOver(true); }}
+            onDragLeave={() => setLogoDragOver(false)}
+            onDrop={async (e) => {
+              e.preventDefault();
+              setLogoDragOver(false);
+              const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+              if (file) await handleLogoFile(file);
+            }}
+            onClick={() => logoInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+              logoDragOver ? "border-[var(--sf-accent)] bg-[var(--sf-bg-elevated)]" : "border-red-300 hover:border-[var(--sf-accent)] bg-red-50/30"
+            }`}
+          >
+            {uploadingLogo ? (
+              <p className="text-sm text-[var(--sf-text-secondary)]">Uploading…</p>
+            ) : (
+              <p className="text-sm text-[var(--sf-text-secondary)]">
+                Drag & drop or <span className="underline font-medium">click to upload logo</span>
+                <span className="ml-2 text-xs text-[var(--sf-text-muted)]">PNG, JPEG, WebP — max 10 MB</span>
+              </p>
+            )}
+          </div>
+        )}
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (file) await handleLogoFile(file);
+            e.target.value = "";
+          }}
+        />
+        {logoError && <p className="text-sm text-red-500">{logoError}</p>}
       </div>
 
-      {/* Drop zone */}
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={async (e) => {
-          e.preventDefault();
-          setDragOver(false);
-          const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
-          if (files.length > 0) await handleFiles(files);
-        }}
-        onClick={() => inputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
-          dragOver ? "border-[var(--sf-accent)] bg-[var(--sf-bg-elevated)]" : "border-[var(--sf-border)] hover:border-[var(--sf-text-muted)]"
-        }`}
-      >
-        {uploading ? (
-          <p className="text-sm text-[var(--sf-text-secondary)]">Uploading…</p>
-        ) : (
-          <p className="text-sm text-[var(--sf-text-secondary)]">
-            Drag & drop or <span className="underline font-medium">click to upload</span>
-            <span className="ml-2 text-xs text-[var(--sf-text-muted)]">PNG, JPEG, WebP — max 10 MB</span>
-          </p>
+      {/* ── Additional Brand Assets ───────────────────────────────────────── */}
+      <div className="space-y-3">
+        <span className="text-sm font-semibold text-[var(--sf-text-primary)]">Additional Brand Assets</span>
+        <p className="text-xs text-[var(--sf-text-muted)]">Lifestyle photos, icons, patterns, textures — tagged and used in generation.</p>
+
+        {/* Type selector for new uploads */}
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-[var(--sf-text-secondary)]">Add as:</span>
+          <div className="flex flex-wrap gap-1.5">
+            {(ASSET_TYPES.filter((t) => t !== "logo") as Array<typeof ASSET_TYPES[number]>).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setPendingType(t)}
+                className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors capitalize ${
+                  pendingType === t
+                    ? "bg-black text-white border-black"
+                    : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)]"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Drop zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setOtherDragOver(true); }}
+          onDragLeave={() => setOtherDragOver(false)}
+          onDrop={async (e) => {
+            e.preventDefault();
+            setOtherDragOver(false);
+            const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
+            if (files.length > 0) await handleOtherFiles(files);
+          }}
+          onClick={() => otherInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
+            otherDragOver ? "border-[var(--sf-accent)] bg-[var(--sf-bg-elevated)]" : "border-[var(--sf-border)] hover:border-[var(--sf-text-muted)]"
+          }`}
+        >
+          {uploadingOther ? (
+            <p className="text-sm text-[var(--sf-text-secondary)]">Uploading…</p>
+          ) : (
+            <p className="text-sm text-[var(--sf-text-secondary)]">
+              Drag & drop or <span className="underline font-medium">click to upload</span>
+              <span className="ml-2 text-xs text-[var(--sf-text-muted)]">PNG, JPEG, WebP — max 10 MB</span>
+            </p>
+          )}
+        </div>
+        <input
+          ref={otherInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          multiple
+          className="hidden"
+          onChange={async (e) => {
+            const files = Array.from(e.target.files ?? []);
+            if (files.length > 0) await handleOtherFiles(files);
+            e.target.value = "";
+          }}
+        />
+
+        {/* URL input */}
+        <div className="flex gap-2">
+          <input
+            type="url"
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }}
+            placeholder="Or paste image URL…"
+            className="flex-1 px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
+          />
+          <button type="button" onClick={addUrl} className="px-3 py-2 text-sm bg-[var(--sf-bg-elevated)] rounded-lg font-medium whitespace-nowrap">
+            Add URL
+          </button>
+        </div>
+
+        {otherError && <p className="text-sm text-red-500">{otherError}</p>}
+
+        {/* Asset grid — non-logo assets only */}
+        {otherAssets.length > 0 && (
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+            {otherAssets.map((asset) => (
+              <div key={asset.id} className="relative group space-y-1">
+                <div className="relative rounded-xl overflow-hidden aspect-square bg-[var(--sf-bg-elevated)] border border-[var(--sf-border)]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={asset.url} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.3"; }} />
+                  <button
+                    type="button"
+                    onClick={() => removeAsset(asset.id)}
+                    className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    ×
+                  </button>
+                </div>
+                {/* Type selector per asset */}
+                <select
+                  value={asset.type}
+                  onChange={(e) => updateType(asset.id, e.target.value as typeof ASSET_TYPES[number])}
+                  className="w-full text-xs border border-[var(--sf-border)] rounded-md px-1 py-0.5 bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] focus:outline-none"
+                >
+                  {ASSET_TYPES.filter((t) => t !== "logo").map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
         )}
       </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        multiple
-        className="hidden"
-        onChange={async (e) => {
-          const files = Array.from(e.target.files ?? []);
-          if (files.length > 0) await handleFiles(files);
-          e.target.value = "";
-        }}
-      />
-
-      {/* URL input */}
-      <div className="flex gap-2">
-        <input
-          type="url"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }}
-          placeholder="Or paste image URL…"
-          className="flex-1 px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
-        />
-        <button type="button" onClick={addUrl} className="px-3 py-2 text-sm bg-[var(--sf-bg-elevated)] rounded-lg font-medium whitespace-nowrap">
-          Add URL
-        </button>
-      </div>
-
-      {error && <p className="text-sm text-red-500">{error}</p>}
-
-      {/* Asset grid */}
-      {assets.length > 0 && (
-        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-          {assets.map((asset) => (
-            <div key={asset.id} className="relative group space-y-1">
-              <div className="relative rounded-xl overflow-hidden aspect-square bg-[var(--sf-bg-elevated)] border border-[var(--sf-border)]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={asset.url} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.3"; }} />
-                <button
-                  type="button"
-                  onClick={() => removeAsset(asset.id)}
-                  className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  ×
-                </button>
-              </div>
-              {/* Type selector per asset */}
-              <select
-                value={asset.type}
-                onChange={(e) => updateType(asset.id, e.target.value as typeof ASSET_TYPES[number])}
-                className="w-full text-xs border border-[var(--sf-border)] rounded-md px-1 py-0.5 bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] focus:outline-none"
-              >
-                {ASSET_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

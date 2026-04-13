@@ -391,6 +391,8 @@ Do NOT copy these ads. Adapt their winning structure and visual DNA to ${brandDn
 
   const textPrompt = `You are a senior creative director at a top DTC advertising agency. Create a detailed creative brief for a static Meta Ad that is unmistakably "on brand" for this brand.${inspirationSection}${userBriefSection}
 
+IMPORTANT: Use brand colors contextually. Do not override the inspiration image layout background with the primary color.
+
 BRAND DNA:
 - Brand: ${brandDna.name}
 - Website: ${brandDna.url}
@@ -441,13 +443,13 @@ Call the submit_creative_brief tool with the completed brief. For imagePrompt: w
             headline:      { type: "string", description: "Main headline — max 6 words, punchy, uses the hook angle" },
             subheadline:   { type: "string", description: "Supporting line — max 12 words" },
             copy:          { type: "string", description: `Body copy — max 20 words, ${brandDna.toneOfVoice} tone` },
-            callToAction:  { type: "string", description: "CTA button text — 2–4 words" },
+            callToAction:  { type: "string", description: "CTA button text — 2-4 words, ALWAYS ALL CAPS (e.g. SHOP NOW, GET 50% OFF, TRY FOR FREE)" },
             angle:         { type: "string", description: "Creative angle (must match requested angle)" },
             format:        { type: "string", description: "Ad format (must match requested format)" },
             layout:        { type: "string", description: "Visual layout: product placement, text zones, hierarchy" },
-            colorGuidance: { type: "string", description: `Exact color usage — primary ${brandDna.colors.primary} for bg, accent ${brandDna.colors.accent} for CTA` },
+            colorGuidance: { type: "string", description: `brand colors — primary ${brandDna.colors.primary} as dominant brand color (use contextually based on inspiration layout: CTA fill, overlay strip, text — do NOT force it as background if inspiration shows a different approach), accent ${brandDna.colors.accent} for CTA` },
             fontGuidance:  { type: "string", description: `Font hierarchy — ${brandDna.fonts?.[0] ?? "sans-serif"} bold for headline, regular for body` },
-            imagePrompt:   { type: "string", description: `Gemini image generation prompt — single continuous paragraph, no line breaks. MUST incorporate all Visual Style Directives above verbatim. Include: layout, product placement, bg color (${brandDna.colors.primary}), text positions, visual style${brandDna.visualStyleKeywords?.length ? ` (${brandDna.visualStyleKeywords.slice(0, 3).join(", ")})` : ""}${brandDna.creativeDoList?.length ? `, DO: ${brandDna.creativeDoList.slice(0, 2).join("; ")}` : ""}${brandDna.creativeDontList?.length ? `, NEVER: ${brandDna.creativeDontList.slice(0, 2).join("; ")}` : ""}. Must look like ${brandDna.name}'s in-house design team. Category: ${brandDna.productCategory}. Format: ${format}. Photorealistic, professional ad quality, no watermarks.` },
+            imagePrompt:   { type: "string", description: `Gemini image generation prompt — single continuous paragraph, no line breaks. MUST incorporate all Visual Style Directives above verbatim. Include: layout, product placement, use ${brandDna.colors.primary} as primary brand color placed contextually (CTA button, overlay, text), text positions, visual style${brandDna.visualStyleKeywords?.length ? ` (${brandDna.visualStyleKeywords.slice(0, 3).join(", ")})` : ""}${brandDna.creativeDoList?.length ? `, DO: ${brandDna.creativeDoList.slice(0, 2).join("; ")}` : ""}${brandDna.creativeDontList?.length ? `, NEVER: ${brandDna.creativeDontList.slice(0, 2).join("; ")}` : ""}. Must look like ${brandDna.name}'s in-house design team. Category: ${brandDna.productCategory}. Format: ${format}. Photorealistic, professional ad quality, no watermarks.` },
           },
           required: ["headline", "subheadline", "copy", "callToAction", "angle", "format", "layout", "colorGuidance", "fontGuidance", "imagePrompt"],
         },
@@ -467,6 +469,8 @@ Call the submit_creative_brief tool with the completed brief. For imagePrompt: w
 
   const brief: CreativeBrief = {
     ...parsed,
+    // Guarantee CTA is always uppercase regardless of what Claude returns
+    callToAction: parsed.callToAction?.toUpperCase() ?? parsed.callToAction,
     brandDnaRef: brandDna,
     ...(inspirationTemplates?.length
       ? { inspirationTemplateIds: inspirationTemplates.map((t) => t.id) }

@@ -44,6 +44,11 @@ export default async function GeneratePage({ params }: PageProps) {
 
   if (!brand) notFound();
 
+  // Check if the brand has a logo asset — required to unlock generation
+  const brandDnaJson = (brand.brandDnaJson ?? {}) as Record<string, unknown>;
+  const brandAssets = Array.isArray(brandDnaJson.brandAssets) ? brandDnaJson.brandAssets as { type: string }[] : [];
+  const hasLogo = brandAssets.some((a) => a.type === "logo");
+
   return (
     <main className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
       <AppNavbar email={session.user?.email} brandId={brand.id} />
@@ -51,6 +56,7 @@ export default async function GeneratePage({ params }: PageProps) {
       <GenerateClient
         brandId={brand.id}
         brandName={brand.name}
+        hasLogo={hasLogo}
         existingCreatives={brand.creatives.map((c) => ({
           id: c.id,
           imageUrl: c.imageUrl,
