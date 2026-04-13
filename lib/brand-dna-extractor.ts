@@ -3,7 +3,7 @@
 
 import { createClaudeClient, CLAUDE_MODEL } from "@/lib/claude";
 import { scrapeWebsite, ScrapeResult } from "@/lib/scraper";
-import type { CustomerVocabulary, Persona, CommunicationAngles, CustomAsset, BrandProduct } from "@/types/index";
+import type { CustomerVocabulary, Persona, CommunicationAngles, CustomAsset, BrandAsset, BrandProduct } from "@/types/index";
 
 export interface ExtractedBrandDNA {
   // ── Auto-extracted (Phase 1) ───────────────────────────────────────────────
@@ -81,6 +81,10 @@ export interface ExtractedBrandDNA {
 
   // ── Products (STA-80) ─────────────────────────────────────────────────────
   products?: BrandProduct[];    // per-product data (images, icons, moodboard)
+
+  // ── Brand Assets v2 (Phase E) ─────────────────────────────────────────────
+  // Unified typed asset library. logoUrl + lifestyleImages kept for backward compat.
+  brandAssets?: BrandAsset[];
 }
 
 /**

@@ -32,13 +32,20 @@ export interface BrandProduct {
   moodboard: string[];
 }
 
-/** A custom brand asset uploaded by the user */
+/** A custom brand asset uploaded by the user (legacy) */
 export interface CustomAsset {
   id: string;
   type: 'packshot' | 'studio' | 'ugc' | 'other';
   url: string;           // R2 public URL
   fileName: string;
   uploadedAt: string;    // ISO date string
+}
+
+/** Unified brand asset (v2 — replaces separate logoUrl + lifestyleImages) */
+export interface BrandAsset {
+  id: string;
+  type: 'logo' | 'lifestyle' | 'icon' | 'pattern' | 'texture';
+  url: string;
 }
 
 /** Brand DNA extracted from a URL */

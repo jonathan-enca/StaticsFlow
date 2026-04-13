@@ -6,11 +6,12 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
-import type { Persona, CommunicationAngles, BrandProduct } from "@/types/index";
+import type { Persona, CommunicationAngles, BrandAsset, BrandProduct } from "@/types/index";
 
 const PRICE_POSITIONS = ["budget", "mid-range", "premium", "ultra-premium"] as const;
 const HOOK_OPTIONS = ["pain", "curiosite", "social_proof", "fomo", "benefice_direct", "autorite", "urgence"] as const;
 const CAMPAIGN_OBJECTIVES = ["awareness", "consideration", "conversion", "retention"] as const;
+const ASSET_TYPES = ["logo", "lifestyle", "icon", "pattern", "texture"] as const;
 
 const POPULAR_FONTS = [
   "Inter", "Roboto", "Open Sans", "Lato", "Montserrat", "Poppins",
@@ -125,7 +126,7 @@ function PillSelect<T extends string>({
   );
 }
 
-// ── GroupHeader ───────────────────────────────────────────────────────────────
+// ── GroupHeader (legacy, kept for Products tab) ───────────────────────────────
 function GroupHeader({ label, badge }: { label: string; badge?: string }) {
   return (
     <div className="flex items-center gap-2 mb-2">
@@ -134,6 +135,220 @@ function GroupHeader({ label, badge }: { label: string; badge?: string }) {
         <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "var(--sf-accent-muted)", color: "var(--sf-accent)" }}>
           {badge}
         </span>
+      )}
+    </div>
+  );
+}
+
+// ── CollapsibleSection ────────────────────────────────────────────────────────
+function CollapsibleSection({
+  title,
+  badge,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  badge?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-[var(--sf-border)] rounded-2xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-6 py-4 bg-[var(--sf-bg-secondary)] hover:bg-[var(--sf-bg-elevated)] transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-bold text-[var(--sf-text-primary)]">{title}</h2>
+          {badge && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "var(--sf-accent-muted)", color: "var(--sf-accent)" }}>
+              {badge}
+            </span>
+          )}
+        </div>
+        <span className="text-[var(--sf-text-muted)] text-sm ml-4">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="px-6 py-6 space-y-6 bg-[var(--sf-bg-primary)]">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── BrandAssetManager ─────────────────────────────────────────────────────────
+// Unified typed brand asset library (Phase E): logo | lifestyle | icon | pattern | texture
+function BrandAssetManager({
+  brandId,
+  assets,
+  onChange,
+}: {
+  brandId: string;
+  assets: BrandAsset[];
+  onChange: (assets: BrandAsset[]) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [urlInput, setUrlInput] = useState("");
+  const [pendingType, setPendingType] = useState<typeof ASSET_TYPES[number]>("lifestyle");
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const uploadFile = useCallback(async (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("type", "other");
+    const res = await fetch(`/api/brands/${brandId}/assets`, { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "Upload failed");
+    return data.asset.url as string;
+  }, [brandId]);
+
+  const addAssets = async (urls: string[]) => {
+    const newAssets: BrandAsset[] = urls.map((url) => ({
+      id: crypto.randomUUID(),
+      type: pendingType,
+      url,
+    }));
+    onChange([...assets, ...newAssets]);
+  };
+
+  const handleFiles = async (files: File[]) => {
+    setUploading(true);
+    setError(null);
+    try {
+      for (const file of files) {
+        const url = await uploadFile(file);
+        onChange([...assets, { id: crypto.randomUUID(), type: pendingType, url }]);
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const addUrl = () => {
+    const val = urlInput.trim();
+    if (!val) return;
+    addAssets([val]);
+    setUrlInput("");
+  };
+
+  const updateType = (id: string, type: typeof ASSET_TYPES[number]) =>
+    onChange(assets.map((a) => (a.id === id ? { ...a, type } : a)));
+
+  const removeAsset = (id: string) => onChange(assets.filter((a) => a.id !== id));
+
+  return (
+    <div className="space-y-4">
+      {/* Type selector for new uploads */}
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-[var(--sf-text-secondary)]">Add as:</span>
+        <div className="flex flex-wrap gap-1.5">
+          {ASSET_TYPES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setPendingType(t)}
+              className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors capitalize ${
+                pendingType === t
+                  ? "bg-black text-white border-black"
+                  : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)]"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Drop zone */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={async (e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
+          if (files.length > 0) await handleFiles(files);
+        }}
+        onClick={() => inputRef.current?.click()}
+        className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
+          dragOver ? "border-[var(--sf-accent)] bg-[var(--sf-bg-elevated)]" : "border-[var(--sf-border)] hover:border-[var(--sf-text-muted)]"
+        }`}
+      >
+        {uploading ? (
+          <p className="text-sm text-[var(--sf-text-secondary)]">Uploading…</p>
+        ) : (
+          <p className="text-sm text-[var(--sf-text-secondary)]">
+            Drag & drop or <span className="underline font-medium">click to upload</span>
+            <span className="ml-2 text-xs text-[var(--sf-text-muted)]">PNG, JPEG, WebP — max 10 MB</span>
+          </p>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        multiple
+        className="hidden"
+        onChange={async (e) => {
+          const files = Array.from(e.target.files ?? []);
+          if (files.length > 0) await handleFiles(files);
+          e.target.value = "";
+        }}
+      />
+
+      {/* URL input */}
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={urlInput}
+          onChange={(e) => setUrlInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }}
+          placeholder="Or paste image URL…"
+          className="flex-1 px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
+        />
+        <button type="button" onClick={addUrl} className="px-3 py-2 text-sm bg-[var(--sf-bg-elevated)] rounded-lg font-medium whitespace-nowrap">
+          Add URL
+        </button>
+      </div>
+
+      {error && <p className="text-sm text-red-500">{error}</p>}
+
+      {/* Asset grid */}
+      {assets.length > 0 && (
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+          {assets.map((asset) => (
+            <div key={asset.id} className="relative group space-y-1">
+              <div className="relative rounded-xl overflow-hidden aspect-square bg-[var(--sf-bg-elevated)] border border-[var(--sf-border)]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={asset.url} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.3"; }} />
+                <button
+                  type="button"
+                  onClick={() => removeAsset(asset.id)}
+                  className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  ×
+                </button>
+              </div>
+              {/* Type selector per asset */}
+              <select
+                value={asset.type}
+                onChange={(e) => updateType(asset.id, e.target.value as typeof ASSET_TYPES[number])}
+                className="w-full text-xs border border-[var(--sf-border)] rounded-md px-1 py-0.5 bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] focus:outline-none"
+              >
+                {ASSET_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -480,13 +695,21 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // ── Visuals & Identity ──────────────────────────────────────────────────────
+  // ── Visual Identity ──────────────────────────────────────────────────────────
   const [colors, setColors] = useState(dna.colors);
   const [font, setFont] = useState<string>((dna.fonts ?? [])[0] ?? "");
-  const [logoUrl, setLogoUrl] = useState<string[]>(dna.logoUrl ? [dna.logoUrl] : []);
-  const [brandImages, setBrandImages] = useState<string[]>(dna.lifestyleImages ?? []);
+  // Phase E: unified brand asset library. Seed from existing logoUrl/lifestyleImages if brandAssets is empty.
+  const [brandAssets, setBrandAssets] = useState<BrandAsset[]>(() => {
+    if ((dna.brandAssets ?? []).length > 0) return dna.brandAssets!;
+    const seeded: BrandAsset[] = [];
+    if (dna.logoUrl) seeded.push({ id: crypto.randomUUID(), type: "logo", url: dna.logoUrl });
+    for (const url of (dna.lifestyleImages ?? [])) {
+      seeded.push({ id: crypto.randomUUID(), type: "lifestyle", url });
+    }
+    return seeded;
+  });
 
-  // ── Identity & Positioning ──────────────────────────────────────────────────
+  // ── Strategy ─────────────────────────────────────────────────────────────────
   const [pricePositioning, setPricePositioning] = useState<typeof PRICE_POSITIONS[number] | "">(
     (dna.pricePositioning as typeof PRICE_POSITIONS[number]) ?? ""
   );
@@ -494,7 +717,6 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
   const [differentiators, setDifferentiators] = useState<string[]>(dna.differentiators ?? []);
   const [productCategory, setProductCategory] = useState(dna.productCategory ?? "");
   const [keyBenefits, setKeyBenefits] = useState<string[]>(dna.keyBenefits ?? []);
-  const [personas, setPersonas] = useState<string[]>(dna.personas ?? []);
 
   // ── Voice & Messaging ───────────────────────────────────────────────────────
   const [toneOfVoice, setToneOfVoice] = useState(dna.toneOfVoice ?? "");
@@ -531,7 +753,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
   const [currentPromotion, setCurrentPromotion] = useState(dna.currentPromotion ?? "");
   const [seasonalConstraints, setSeasonalConstraints] = useState<string[]>(dna.seasonalConstraints ?? []);
   const [legalConstraints, setLegalConstraints] = useState<string[]>(dna.legalConstraints ?? []);
-  const [campaignOpen, setCampaignOpen] = useState(false);
+  // campaignOpen removed — Campaign Context is now a CollapsibleSection (Phase E)
 
   // ── Brand Charter ───────────────────────────────────────────────────────────
   const [brandBrief, setBrandBrief] = useState(dna.brandBrief ?? "");
@@ -564,14 +786,15 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
         body: JSON.stringify({
           colors,
           fonts: font ? [font] : [],
-          logoUrl: logoUrl[0] ?? null,
-          lifestyleImages: brandImages,
+          // Derive backward-compat fields from brandAssets
+          logoUrl: brandAssets.find((a) => a.type === "logo")?.url ?? null,
+          lifestyleImages: brandAssets.filter((a) => a.type === "lifestyle").map((a) => a.url),
+          brandAssets,
           pricePositioning: pricePositioning || undefined,
           targetMarkets,
           differentiators,
           productCategory,
           keyBenefits,
-          personas,
           toneOfVoice,
           brandVoice,
           brandVoiceAdjectives,
@@ -676,15 +899,13 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TAB: Global Brand DNA
+          TAB: Global Brand DNA — 5 collapsible sections (Phase E)
       ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "global" && (
-        <div className="space-y-10">
+        <div className="space-y-4">
 
-          {/* GROUP 1 — Visuals & Identity */}
-          <div className="space-y-6">
-            <GroupHeader label="Visuals & Identity" badge="Auto-extracted · Editable" />
-
+          {/* SECTION 1 — Visual Identity */}
+          <CollapsibleSection title="Visual Identity" badge="Auto-extracted · Editable">
             <Section title="Brand Colors" subtitle="Edit directly — applied to all future creatives.">
               <div className="space-y-3">
                 {(["primary", "secondary", "accent"] as const).map((key) => (
@@ -702,61 +923,17 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
               </div>
             </Section>
 
-            <Section title="Logo" subtitle="Brand logo. Drag & drop a file or paste a URL.">
-              <DropZone brandId={brandId} urls={logoUrl} onUrlsChange={setLogoUrl} multiple={false} showUrlInput />
-            </Section>
-
             <Section title="Brand Font" subtitle="Primary typeface. Used for guidance in ad generation prompts.">
               <FontPicker value={font} onChange={setFont} />
             </Section>
 
-            <Section title="Brand Images" subtitle="Lifestyle and editorial photos. Used as visual references in ad generation.">
-              <DropZone brandId={brandId} urls={brandImages} onUrlsChange={setBrandImages} multiple showUrlInput />
+            <Section title="Brand Assets" subtitle="Logo, lifestyle photos, icons, patterns, textures — tagged and used in generation.">
+              <BrandAssetManager brandId={brandId} assets={brandAssets} onChange={setBrandAssets} />
             </Section>
-          </div>
+          </CollapsibleSection>
 
-          {/* GROUP 2 — Identity & Positioning */}
-          <div className="space-y-6">
-            <GroupHeader label="Identity & Positioning" />
-
-            <Section title="Price Positioning" subtitle="Where this brand sits in the market.">
-              <div className="flex flex-wrap gap-2">
-                {PRICE_POSITIONS.map((pos) => (
-                  <button key={pos} type="button" onClick={() => setPricePositioning(pricePositioning === pos ? "" : pos)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors capitalize ${pricePositioning === pos ? "bg-black text-white border-black" : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)]"}`}>
-                    {pos}
-                  </button>
-                ))}
-              </div>
-            </Section>
-
-            <Section title="Target Markets" subtitle="Countries or regions this brand targets.">
-              <TagInput label="Markets" tags={targetMarkets} onChange={setTargetMarkets} placeholder="e.g. France, US, Europe…" />
-            </Section>
-
-            <Section title="Differentiators" subtitle="What makes this brand unique vs. competitors.">
-              <TagInput label="Differentiators" tags={differentiators} onChange={setDifferentiators} placeholder="e.g. ethically sourced, made in France…" />
-            </Section>
-
-            <Section title="Product Category">
-              <input type="text" value={productCategory} onChange={(e) => setProductCategory(e.target.value)}
-                placeholder="e.g. skincare, fashion, food…"
-                className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]" />
-            </Section>
-
-            <Section title="Key Benefits" subtitle="Core product benefits used in ad copy.">
-              <TagInput label="Benefits" tags={keyBenefits} onChange={setKeyBenefits} placeholder="e.g. 100% natural, dermatologist-tested…" />
-            </Section>
-
-            <Section title="Target Personas" subtitle="Simple persona descriptions (one per tag).">
-              <TagInput label="Personas" tags={personas} onChange={setPersonas} placeholder="e.g. Women 28-40, urban, health-conscious…" />
-            </Section>
-          </div>
-
-          {/* GROUP 3 — Voice & Messaging */}
-          <div className="space-y-6">
-            <GroupHeader label="Voice & Messaging" />
-
+          {/* SECTION 2 — Brand Voice */}
+          <CollapsibleSection title="Brand Voice">
             <Section title="Tone of Voice" subtitle="How the brand communicates. Injected into every creative brief.">
               <textarea value={toneOfVoice} onChange={(e) => setToneOfVoice(e.target.value)} rows={3}
                 placeholder="Casual and warm, uses tutoiement, emphasis on community and authenticity…"
@@ -793,32 +970,63 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
             <Section title="Call-to-Action Examples" subtitle="CTAs that fit this brand's tone.">
               <TagInput label="CTA examples" tags={callToActionExamples} onChange={setCallToActionExamples} placeholder="e.g. Shop the collection, Discover now…" />
             </Section>
-          </div>
 
-          {/* GROUP 4 — Creative Direction */}
-          <div className="space-y-6">
-            <GroupHeader label="Creative Direction" />
-
-            <Section title="Visual Style Keywords" subtitle="Keywords describing the brand's visual aesthetic.">
-              <TagInput label="Style keywords" tags={visualStyleKeywords} onChange={setVisualStyleKeywords} placeholder="e.g. minimalist, editorial, raw UGC, luxury…" />
+            <Section title="Brand Brief" subtitle="Free text: who you are, who you're not, your obsession.">
+              <textarea value={brandBrief} onChange={(e) => setBrandBrief(e.target.value)} rows={4}
+                placeholder="We want to be perceived as X. Our brand is never Y. Our obsession is Z…"
+                className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)] resize-none" />
             </Section>
 
-            <Section title="Creative Do's & Don'ts">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <TagInput label="✓ Do's" tags={creativeDoList} onChange={setCreativeDoList} placeholder="e.g. use natural lighting…" />
-                <TagInput label="✗ Don'ts" tags={creativeDontList} onChange={setCreativeDontList} placeholder="e.g. avoid stock photo feel…" />
+            <Section title="Communication Angles" subtitle="Preferred and forbidden communication approaches.">
+              <TagInput label="Preferred angles" tags={preferredAngles} onChange={setPreferredAngles} placeholder="e.g. transformation, authenticity, expertise…" />
+              <TagInput label="Forbidden angles" tags={forbiddenAngles} onChange={setForbiddenAngles} placeholder="e.g. fear-based, aggressive discounts…" />
+            </Section>
+          </CollapsibleSection>
+
+          {/* SECTION 3 — Audience */}
+          <CollapsibleSection title="Audience">
+            <Section title="Target Markets" subtitle="Countries or regions this brand targets.">
+              <TagInput label="Markets" tags={targetMarkets} onChange={setTargetMarkets} placeholder="e.g. France, US, Europe…" />
+            </Section>
+
+            <Section title="Buyer Personas" subtitle="Detailed personas with pain points and aspirations.">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-[var(--sf-text-primary)]">Personas</label>
+                  <button type="button" onClick={addPersona} className="text-xs px-3 py-1.5 bg-[var(--sf-bg-elevated)] rounded-lg font-medium transition-colors">
+                    + Add persona
+                  </button>
+                </div>
+                {structuredPersonas.map((p, i) => (
+                  <div key={i} className="border border-[var(--sf-border)] rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-[var(--sf-text-primary)]">Persona {i + 1}</p>
+                      <button type="button" onClick={() => removePersona(i)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-[var(--sf-text-secondary)] mb-1">Name</label>
+                        <input type="text" value={p.name} onChange={(e) => updatePersona(i, { name: e.target.value })} placeholder="e.g. Sarah"
+                          className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[var(--sf-text-secondary)] mb-1">Age range</label>
+                        <input type="text" value={p.ageRange} onChange={(e) => updatePersona(i, { ageRange: e.target.value })} placeholder="e.g. 28-40"
+                          className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[var(--sf-text-secondary)] mb-1">Description</label>
+                      <textarea value={p.description} onChange={(e) => updatePersona(i, { description: e.target.value })} rows={2}
+                        placeholder="Who is this person? Lifestyle, habits, values…"
+                        className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)] resize-none" />
+                    </div>
+                    <TagInput label="Pain points" tags={p.painPoints} onChange={(tags) => updatePersona(i, { painPoints: tags })} placeholder="e.g. feels invisible, dry skin…" />
+                    <TagInput label="Aspirations" tags={p.aspirations} onChange={(tags) => updatePersona(i, { aspirations: tags })} placeholder="e.g. feel confident, look effortless…" />
+                  </div>
+                ))}
               </div>
             </Section>
-
-            <Section title="Ad Hooks" subtitle="Hook types to use or avoid in creative briefs.">
-              <PillSelect label="Preferred hooks" options={HOOK_OPTIONS} selected={preferredHooks} onChange={setPreferredHooks} />
-              <TagInput label="Hooks to avoid" tags={avoidedHooks} onChange={setAvoidedHooks} placeholder="e.g. fomo, urgence…" />
-            </Section>
-          </div>
-
-          {/* GROUP 5 — Customer Intelligence */}
-          <div className="space-y-6">
-            <GroupHeader label="Customer Intelligence" />
 
             <Section title="Customer Reviews Verbatim" subtitle="Real customer quotes — max 10. Used directly in ad copy.">
               <TagInput label="Verbatim quotes (max 10)" tags={customerReviewsVerbatim} onChange={(tags) => setCustomerReviewsVerbatim(tags.slice(0, 10))} placeholder="Exact customer quote…" />
@@ -868,98 +1076,80 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
                 </div>
               )}
             </Section>
-          </div>
+          </CollapsibleSection>
 
-          {/* GROUP 6 — Campaign Context (collapsible) */}
-          <div className="space-y-6">
-            <button type="button" onClick={() => setCampaignOpen((v) => !v)} className="flex items-center gap-3 w-full text-left">
-              <h2 className="text-lg font-bold text-[var(--sf-text-primary)]">Campaign Context</h2>
-              <span className="text-xs px-2 py-0.5 bg-[var(--sf-bg-elevated)] text-[var(--sf-text-secondary)] rounded-full font-medium">Advanced</span>
-              <span className="ml-auto text-[var(--sf-text-muted)] text-sm">{campaignOpen ? "▲ Collapse" : "▼ Expand"}</span>
-            </button>
-            {campaignOpen && (
-              <>
-                <Section title="Campaign Objective">
-                  <div className="flex flex-wrap gap-2">
-                    {CAMPAIGN_OBJECTIVES.map((obj) => (
-                      <button key={obj} type="button" onClick={() => setCurrentCampaignObjective(currentCampaignObjective === obj ? "" : obj)}
-                        className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors capitalize ${currentCampaignObjective === obj ? "bg-black text-white border-black" : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)]"}`}>
-                        {obj}
-                      </button>
-                    ))}
-                  </div>
-                </Section>
-                <Section title="Current Promotion">
-                  <input type="text" value={currentPromotion} onChange={(e) => setCurrentPromotion(e.target.value)}
-                    placeholder="e.g. Summer Sale — 20% off all skincare…"
-                    className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]" />
-                </Section>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <Section title="Seasonal Constraints">
-                    <TagInput label="Constraints" tags={seasonalConstraints} onChange={setSeasonalConstraints} placeholder="e.g. no summer imagery in Dec…" />
-                  </Section>
-                  <Section title="Legal Constraints">
-                    <TagInput label="Constraints" tags={legalConstraints} onChange={setLegalConstraints} placeholder="e.g. must include disclaimer…" />
-                  </Section>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* GROUP 7 — Brand Charter */}
-          <div className="space-y-6">
-            <GroupHeader label="Brand Charter" badge="Manual enrichment" />
-
-            <Section title="Brand Brief" subtitle="Free text: who you are, who you're not, your obsession.">
-              <textarea value={brandBrief} onChange={(e) => setBrandBrief(e.target.value)} rows={4}
-                placeholder="We want to be perceived as X. Our brand is never Y. Our obsession is Z…"
-                className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)] resize-none" />
-            </Section>
-
-            <Section title="Buyer Personas (Structured)" subtitle="Detailed personas with pain points and aspirations.">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-[var(--sf-text-primary)]">Personas</label>
-                  <button type="button" onClick={addPersona} className="text-xs px-3 py-1.5 bg-[var(--sf-bg-elevated)] rounded-lg font-medium transition-colors">
-                    + Add persona
+          {/* SECTION 4 — Strategy */}
+          <CollapsibleSection title="Strategy">
+            <Section title="Price Positioning" subtitle="Where this brand sits in the market.">
+              <div className="flex flex-wrap gap-2">
+                {PRICE_POSITIONS.map((pos) => (
+                  <button key={pos} type="button" onClick={() => setPricePositioning(pricePositioning === pos ? "" : pos)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors capitalize ${pricePositioning === pos ? "bg-black text-white border-black" : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)]"}`}>
+                    {pos}
                   </button>
-                </div>
-                {structuredPersonas.map((p, i) => (
-                  <div key={i} className="border border-[var(--sf-border)] rounded-xl p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-[var(--sf-text-primary)]">Persona {i + 1}</p>
-                      <button type="button" onClick={() => removePersona(i)} className="text-xs text-red-400 hover:text-red-600">Remove</button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs text-[var(--sf-text-secondary)] mb-1">Name</label>
-                        <input type="text" value={p.name} onChange={(e) => updatePersona(i, { name: e.target.value })} placeholder="e.g. Sarah"
-                          className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-[var(--sf-text-secondary)] mb-1">Age range</label>
-                        <input type="text" value={p.ageRange} onChange={(e) => updatePersona(i, { ageRange: e.target.value })} placeholder="e.g. 28-40"
-                          className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-[var(--sf-text-secondary)] mb-1">Description</label>
-                      <textarea value={p.description} onChange={(e) => updatePersona(i, { description: e.target.value })} rows={2}
-                        placeholder="Who is this person? Lifestyle, habits, values…"
-                        className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)] resize-none" />
-                    </div>
-                    <TagInput label="Pain points" tags={p.painPoints} onChange={(tags) => updatePersona(i, { painPoints: tags })} placeholder="e.g. feels invisible, dry skin…" />
-                    <TagInput label="Aspirations" tags={p.aspirations} onChange={(tags) => updatePersona(i, { aspirations: tags })} placeholder="e.g. feel confident, look effortless…" />
-                  </div>
                 ))}
               </div>
             </Section>
 
-            <Section title="Communication Angles" subtitle="Preferred and forbidden communication approaches.">
-              <TagInput label="Preferred angles" tags={preferredAngles} onChange={setPreferredAngles} placeholder="e.g. transformation, authenticity, expertise…" />
-              <TagInput label="Forbidden angles" tags={forbiddenAngles} onChange={setForbiddenAngles} placeholder="e.g. fear-based, aggressive discounts…" />
+            <Section title="Product Category">
+              <input type="text" value={productCategory} onChange={(e) => setProductCategory(e.target.value)}
+                placeholder="e.g. skincare, fashion, food…"
+                className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]" />
             </Section>
-          </div>
+
+            <Section title="Key Benefits" subtitle="Core product benefits used in ad copy.">
+              <TagInput label="Benefits" tags={keyBenefits} onChange={setKeyBenefits} placeholder="e.g. 100% natural, dermatologist-tested…" />
+            </Section>
+
+            <Section title="Differentiators" subtitle="What makes this brand unique vs. competitors.">
+              <TagInput label="Differentiators" tags={differentiators} onChange={setDifferentiators} placeholder="e.g. ethically sourced, made in France…" />
+            </Section>
+
+            <Section title="Visual Style Keywords" subtitle="Keywords describing the brand's visual aesthetic.">
+              <TagInput label="Style keywords" tags={visualStyleKeywords} onChange={setVisualStyleKeywords} placeholder="e.g. minimalist, editorial, raw UGC, luxury…" />
+            </Section>
+
+            <Section title="Creative Do's & Don'ts">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <TagInput label="✓ Do's" tags={creativeDoList} onChange={setCreativeDoList} placeholder="e.g. use natural lighting…" />
+                <TagInput label="✗ Don'ts" tags={creativeDontList} onChange={setCreativeDontList} placeholder="e.g. avoid stock photo feel…" />
+              </div>
+            </Section>
+
+            <Section title="Ad Hooks" subtitle="Hook types to use or avoid in creative briefs.">
+              <PillSelect label="Preferred hooks" options={HOOK_OPTIONS} selected={preferredHooks} onChange={setPreferredHooks} />
+              <TagInput label="Hooks to avoid" tags={avoidedHooks} onChange={setAvoidedHooks} placeholder="e.g. fomo, urgence…" />
+            </Section>
+          </CollapsibleSection>
+
+          {/* SECTION 5 — Campaign Context (collapsed by default — advanced) */}
+          <CollapsibleSection title="Campaign Context" badge="Advanced" defaultOpen={false}>
+            <Section title="Campaign Objective">
+              <div className="flex flex-wrap gap-2">
+                {CAMPAIGN_OBJECTIVES.map((obj) => (
+                  <button key={obj} type="button" onClick={() => setCurrentCampaignObjective(currentCampaignObjective === obj ? "" : obj)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors capitalize ${currentCampaignObjective === obj ? "bg-black text-white border-black" : "bg-[var(--sf-bg-secondary)] text-[var(--sf-text-secondary)] border-[var(--sf-border)]"}`}>
+                    {obj}
+                  </button>
+                ))}
+              </div>
+            </Section>
+
+            <Section title="Current Promotion">
+              <input type="text" value={currentPromotion} onChange={(e) => setCurrentPromotion(e.target.value)}
+                placeholder="e.g. Summer Sale — 20% off all skincare…"
+                className="w-full px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]" />
+            </Section>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Section title="Seasonal Constraints">
+                <TagInput label="Constraints" tags={seasonalConstraints} onChange={setSeasonalConstraints} placeholder="e.g. no summer imagery in Dec…" />
+              </Section>
+              <Section title="Legal Constraints">
+                <TagInput label="Constraints" tags={legalConstraints} onChange={setLegalConstraints} placeholder="e.g. must include disclaimer…" />
+              </Section>
+            </div>
+          </CollapsibleSection>
 
         </div>
       )}

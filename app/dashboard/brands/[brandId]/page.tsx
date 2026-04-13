@@ -86,6 +86,8 @@ export default async function BrandDnaPage({ params }: PageProps) {
     brandBrief: dna.brandBrief ?? "",
     structuredPersonas: dna.structuredPersonas ?? [],
     communicationAngles: dna.communicationAngles,
+    // Phase E: unified asset library
+    brandAssets: dna.brandAssets ?? [],
   };
 
   return (

@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
-import type { Persona, CommunicationAngles, BrandProduct } from "@/types/index";
+import type { Persona, CommunicationAngles, BrandAsset, BrandProduct } from "@/types/index";
 
 interface EnrichPayload {
   // Visuals & Identity
@@ -60,6 +60,8 @@ interface EnrichPayload {
   icons?: string[];
   // Products (STA-80)
   products?: BrandProduct[];
+  // Phase E: unified brand asset library
+  brandAssets?: BrandAsset[];
 }
 
 export async function PUT(
@@ -145,6 +147,8 @@ export async function PUT(
     ...pick("icons"),
     // Products (STA-80)
     ...pick("products"),
+    // Phase E: unified brand asset library
+    ...pick("brandAssets"),
   } as Partial<ExtractedBrandDNA>;
 
   const updated = await prisma.brand.update({
