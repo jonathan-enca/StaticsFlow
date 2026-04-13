@@ -3,8 +3,10 @@
 // ProductFormClient — Product DNA form (create + edit)
 // Features:
 //   - URL extraction: paste URL → auto-fills form via Claude + scraper
+//   - Extraction result card: compact confirmation after extraction
+//   - Image grid: 3-column visual grid replacing flat URL list
 //   - Tag inputs for benefits, claims, ingredients, CTAs, hooks, avoids
-//   - Image URL management (productImages min 3, lifestyle, packaging, UGC)
+//   - Image URL management (productImages min 1, lifestyle, packaging, UGC)
 //   - Advanced section (collapsible)
 //   - Auto-save on submit (not per-field blur — keeps complexity manageable)
 
@@ -106,18 +108,16 @@ function TagInput({
   );
 }
 
-// ── ImageUrlList ───────────────────────────────────────────────────────────────
-function ImageUrlList({
-  label,
+// ── ImageGrid ─────────────────────────────────────────────────────────────────
+// 3-column visual grid of ~100px thumbnails, each with an overlay remove button.
+// URL-paste input stays below the grid.
+function ImageGrid({
   urls,
   onChange,
-  minCount,
   hint,
 }: {
-  label: string;
   urls: string[];
   onChange: (urls: string[]) => void;
-  minCount?: number;
   hint?: string;
 }) {
   const [input, setInput] = useState("");
@@ -130,22 +130,89 @@ function ImageUrlList({
     setInput("");
   }
 
-  const count = urls.length;
-  const needed = minCount ? Math.max(0, minCount - count) : 0;
+  return (
+    <div className="space-y-3">
+      {hint && <p className="text-xs text-[var(--sf-muted)]">{hint}</p>}
+
+      {/* 3-column grid */}
+      {urls.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
+          {urls.map((url, i) => (
+            <div key={i} className="group relative aspect-square w-full overflow-hidden rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg)]">
+              <img
+                src={url}
+                alt=""
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.opacity = "0.3";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => onChange(urls.filter((_, j) => j !== i))}
+                className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity group-hover:opacity-100 text-[10px] leading-none"
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* URL paste input */}
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addUrl(input);
+            }
+          }}
+          placeholder="Paste image URL and press Enter"
+          className="flex-1 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg)] px-3 py-2 text-xs text-[var(--sf-text)] placeholder:text-[var(--sf-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--sf-accent)]"
+        />
+        <button
+          type="button"
+          onClick={() => addUrl(input)}
+          className="rounded-lg border border-[var(--sf-border)] px-3 py-2 text-xs text-[var(--sf-muted)] hover:bg-[var(--sf-surface)]"
+        >
+          Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── ImageUrlList ── (kept for lifestyle/packaging/UGC — compact list is fine there)
+function ImageUrlList({
+  label,
+  urls,
+  onChange,
+  hint,
+}: {
+  label: string;
+  urls: string[];
+  onChange: (urls: string[]) => void;
+  hint?: string;
+}) {
+  const [input, setInput] = useState("");
+
+  function addUrl(val: string) {
+    const trimmed = val.trim();
+    if (trimmed && trimmed.startsWith("http") && !urls.includes(trimmed)) {
+      onChange([...urls, trimmed]);
+    }
+    setInput("");
+  }
 
   return (
     <div>
       <label className="mb-1 block text-xs font-medium text-[var(--sf-muted)] uppercase tracking-wide">
         {label}
-        {minCount && (
-          <span
-            className={`ml-2 text-xs font-normal ${
-              count >= minCount ? "text-emerald-400" : "text-amber-400"
-            }`}
-          >
-            {count >= minCount ? `✓ ${count}/${minCount}` : `${count}/${minCount} — add ${needed} more`}
-          </span>
-        )}
       </label>
       {hint && <p className="mb-2 text-xs text-[var(--sf-muted)]">{hint}</p>}
       <div className="space-y-2">
@@ -191,6 +258,94 @@ function ImageUrlList({
   );
 }
 
+// ── ExtractionSkeleton ─────────────────────────────────────────────────────────
+// Animated skeleton shown while Claude is analyzing the product page.
+function ExtractionSkeleton() {
+  return (
+    <div className="mt-4 rounded-xl border border-[var(--sf-border)] bg-[var(--sf-surface)] p-4 animate-pulse">
+      <div className="mb-3 flex items-center gap-2">
+        <div className="h-3 w-3 rounded-full bg-[var(--sf-accent)]/40" />
+        <div className="h-3 w-48 rounded bg-[var(--sf-border)]" />
+      </div>
+      <div className="flex gap-2 mb-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-20 w-20 flex-shrink-0 rounded-lg bg-[var(--sf-border)]" />
+        ))}
+      </div>
+      <div className="space-y-2">
+        <div className="h-2.5 w-3/4 rounded bg-[var(--sf-border)]" />
+        <div className="h-2.5 w-1/2 rounded bg-[var(--sf-border)]" />
+      </div>
+      <p className="mt-3 text-xs text-[var(--sf-muted)]">Analyzing… usually 15–30 seconds</p>
+    </div>
+  );
+}
+
+// ── ExtractionResultCard ───────────────────────────────────────────────────────
+// Compact confirmation card shown after a successful extraction.
+function ExtractionResultCard({
+  result,
+  onSaveNow,
+}: {
+  result: ExtractionResult;
+  onSaveNow: () => void;
+}) {
+  const thumbs = result.productImages.slice(0, 4);
+  const stats = [
+    result.benefits.length > 0 && `${result.benefits.length} benefits`,
+    result.claims.length > 0 && `${result.claims.length} claims`,
+    result.reviewsVerbatim.length > 0 && `${result.reviewsVerbatim.length} reviews`,
+  ].filter(Boolean);
+
+  return (
+    <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-emerald-400 text-sm">✓</span>
+        <span className="text-sm font-semibold text-[var(--sf-text)]">{result.name}</span>
+        {stats.length > 0 && (
+          <span className="text-xs text-[var(--sf-muted)]">— {stats.join(", ")}</span>
+        )}
+      </div>
+
+      {/* Thumbnail strip */}
+      {thumbs.length > 0 && (
+        <div className="mb-3 flex gap-2">
+          {thumbs.map((url, i) => (
+            <div
+              key={i}
+              className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg)]"
+            >
+              <img src={url} alt="" className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.3"; }} />
+            </div>
+          ))}
+          {result.productImages.length > 4 && (
+            <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg)] text-xs text-[var(--sf-muted)]">
+              +{result.productImages.length - 4}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Extraction notes from Claude */}
+      {result.extractionNotes && (
+        <p className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          ℹ {result.extractionNotes}
+        </p>
+      )}
+
+      {/* Quick-save CTA */}
+      <button
+        type="button"
+        onClick={onSaveNow}
+        className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
+      >
+        Looks good — save product →
+      </button>
+      <span className="ml-3 text-xs text-[var(--sf-muted)]">or review &amp; adjust the form below</span>
+    </div>
+  );
+}
+
 // ── Main form component ────────────────────────────────────────────────────────
 export default function ProductFormClient({ brandId, mode, initialProduct }: Props) {
   const router = useRouter();
@@ -221,7 +376,7 @@ export default function ProductFormClient({ brandId, mode, initialProduct }: Pro
   const [extractUrl, setExtractUrl] = useState(initialProduct?.sourceUrl ?? "");
   const [extracting, setExtracting] = useState(false);
   const [extractionError, setExtractionError] = useState<string | null>(null);
-  const [extractionNotes, setExtractionNotes] = useState<string | null>(null);
+  const [lastExtraction, setLastExtraction] = useState<ExtractionResult | null>(null);
 
   // Submit state
   const [saving, setSaving] = useState(false);
@@ -231,7 +386,7 @@ export default function ProductFormClient({ brandId, mode, initialProduct }: Pro
     if (!extractUrl.trim()) return;
     setExtracting(true);
     setExtractionError(null);
-    setExtractionNotes(null);
+    setLastExtraction(null);
 
     try {
       const res = await fetch(`/api/brands/${brandId}/products/extract`, {
@@ -265,9 +420,9 @@ export default function ProductFormClient({ brandId, mode, initialProduct }: Pro
       if (productSpecificCTAs.length === 0 && extraction.productSpecificCTAs.length > 0) setProductSpecificCTAs(extraction.productSpecificCTAs);
       if (productSpecificHooks.length === 0 && extraction.productSpecificHooks.length > 0) setProductSpecificHooks(extraction.productSpecificHooks);
 
-      // Always update sourceUrl
+      // Always update sourceUrl and store the extraction result for the card
       setSourceUrl(extractUrl);
-      setExtractionNotes(extraction.extractionNotes);
+      setLastExtraction(extraction);
     } catch {
       setExtractionError("Network error. Please try again.");
     } finally {
@@ -275,8 +430,8 @@ export default function ProductFormClient({ brandId, mode, initialProduct }: Pro
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(e?: React.FormEvent) {
+    if (e) e.preventDefault();
     if (!name.trim()) {
       setSaveError("Product name is required.");
       return;
@@ -337,7 +492,9 @@ export default function ProductFormClient({ brandId, mode, initialProduct }: Pro
     }
   }
 
-  const imageCountOk = productImages.length >= 3;
+  // P0-Fix3: Hard-block only at 0 images. Amber nudge for < 3.
+  const hasImages = productImages.length >= 1;
+  const imageNudge = productImages.length > 0 && productImages.length < 3;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
@@ -364,20 +521,25 @@ export default function ProductFormClient({ brandId, mode, initialProduct }: Pro
             {extracting ? "Extracting…" : "Extract →"}
           </button>
         </div>
-        {extracting && (
-          <p className="mt-3 text-xs text-[var(--sf-muted)] animate-pulse">
-            Analyzing product page with Claude — this takes 15–30 seconds…
-          </p>
-        )}
+
+        {/* P1-Fix4: Skeleton loader during extraction */}
+        {extracting && <ExtractionSkeleton />}
+
         {extractionError && (
           <p className="mt-3 text-xs text-red-400">{extractionError}</p>
         )}
-        {extractionNotes && (
-          <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-            ℹ {extractionNotes}
-          </p>
+
+        {/* P0-Fix1: Extraction result card */}
+        {!extracting && lastExtraction && (
+          <ExtractionResultCard
+            result={lastExtraction}
+            onSaveNow={() => handleSubmit()}
+          />
         )}
-        <div className="mt-3 text-xs text-[var(--sf-muted)]">or fill in the form below manually</div>
+
+        {!lastExtraction && !extracting && (
+          <div className="mt-3 text-xs text-[var(--sf-muted)]">or fill in the form below manually</div>
+        )}
       </section>
 
       {/* Core product info */}
@@ -459,33 +621,42 @@ export default function ProductFormClient({ brandId, mode, initialProduct }: Pro
         </div>
       </section>
 
-      {/* Product images — required min 3 */}
+      {/* Product images — P0-Fix2: visual grid, P0-Fix3: min 1, P1-Fix5: pro tip */}
       <section className="rounded-xl border border-[var(--sf-border)] bg-[var(--sf-surface)] p-6">
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h2 className="text-sm font-semibold text-[var(--sf-text)]">
               Product images{" "}
-              <span className={imageCountOk ? "text-emerald-400" : "text-amber-400"}>
-                {productImages.length}/3 minimum
-              </span>
+              {productImages.length === 0 ? (
+                <span className="text-red-400">required</span>
+              ) : imageNudge ? (
+                <span className="text-amber-400">{productImages.length} added</span>
+              ) : (
+                <span className="text-emerald-400">✓ {productImages.length} added</span>
+              )}
             </h2>
             <p className="mt-0.5 text-xs text-[var(--sf-muted)]">
-              Packshots and product-focused photos. Minimum 3 required for generation.
+              Packshots and product-focused photos. At least 1 required; 3+ recommended for best results.
             </p>
           </div>
-          {!imageCountOk && (
+          {imageNudge && (
             <span className="rounded-full bg-amber-500/10 px-2 py-1 text-xs text-amber-400">
-              Add {3 - productImages.length} more
+              3+ recommended
             </span>
           )}
         </div>
-        <ImageUrlList
-          label=""
+
+        {/* P0-Fix2: ImageGrid replaces flat URL list */}
+        <ImageGrid
           urls={productImages}
           onChange={setProductImages}
-          minCount={3}
           hint="Paste absolute image URLs (https://…). Extracted URLs from your product page appear here automatically."
         />
+
+        {/* P1-Fix5: Transparent background tip */}
+        <p className="mt-3 text-xs text-[var(--sf-muted)]">
+          Pro tip: PNG product images with transparent background produce the best results in generated ads.
+        </p>
       </section>
 
       {/* Benefits & Claims */}
@@ -625,17 +796,19 @@ export default function ProductFormClient({ brandId, mode, initialProduct }: Pro
         <p className="rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">{saveError}</p>
       )}
 
-      {!imageCountOk && (
+      {/* P0-Fix3: amber nudge at 1–2 images, no hard block */}
+      {imageNudge && (
         <p className="rounded-lg bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
-          ⚠ Add at least 3 product images before generating ads with this product.
+          3+ product images recommended for best ad generation quality.
         </p>
       )}
 
       <div className="flex gap-3">
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || !hasImages}
           className="rounded-lg bg-[var(--sf-accent)] px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          title={!hasImages ? "Add at least 1 product image to save" : undefined}
         >
           {saving ? "Saving…" : mode === "create" ? "Save product" : "Update product"}
         </button>
