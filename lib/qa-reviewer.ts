@@ -93,6 +93,13 @@ export async function qaReviewCreative(
       effectiveScore = Math.min(effectiveScore, 0.55);
     }
 
+    // STA-115 Phase 3.1: If QA flagged PRIMARY_COLOR_BACKGROUND, deduct 0.2 from score.
+    // This forces a regeneration pass with explicit background correction feedback.
+    const primaryColorBackground = lastResult.visualImprovements.includes("PRIMARY_COLOR_BACKGROUND");
+    if (primaryColorBackground) {
+      effectiveScore = Math.max(0, effectiveScore - 0.2);
+    }
+
     if (effectiveScore >= 0.7) {
       // Inject the composite score so the result reflects dual scoring
       lastResult = { ...lastResult, score: effectiveScore };
@@ -136,7 +143,13 @@ function buildRegenerationFeedback(review: QAReviewResponse): string {
   const sections: string[] = [];
 
   if (review.visualImprovements.length > 0) {
-    sections.push(`VISUAL FIXES: ${review.visualImprovements.join(". ")}`);
+    // STA-115 Phase 3.1: Translate PRIMARY_COLOR_BACKGROUND into a concrete Gemini instruction
+    const visualFixes = review.visualImprovements.map((item) =>
+      item === "PRIMARY_COLOR_BACKGROUND"
+        ? "Change the background to white (#FFFFFF) or a very light neutral (>=95% lightness). The primary brand color must NEVER fill the background — reserve it for CTA buttons, text accents, and small graphic elements only."
+        : item
+    );
+    sections.push(`VISUAL FIXES: ${visualFixes.join(". ")}`);
   }
   if (review.copyImprovements.length > 0) {
     sections.push(`COPY FIXES: ${review.copyImprovements.join(". ")}`);
@@ -329,7 +342,18 @@ EVALUATION CRITERIA:
    - If NO logo-like element is visible: add exactly "LOGO_MISSING" to brandImprovements
    - A creative without a brand logo scores a maximum of 0.60 regardless of other criteria
    - LOGO SAFE ZONE: If a CTA button, text overlay, or decorative element occupies the bottom-right corner area (≈20% width × 15% height), add exactly "LOGO_CTA_COLLISION" to brandImprovements — that zone is reserved for logo compositing. A creative with this collision scores a maximum of 0.55.` : `
-   - No logoUrl is set for this brand — skip this check`}` : ""}${additionalComplianceSection}
+   - No logoUrl is set for this brand — skip this check`}
+
+9. BACKGROUND CHECK (CRITICAL)
+   - Is the primary brand color (${brandDna.colors.primary}) used as the MAIN BACKGROUND FILL covering the majority of the image?
+   - If YES: add exactly "PRIMARY_COLOR_BACKGROUND" to visualImprovements and deduct 0.2 from the score.
+   - Acceptable backgrounds: white, off-white, very light neutrals (>=95% lightness), OR a background that clearly matches the inspiration ad's background color.
+   - Unacceptable: any background that a media buyer would describe as "the brand color"${inspirationBase64 ? `
+
+10. INSPIRATION BACKGROUND FIDELITY
+   - Does the generated ad background color match the inspiration ad's background?
+   - If the inspiration shows a white/neutral background but the generated ad uses the brand color as background, reduce fidelityScore by 0.15.
+   - If the inspiration shows a colored background but the generated ad ignores it, reduce fidelityScore by 0.15.` : ""}` : ""}${additionalComplianceSection}
 
 SCORING GUIDE:
 - 0.9–1.0: Premium agency quality. Upload-ready for a top DTC brand's Meta campaign.

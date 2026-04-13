@@ -85,6 +85,10 @@ export interface ExtractedBrandDNA {
   // ── Brand Assets v2 (Phase E) ─────────────────────────────────────────────
   // Unified typed asset library. logoUrl + lifestyleImages kept for backward compat.
   brandAssets?: BrandAsset[];
+
+  // ── Ad Production (STA-115 / STA-116) ────────────────────────────────────
+  adBackgroundColor?: string;              // Dominant background hex detected from hero/product sections
+  adBackgroundColorIsIntentional?: boolean; // true when brand uses a non-neutral color as background (matches primary hue)
 }
 
 /**
@@ -180,6 +184,68 @@ CRITICAL RULES:
       `Claude returned invalid JSON for customer vocabulary: ${text.slice(0, 300)}`
     );
   }
+}
+
+// ── Background color helpers (STA-116) ────────────────────────────────────
+
+function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i);
+  if (!m) return null;
+  const r = parseInt(m[1], 16) / 255;
+  const g = parseInt(m[2], 16) / 255;
+  const b = parseInt(m[3], 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l: l * 100 };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+function hueDiff(h1: number, h2: number): number {
+  const diff = Math.abs(h1 - h2) % 360;
+  return diff > 180 ? 360 - diff : diff;
+}
+
+/**
+ * Derive adBackgroundColor and adBackgroundColorIsIntentional from scraped pages.
+ * - adBackgroundColor: the most frequently-detected background hex (default #ffffff)
+ * - adBackgroundColorIsIntentional: true when the background is non-neutral and shares
+ *   a hue with the brand's primary color (brand intentionally uses their color as bg)
+ */
+function detectAdBackground(
+  scraped: ScrapeResult,
+  primaryColor?: string
+): { adBackgroundColor: string; adBackgroundColorIsIntentional: boolean } {
+  // Merge and count background colors across all scraped pages
+  const freq = new Map<string, number>();
+  for (const page of scraped.pages) {
+    for (const color of page.backgroundColors ?? []) {
+      freq.set(color, (freq.get(color) ?? 0) + 1);
+    }
+  }
+  const sorted = [...freq.entries()].sort((a, b) => b[1] - a[1]);
+  const adBackgroundColor = sorted[0]?.[0] ?? "#ffffff";
+
+  // Determine intentionality: brand uses primary color as background (not just neutral)
+  let adBackgroundColorIsIntentional = false;
+  if (primaryColor) {
+    const bgHsl = hexToHsl(adBackgroundColor);
+    const primaryHsl = hexToHsl(primaryColor);
+    if (bgHsl && primaryHsl) {
+      // Neutral = near-white (l > 92%), near-black (l < 5%), or near-gray (s < 10%)
+      const isNeutral = bgHsl.l > 92 || bgHsl.l < 5 || bgHsl.s < 10;
+      if (!isNeutral) {
+        adBackgroundColorIsIntentional = hueDiff(bgHsl.h, primaryHsl.h) < 40;
+      }
+    }
+  }
+
+  return { adBackgroundColor, adBackgroundColorIsIntentional };
 }
 
 async function analyzeBrandWithClaude(
@@ -306,6 +372,14 @@ CRITICAL RULES:
       const merged = [...existing, ...trustpilotVerbatims].slice(0, 10);
       dna.customerReviewsVerbatim = [...new Set(merged)];
     }
+
+    // Detect ad background color from scraped CSS (STA-116)
+    const { adBackgroundColor, adBackgroundColorIsIntentional } = detectAdBackground(
+      scraped,
+      dna.colors?.primary
+    );
+    dna.adBackgroundColor = adBackgroundColor;
+    dna.adBackgroundColorIsIntentional = adBackgroundColorIsIntentional;
 
     return dna;
   } catch {
