@@ -719,6 +719,43 @@ function ProductCard({
   onRemove: () => void;
 }) {
   const [expanded, setExpanded] = useState(index === 0);
+  const [extractUrl, setExtractUrl] = useState(product.sourceUrl ?? "");
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extracted, setExtracted] = useState(!!product.sourceUrl && !!product.name);
+
+  async function handleExtract() {
+    const url = extractUrl.trim();
+    if (!url) return;
+    setExtracting(true);
+    setExtractError(null);
+    setExtracted(false);
+    try {
+      const res = await fetch(`/api/brands/${brandId}/products/extract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setExtractError(err.message ?? "Extraction failed. Fill in the details manually.");
+        return;
+      }
+      const { extraction } = await res.json();
+      const patch: Partial<BrandProduct> = { sourceUrl: url };
+      if (!product.name && extraction.name) patch.name = extraction.name;
+      if (!product.description && (extraction.description || extraction.tagline))
+        patch.description = extraction.description ?? extraction.tagline ?? "";
+      if (product.images.length === 0 && extraction.productImages?.length > 0)
+        patch.images = extraction.productImages.slice(0, 8);
+      onUpdate(patch);
+      setExtracted(true);
+    } catch {
+      setExtractError("Network error. Please try again.");
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   return (
     <div className="border border-[var(--sf-border)] rounded-2xl overflow-hidden">
@@ -739,6 +776,48 @@ function ProductCard({
 
       {expanded && (
         <div className="p-5 space-y-6 border-t border-[var(--sf-border)] bg-[var(--sf-bg-primary)]">
+
+          {/* URL-first extraction — primary path */}
+          <div className="rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] p-4">
+            <p className="text-xs font-semibold text-[var(--sf-text-primary)] mb-1 uppercase tracking-wide">
+              Product page URL
+            </p>
+            <p className="text-xs text-[var(--sf-text-muted)] mb-3">
+              Paste the URL of your product page — name, description, and images will be extracted automatically.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={extractUrl}
+                onChange={(e) => { setExtractUrl(e.target.value); setExtracted(false); setExtractError(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleExtract(); } }}
+                placeholder="https://yourstore.com/products/serum"
+                className="flex-1 px-3 py-2 text-sm border border-[var(--sf-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--sf-accent)]"
+              />
+              <button
+                type="button"
+                onClick={handleExtract}
+                disabled={extracting || !extractUrl.trim()}
+                className="px-4 py-2 text-sm font-semibold rounded-lg bg-[var(--sf-accent)] text-white hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
+              >
+                {extracting ? "Extracting…" : "Extract →"}
+              </button>
+            </div>
+            {extracting && (
+              <p className="mt-2 text-xs text-[var(--sf-text-muted)] animate-pulse">
+                Analyzing with Claude… usually 15–30 seconds
+              </p>
+            )}
+            {extractError && (
+              <p className="mt-2 text-xs text-red-400">{extractError}</p>
+            )}
+            {extracted && !extracting && (
+              <p className="mt-2 text-xs text-emerald-400">✓ Product data extracted — review and adjust below</p>
+            )}
+            <p className="mt-3 text-xs text-[var(--sf-text-muted)]">or fill in the details manually below</p>
+          </div>
+
+          {/* Manual fields */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-[var(--sf-text-secondary)] mb-1">Product name</label>
@@ -870,7 +949,7 @@ export default function BrandDnaClient({ brandId, initialDna, brandName }: Props
   const removePersona = (i: number) => setStructuredPersonas((prev) => prev.filter((_, idx) => idx !== i));
 
   // ── Product helpers ─────────────────────────────────────────────────────────
-  const addProduct = () => setProducts((prev) => [...prev, { id: crypto.randomUUID(), name: "", description: "", images: [], icons: [], moodboard: [] }]);
+  const addProduct = () => setProducts((prev) => [...prev, { id: crypto.randomUUID(), sourceUrl: "", name: "", description: "", images: [], icons: [], moodboard: [] }]);
   const updateProduct = (i: number, patch: Partial<BrandProduct>) => setProducts((prev) => prev.map((p, idx) => idx === i ? { ...p, ...patch } : p));
   const removeProduct = (i: number) => setProducts((prev) => prev.filter((_, idx) => idx !== i));
 

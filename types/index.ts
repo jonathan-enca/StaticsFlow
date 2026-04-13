@@ -25,6 +25,7 @@ export interface CommunicationAngles {
 /** A product entry within Brand DNA */
 export interface BrandProduct {
   id: string;
+  sourceUrl?: string; // URL used to auto-extract product data
   name: string;
   description: string;
   images: string[];   // product packshots / photos
