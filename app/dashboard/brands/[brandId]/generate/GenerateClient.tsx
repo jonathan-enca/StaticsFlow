@@ -1,9 +1,9 @@
 "use client";
 
-// Creative generation — 3-step wizard (STA-95 Phase C)
+// Creative generation — 3-step wizard (STA-105)
 // Step 1: Pick a Product
-// Step 2: Pick an Inspiration (auto or manual from library)
-// Step 3: Settings (format, quality, brief) + Generate
+// Step 2: Generation mode — Replicate (from library or Upload/URL) vs Batch
+// Step 3: Settings (format, quality, brief, batch count) + Generate
 
 import { useState, useEffect, useRef } from "react";
 import type { AdFormat } from "@/types/index";
@@ -11,7 +11,16 @@ import CreativePreviewModal, {
   type InspirationSource,
   type CreativePreviewData,
 } from "@/components/CreativePreviewModal";
-import { Loader2, Wand2, Zap, Layers, Check, ChevronRight } from "lucide-react";
+import {
+  Loader2,
+  Wand2,
+  Zap,
+  Layers,
+  Check,
+  ChevronRight,
+  Upload,
+  BookImage,
+} from "lucide-react";
 
 // ── Prop types ────────────────────────────────────────────────────────────────
 
@@ -83,14 +92,10 @@ const QUALITY_OPTIONS: {
   },
 ];
 
-const HOOK_ANGLES = [
-  { value: "benefit", label: "Benefit" },
-  { value: "pain", label: "Pain point" },
-  { value: "social_proof", label: "Social proof" },
-  { value: "curiosity", label: "Curiosity" },
-  { value: "fomo", label: "FOMO" },
-  { value: "urgency", label: "Urgency" },
-  { value: "authority", label: "Authority" },
+const BATCH_COUNT_OPTIONS: { value: 5 | 10 | 20; label: string }[] = [
+  { value: 5, label: "5 images" },
+  { value: 10, label: "10 images" },
+  { value: 20, label: "20 images" },
 ];
 
 // Step progress bar steps
@@ -271,7 +276,7 @@ export default function GenerateClient({
   products,
   inspirations,
 }: Props) {
-  // Wizard step: 0 = Product, 1 = Inspiration, 2 = Settings/Generate
+  // Wizard step: 0 = Product, 1 = Inspiration mode, 2 = Settings/Generate
   const [step, setStep] = useState(0);
 
   // Step 1 — Product
@@ -280,26 +285,49 @@ export default function GenerateClient({
     defaultProduct?.id ?? null
   );
 
-  // Step 2 — Inspiration
-  // "auto" = Claude picks from library, "manual" = user picks from gallery, "none" = skip (use BDD templates)
-  const [inspirationMode, setInspirationMode] = useState<"auto" | "manual" | "none">("auto");
+  // Step 2 — Generation mode
+  // "replicate" = clone a specific ad, "batch" = generate N from DBB library
+  const [inspirationMode, setInspirationMode] = useState<"replicate" | "batch">("replicate");
+
+  // Replicate sub-path
+  const [replicateSource, setReplicateSource] = useState<"library" | "upload">("library");
   const [selectedInspirationId, setSelectedInspirationId] = useState<string | null>(null);
-  const [autoSelecting, setAutoSelecting] = useState(false);
-  const [autoSelectedId, setAutoSelectedId] = useState<string | null>(null);
-  const [inspirationFilter, setInspirationFilter] = useState<string>("");
-  const [hookAngle, setHookAngle] = useState<string>("benefit");
+  const [libraryFilter, setLibraryFilter] = useState<string>("");
+
+  // Replicate — upload/URL sub-path
+  const [uploadUrl, setUploadUrl] = useState<string>("");
+  const [uploadImageData, setUploadImageData] = useState<{
+    data: string;
+    mimeType: string;
+  } | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
 
   // Step 3 — Settings
+  const [batchCount, setBatchCount] = useState<5 | 10 | 20>(5);
   const [format, setFormat] = useState<AdFormat>("1080x1080");
   const [imageQuality, setImageQuality] = useState<ImageQuality>("flash");
   const [creativeBrief, setCreativeBrief] = useState<string>("");
 
-  // Generation state
+  // Generation state (replicate — single result)
   const [generating, setGenerating] = useState(false);
   const [stageIndex, setStageIndex] = useState(-1);
   const stageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [singleResult, setSingleResult] = useState<SingleResult | null>(null);
+
+  // Generation state (batch)
+  const [batchId, setBatchId] = useState<string | null>(null);
+  const [batchResults, setBatchResults] = useState<ExistingCreative[]>([]);
+  const [batchStatus, setBatchStatus] = useState<
+    "PENDING" | "RUNNING" | "DONE" | "FAILED" | null
+  >(null);
+  const [batchTotal, setBatchTotal] = useState<number>(0);
+  const [batchCompleted, setBatchCompleted] = useState<number>(0);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Post-generation prompt (replicate + upload/URL)
+  const [canSaveAsInspiration, setCanSaveAsInspiration] = useState(false);
+  const [inspirationPromptDismissed, setInspirationPromptDismissed] = useState(false);
 
   // Creative history
   const [creatives, setCreatives] = useState<ExistingCreative[]>(existingCreatives);
@@ -310,51 +338,48 @@ export default function GenerateClient({
     inspirationSource?: InspirationSource;
   } | null>(null);
 
-  const hasInspiration = inspirations.length > 0;
-  const analyzedInspirations = inspirations.filter((i) => i.analyzedAt);
-
-  // Derive the effective inspirationId for the API call
-  const effectiveInspirationId =
-    inspirationMode === "auto"
-      ? autoSelectedId
-      : inspirationMode === "manual"
-      ? selectedInspirationId
-      : null;
-
-  // Auto-select inspiration via API when entering step 2 in auto mode
+  // ── Batch polling ──────────────────────────────────────────────────────────
   useEffect(() => {
-    if (step !== 1 || inspirationMode !== "auto" || analyzedInspirations.length === 0) return;
-    let cancelled = false;
+    if (!batchId || batchStatus === "DONE" || batchStatus === "FAILED") return;
 
-    async function doAutoSelect() {
-      setAutoSelecting(true);
-      setAutoSelectedId(null);
+    const poll = async () => {
       try {
-        const res = await fetch(
-          `/api/brands/${brandId}/inspirations/auto-select`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ angle: hookAngle }),
-          }
+        const res = await fetch(`/api/creatives/batch/${batchId}`);
+        if (!res.ok) return;
+        const { batch } = await res.json();
+        setBatchStatus(batch.status);
+        setBatchTotal(batch.totalCount);
+        setBatchCompleted(batch.completedCount);
+        // Stream results in as they arrive
+        const completedCreatives: ExistingCreative[] = batch.creatives.filter(
+          (c: ExistingCreative) => c.status !== "GENERATING"
         );
-        if (!res.ok) throw new Error("Auto-select failed");
-        const data = await res.json();
-        if (!cancelled) setAutoSelectedId(data.inspirationId ?? null);
+        setBatchResults(completedCreatives);
+        // Add newly-done creatives to the history panel
+        setCreatives((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          const newOnes = completedCreatives.filter((c) => !existingIds.has(c.id));
+          return newOnes.length > 0 ? [...newOnes, ...prev] : prev;
+        });
+        if (batch.status === "DONE" || batch.status === "FAILED") {
+          setGenerating(false);
+          stopStages();
+        }
       } catch {
-        // Fall back silently — generation will use BDD templates
-        if (!cancelled) setAutoSelectedId(null);
-      } finally {
-        if (!cancelled) setAutoSelecting(false);
+        // ignore transient errors
       }
-    }
+    };
 
-    doAutoSelect();
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, inspirationMode, hookAngle]);
+    poll(); // immediate first check
+    pollIntervalRef.current = setInterval(poll, 3000);
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchId, batchStatus]);
 
-  // Animate through GEN_STAGES while generating
+  // ── Stage animation ────────────────────────────────────────────────────────
+
   const startStages = () => {
     setStageIndex(0);
     let current = 0;
@@ -374,31 +399,94 @@ export default function GenerateClient({
     setStageIndex(-1);
   };
 
+  // ── File upload handler ────────────────────────────────────────────────────
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadUrl(""); // clear URL when file selected
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string;
+      const [header, data] = result.split(",");
+      const mimeType = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+      setUploadImageData({ data, mimeType });
+      setUploadPreview(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ── Generate ───────────────────────────────────────────────────────────────
+
   const generate = async () => {
     setGenerating(true);
     setError(null);
     setSingleResult(null);
+    setBatchId(null);
+    setBatchResults([]);
+    setBatchStatus(null);
+    setBatchTotal(0);
+    setBatchCompleted(0);
+    setCanSaveAsInspiration(false);
+    setInspirationPromptDismissed(false);
     startStages();
 
+    if (inspirationMode === "batch") {
+      // ── Batch path: fire-and-forget + polling ──────────────────────────────
+      try {
+        const res = await fetch("/api/creatives/batch-generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            brandId,
+            count: batchCount,
+            formats: [format],
+            generationMode: "batch",
+            productId: selectedProductId ?? undefined,
+            imageQuality,
+            creativeBrief: creativeBrief.trim() || undefined,
+          }),
+        });
+        stopStages();
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Batch generation failed");
+        setBatchId(data.batchId);
+        setBatchStatus("PENDING");
+        setBatchTotal(batchCount);
+        // generating stays true — polling will flip it when done
+      } catch (err) {
+        stopStages();
+        setError((err as Error).message);
+        setGenerating(false);
+      }
+      return;
+    }
+
+    // ── Replicate path: single creative ────────────────────────────────────
     try {
+      const body: Record<string, unknown> = {
+        brandId,
+        format,
+        imageQuality,
+        generationMode: "replicate",
+        creativeBrief: creativeBrief.trim() || undefined,
+        productId: selectedProductId ?? undefined,
+      };
+
+      if (replicateSource === "library" && selectedInspirationId) {
+        body.inspirationId = selectedInspirationId;
+      } else if (replicateSource === "upload") {
+        if (uploadImageData) {
+          body.referenceImageData = uploadImageData;
+        } else if (uploadUrl.trim()) {
+          body.inspirationImageUrl = uploadUrl.trim();
+        }
+      }
+
       const res = await fetch("/api/creatives/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brandId,
-          format,
-          angle: hookAngle,
-          imageQuality,
-          creativeBrief: creativeBrief.trim() || undefined,
-          inspirationId: effectiveInspirationId ?? undefined,
-          productId: selectedProductId ?? undefined,
-          generationMode:
-            inspirationMode === "auto"
-              ? "auto"
-              : inspirationMode === "manual"
-              ? "manual"
-              : "none",
-        }),
+        body: JSON.stringify(body),
       });
       stopStages();
       const data = await res.json();
@@ -409,6 +497,7 @@ export default function GenerateClient({
         inspirationSource: data.inspirationSource,
       });
       setCreatives((prev) => [data.creative, ...prev]);
+      if (data.canSaveAsInspiration) setCanSaveAsInspiration(true);
     } catch (err) {
       stopStages();
       setError((err as Error).message);
@@ -417,13 +506,30 @@ export default function GenerateClient({
     }
   };
 
-  // Inspiration card for gallery
+  // ── Derived values ─────────────────────────────────────────────────────────
+
+  const filteredInspirations = inspirations.filter((ins) => {
+    if (!libraryFilter) return true;
+    const a = ins.analysisJson as { hookAngle?: string; layoutType?: string };
+    const q = libraryFilter.toLowerCase();
+    return (
+      a.hookAngle?.toLowerCase().includes(q) ||
+      a.layoutType?.toLowerCase().includes(q)
+    );
+  });
+
+  // Step 2 "Next" button validity
+  const step2Valid =
+    inspirationMode === "batch" ||
+    (replicateSource === "library" && selectedInspirationId !== null) ||
+    (replicateSource === "upload" && (!!uploadImageData || uploadUrl.trim().length > 0));
+
+  // ── Inspiration card for gallery ───────────────────────────────────────────
+
   const InspirationCard = ({ ins }: { ins: InspirationSummary }) => {
     const analysis = ins.analysisJson as {
       hookAngle?: string;
       layoutType?: string;
-      adFormat?: string;
-      mood?: string;
     };
     const isSelected = selectedInspirationId === ins.id;
 
@@ -468,17 +574,6 @@ export default function GenerateClient({
       </button>
     );
   };
-
-  // Filter inspirations by keyword (hookAngle or layoutType)
-  const filteredInspirations = inspirations.filter((ins) => {
-    if (!inspirationFilter) return true;
-    const a = ins.analysisJson as { hookAngle?: string; layoutType?: string };
-    const q = inspirationFilter.toLowerCase();
-    return (
-      a.hookAngle?.toLowerCase().includes(q) ||
-      a.layoutType?.toLowerCase().includes(q)
-    );
-  });
 
   // ── Step renders ─────────────────────────────────────────────────────────
 
@@ -594,67 +689,34 @@ export default function GenerateClient({
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold text-[var(--sf-text-primary)] mb-1">
-          Choose an inspiration
+          How do you want to generate?
         </h2>
         <p className="text-sm text-[var(--sf-text-secondary)]">
-          An inspiration teaches Claude &amp; Gemini the exact structure to clone.
+          Replicate a single top ad, or generate a volume batch from the template library.
         </p>
       </div>
 
-      {/* Hook angle picker — used for both auto-select and passed to generation */}
-      <div>
-        <label className="block text-xs font-medium text-[var(--sf-text-muted)] mb-2 uppercase tracking-wide">
-          Hook angle
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {HOOK_ANGLES.map((h) => (
-            <button
-              key={h.value}
-              type="button"
-              onClick={() => setHookAngle(h.value)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                hookAngle === h.value
-                  ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
-                  : "border-[var(--sf-border)] text-[var(--sf-text-secondary)] hover:border-gray-400"
-              }`}
-            >
-              {h.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Inspiration mode */}
-      <div className="grid sm:grid-cols-3 gap-2">
+      {/* 2 mode cards */}
+      <div className="grid sm:grid-cols-2 gap-3">
         {[
           {
-            value: "auto" as const,
-            icon: <Wand2 className="w-4 h-4" />,
-            title: "Auto-select",
-            desc: "Claude picks the best match from your library",
-            disabled: analyzedInspirations.length === 0,
+            value: "replicate" as const,
+            icon: <BookImage className="w-5 h-5" />,
+            title: "Replicate a top ad",
+            desc: "1 image — Claude clones the structure of a specific high-performing ad",
           },
           {
-            value: "manual" as const,
-            icon: <Layers className="w-4 h-4" />,
-            title: "Pick manually",
-            desc: "Choose from your inspiration gallery",
-            disabled: inspirations.length === 0,
-          },
-          {
-            value: "none" as const,
-            icon: <Zap className="w-4 h-4" />,
-            title: "Skip",
-            desc: "Use global BDD template library instead",
-            disabled: false,
+            value: "batch" as const,
+            icon: <Zap className="w-5 h-5" />,
+            title: "Generate a batch",
+            desc: "5–20 images — Claude picks the best DBB templates for your brand",
           },
         ].map((opt) => (
           <button
             key={opt.value}
             type="button"
-            disabled={opt.disabled}
             onClick={() => setInspirationMode(opt.value)}
-            className={`relative rounded-xl border-2 p-4 text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`rounded-xl border-2 p-5 text-left transition-all ${
               inspirationMode === opt.value
                 ? "border-[var(--sf-accent)] bg-[var(--sf-accent-muted,rgba(108,71,255,0.06))]"
                 : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] hover:border-gray-400"
@@ -669,106 +731,163 @@ export default function GenerateClient({
             >
               {opt.icon}
             </div>
-            <p className="text-sm font-semibold text-[var(--sf-text-primary)]">
-              {opt.title}
-            </p>
-            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5 leading-snug">
-              {opt.desc}
-            </p>
-            {opt.disabled && (
-              <p className="text-xs text-[var(--sf-warning)] mt-1">
-                {opt.value === "auto" ? "Analyze inspirations first" : "Upload inspirations first"}
-              </p>
-            )}
+            <p className="text-sm font-semibold text-[var(--sf-text-primary)]">{opt.title}</p>
+            <p className="text-xs text-[var(--sf-text-secondary)] mt-1 leading-snug">{opt.desc}</p>
           </button>
         ))}
       </div>
 
-      {/* Auto-select: show the picked inspiration */}
-      {inspirationMode === "auto" && (
-        <div className="rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] p-4">
-          {autoSelecting ? (
-            <div className="flex items-center gap-3 text-sm text-[var(--sf-text-secondary)]">
-              <Loader2 className="w-4 h-4 animate-spin text-[var(--sf-accent)]" />
-              Claude is picking the best inspiration for "{hookAngle}" angle…
-            </div>
-          ) : autoSelectedId ? (
-            (() => {
-              const ins = inspirations.find((i) => i.id === autoSelectedId);
-              if (!ins) return null;
-              const a = ins.analysisJson as { hookAngle?: string; layoutType?: string };
-              return (
-                <div className="flex items-center gap-4">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={ins.thumbnailUrl ?? ins.imageUrl}
-                    alt=""
-                    className="w-16 h-16 rounded-lg object-cover border border-[var(--sf-border)]"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <Check className="w-4 h-4 text-[var(--sf-success)]" />
-                      <span className="text-sm font-semibold text-[var(--sf-text-primary)]">
-                        Best match selected
-                      </span>
-                    </div>
-                    <p className="text-xs text-[var(--sf-text-secondary)] capitalize">
-                      {a.hookAngle} · {a.layoutType}
-                    </p>
-                  </div>
-                </div>
-              );
-            })()
-          ) : analyzedInspirations.length === 0 ? (
-            <p className="text-sm text-[var(--sf-text-muted)]">
-              No analyzed inspirations yet.{" "}
-              <a
-                href={`/dashboard/brands/${brandId}/inspirations`}
-                className="text-[var(--sf-accent)] hover:underline"
+      {/* ── Replicate sub-options ────────────────────────────────────────── */}
+      {inspirationMode === "replicate" && (
+        <div className="rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] p-4 space-y-4">
+          {/* Sub-path tabs */}
+          <div className="flex gap-2">
+            {[
+              {
+                value: "library" as const,
+                icon: <BookImage className="w-3.5 h-3.5" />,
+                label: "From library",
+              },
+              {
+                value: "upload" as const,
+                icon: <Upload className="w-3.5 h-3.5" />,
+                label: "Upload / URL",
+              },
+            ].map((src) => (
+              <button
+                key={src.value}
+                type="button"
+                onClick={() => setReplicateSource(src.value)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  replicateSource === src.value
+                    ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
+                    : "border-[var(--sf-border)] text-[var(--sf-text-secondary)] hover:border-gray-400"
+                }`}
               >
-                Add &amp; analyze inspirations →
-              </a>
-            </p>
-          ) : (
-            <p className="text-sm text-[var(--sf-text-muted)]">
-              No match found — will fall back to global templates.
-            </p>
+                {src.icon}
+                {src.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Library sub-path */}
+          {replicateSource === "library" && (
+            <div className="space-y-3">
+              {inspirations.length === 0 ? (
+                <div className="text-center py-6">
+                  <p className="text-sm text-[var(--sf-text-muted)]">
+                    No inspirations in your library yet.
+                  </p>
+                  <a
+                    href={`/dashboard/brands/${brandId}/inspirations`}
+                    className="text-sm text-[var(--sf-accent)] hover:underline mt-1 inline-block"
+                  >
+                    Upload some →
+                  </a>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Filter by hook or layout…"
+                    value={libraryFilter}
+                    onChange={(e) => setLibraryFilter(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-sm text-[var(--sf-text-primary)] placeholder:text-[var(--sf-text-muted)] outline-none focus:border-[var(--sf-accent)] transition-colors"
+                  />
+                  {filteredInspirations.length === 0 ? (
+                    <p className="text-sm text-[var(--sf-text-muted)] text-center py-4">
+                      No inspirations match this filter.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 max-h-72 overflow-y-auto pr-1">
+                      {filteredInspirations.map((ins) => (
+                        <InspirationCard key={ins.id} ins={ins} />
+                      ))}
+                    </div>
+                  )}
+                  {!selectedInspirationId && (
+                    <p className="text-xs text-[var(--sf-text-muted)]">
+                      Select an inspiration to clone its structure.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Upload / URL sub-path */}
+          {replicateSource === "upload" && (
+            <div className="space-y-3">
+              {/* File dropzone */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--sf-text-muted)] mb-2 uppercase tracking-wide">
+                  Upload image
+                </label>
+                <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-[var(--sf-border)] rounded-xl cursor-pointer hover:border-gray-400 transition-colors bg-[var(--sf-bg-primary)]">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                  {uploadPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={uploadPreview}
+                      alt="Preview"
+                      className="h-24 object-contain rounded-lg"
+                    />
+                  ) : (
+                    <>
+                      <Upload className="w-6 h-6 text-[var(--sf-text-muted)] mb-1.5" />
+                      <span className="text-xs text-[var(--sf-text-muted)]">
+                        Drop image here or click to upload
+                      </span>
+                      <span className="text-xs text-[var(--sf-text-muted)] mt-0.5">
+                        JPEG · PNG · WebP — max 10 MB
+                      </span>
+                    </>
+                  )}
+                </label>
+              </div>
+
+              {/* Divider */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-[var(--sf-border)]" />
+                <span className="text-xs text-[var(--sf-text-muted)]">or</span>
+                <div className="flex-1 h-px bg-[var(--sf-border)]" />
+              </div>
+
+              {/* URL input */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--sf-text-muted)] mb-2 uppercase tracking-wide">
+                  Paste a URL
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://example.com/top-ad.jpg"
+                  value={uploadUrl}
+                  onChange={(e) => {
+                    setUploadUrl(e.target.value);
+                    setUploadImageData(null);
+                    setUploadPreview(null);
+                  }}
+                  className="w-full px-3 py-2 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-sm text-[var(--sf-text-primary)] placeholder:text-[var(--sf-text-muted)] outline-none focus:border-[var(--sf-accent)] transition-colors"
+                />
+              </div>
+            </div>
           )}
         </div>
       )}
 
-      {/* Manual: filterable gallery */}
-      {inspirationMode === "manual" && (
-        <div className="space-y-3">
-          <input
-            type="text"
-            placeholder="Filter by hook or layout…"
-            value={inspirationFilter}
-            onChange={(e) => setInspirationFilter(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-sm text-[var(--sf-text-primary)] placeholder:text-[var(--sf-text-muted)] outline-none focus:border-[var(--sf-accent)] transition-colors"
-          />
-          {filteredInspirations.length === 0 ? (
-            <p className="text-sm text-[var(--sf-text-muted)] text-center py-6">
-              No inspirations match this filter.
-            </p>
-          ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 max-h-80 overflow-y-auto pr-1">
-              {filteredInspirations.map((ins) => (
-                <InspirationCard key={ins.id} ins={ins} />
-              ))}
-            </div>
-          )}
-          {!hasInspiration && (
-            <p className="text-sm text-[var(--sf-text-muted)] text-center py-4">
-              No inspirations yet.{" "}
-              <a
-                href={`/dashboard/brands/${brandId}/inspirations`}
-                className="text-[var(--sf-accent)] hover:underline"
-              >
-                Upload some →
-              </a>
-            </p>
-          )}
+      {/* ── Batch confirmation ───────────────────────────────────────────── */}
+      {inspirationMode === "batch" && (
+        <div className="rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] p-4">
+          <p className="text-sm text-[var(--sf-text-secondary)]">
+            Claude will automatically select the best-matching DBB templates for your product
+            category and brand DNA. Angles are auto-varied across the batch (benefit, pain, social
+            proof…). Set the batch count in the next step.
+          </p>
         </div>
       )}
 
@@ -783,7 +902,8 @@ export default function GenerateClient({
         <button
           type="button"
           onClick={() => setStep(2)}
-          className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center gap-2"
+          disabled={!step2Valid}
+          className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center gap-2 disabled:opacity-40 transition-opacity"
           style={{ background: "var(--sf-accent)" }}
         >
           Next: Settings
@@ -803,6 +923,31 @@ export default function GenerateClient({
           Final options before we send it to Claude &amp; Gemini.
         </p>
       </div>
+
+      {/* Batch count — batch mode only */}
+      {inspirationMode === "batch" && (
+        <div>
+          <label className="block text-xs font-medium text-[var(--sf-text-muted)] mb-2 uppercase tracking-wide">
+            Batch count
+          </label>
+          <div className="flex gap-2 flex-wrap">
+            {BATCH_COUNT_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setBatchCount(opt.value)}
+                className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  batchCount === opt.value
+                    ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
+                    : "border-[var(--sf-border)] text-[var(--sf-text-secondary)] hover:border-gray-400"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Format */}
       <div>
@@ -898,18 +1043,14 @@ export default function GenerateClient({
           </span>
         </div>
         <div className="flex justify-between">
-          <span className="text-[var(--sf-text-secondary)]">Inspiration</span>
-          <span className="text-[var(--sf-text-primary)] font-medium capitalize">
-            {inspirationMode === "auto" && autoSelectedId
-              ? "Auto-selected"
-              : inspirationMode === "manual" && selectedInspirationId
-              ? "Manual pick"
-              : "BDD templates (fallback)"}
+          <span className="text-[var(--sf-text-secondary)]">Mode</span>
+          <span className="text-[var(--sf-text-primary)] font-medium">
+            {inspirationMode === "batch"
+              ? `Batch × ${batchCount}`
+              : replicateSource === "library"
+              ? "Replicate — from library"
+              : "Replicate — from upload/URL"}
           </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-[var(--sf-text-secondary)]">Hook angle</span>
-          <span className="text-[var(--sf-text-primary)] font-medium capitalize">{hookAngle}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-[var(--sf-text-secondary)]">Format</span>
@@ -925,8 +1066,8 @@ export default function GenerateClient({
         </div>
       )}
 
-      {/* Progress bar during generation */}
-      {generating && stageIndex >= 0 && (
+      {/* Progress bar (replicate mode) */}
+      {generating && inspirationMode === "replicate" && stageIndex >= 0 && (
         <div className="rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] p-4 space-y-3">
           <div className="flex items-center gap-2 text-sm text-[var(--sf-text-secondary)]">
             <Loader2 className="w-4 h-4 animate-spin text-[var(--sf-accent)]" />
@@ -944,7 +1085,7 @@ export default function GenerateClient({
         </div>
       )}
 
-      {/* Single result */}
+      {/* Replicate single result */}
       {singleResult && (
         <div className="rounded-xl border border-[var(--sf-border)] overflow-hidden">
           <div className="p-4 flex items-center justify-between border-b border-[var(--sf-border)]">
@@ -983,10 +1124,105 @@ export default function GenerateClient({
         </div>
       )}
 
+      {/* Save as inspiration prompt */}
+      {canSaveAsInspiration && !inspirationPromptDismissed && (
+        <div className="rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] p-4 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-[var(--sf-text-primary)]">
+              Save reference as inspiration?
+            </p>
+            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
+              Add this reference image to your brand library for future generations.
+            </p>
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <a
+              href={`/dashboard/brands/${brandId}/inspirations`}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--sf-accent)] text-[var(--sf-accent)] hover:bg-[var(--sf-accent-muted,rgba(108,71,255,0.06))] transition-colors"
+            >
+              Save →
+            </a>
+            <button
+              type="button"
+              onClick={() => setInspirationPromptDismissed(true)}
+              className="px-3 py-1.5 rounded-lg text-xs text-[var(--sf-text-muted)] hover:text-[var(--sf-text-secondary)] transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Batch progress + streaming results */}
+      {batchId && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-[var(--sf-text-secondary)]">
+              {batchStatus !== "DONE" && batchStatus !== "FAILED" && (
+                <Loader2 className="w-4 h-4 animate-spin text-[var(--sf-accent)]" />
+              )}
+              <span>
+                {batchStatus === "DONE"
+                  ? `Batch complete — ${batchCompleted} creative${batchCompleted !== 1 ? "s" : ""} generated`
+                  : batchStatus === "FAILED"
+                  ? "Batch generation failed"
+                  : `Generating… ${batchCompleted} / ${batchTotal}`}
+              </span>
+            </div>
+            {batchTotal > 0 && batchStatus !== "DONE" && batchStatus !== "FAILED" && (
+              <span className="text-xs text-[var(--sf-text-muted)]">
+                {Math.round((batchCompleted / batchTotal) * 100)}%
+              </span>
+            )}
+          </div>
+          {batchTotal > 0 && batchStatus !== "DONE" && batchStatus !== "FAILED" && (
+            <div className="w-full h-1.5 rounded-full bg-[var(--sf-bg-elevated)] overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${Math.round((batchCompleted / batchTotal) * 100)}%`,
+                  background: "var(--sf-accent)",
+                }}
+              />
+            </div>
+          )}
+          {batchResults.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {batchResults.map((c) => (
+                <CreativeThumbnail
+                  key={c.id}
+                  c={c}
+                  brandName={brandName}
+                  onPreview={() =>
+                    setPreviewCreative({
+                      creative: {
+                        id: c.id,
+                        imageUrl: c.imageUrl,
+                        status: c.status,
+                        score: c.score,
+                        format: c.format,
+                        angle: c.angle,
+                      },
+                    })
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex justify-between pt-2">
         <button
           type="button"
-          onClick={() => { setStep(1); setSingleResult(null); setError(null); }}
+          onClick={() => {
+            setStep(1);
+            setSingleResult(null);
+            setBatchId(null);
+            setBatchResults([]);
+            setBatchStatus(null);
+            setError(null);
+          }}
           className="px-4 py-2.5 rounded-lg text-sm font-medium border border-[var(--sf-border)] text-[var(--sf-text-secondary)] hover:border-gray-400 transition-colors"
           disabled={generating}
         >
@@ -1008,17 +1244,21 @@ export default function GenerateClient({
             {generating ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Generating…
+                {inspirationMode === "batch" ? "Generating batch…" : "Generating…"}
               </>
-            ) : singleResult ? (
+            ) : singleResult || batchId ? (
               <>
                 <Wand2 className="w-4 h-4" />
-                Regenerate
+                {inspirationMode === "batch"
+                  ? `New batch (${batchCount} images)`
+                  : "Regenerate"}
               </>
             ) : (
               <>
                 <Wand2 className="w-4 h-4" />
-                Generate Creative
+                {inspirationMode === "batch"
+                  ? `Generate Batch (${batchCount} images)`
+                  : "Generate Creative"}
               </>
             )}
           </button>

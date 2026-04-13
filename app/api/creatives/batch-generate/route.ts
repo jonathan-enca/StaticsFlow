@@ -160,17 +160,21 @@ export async function POST(req: NextRequest) {
 
   let brandId: string,
     count: BatchCount,
+    batchCount: BatchCount | undefined, // alias from new wizard (STA-105)
     formats: string[],
     angles: string[],
     language: string,
     imageQuality: ImageQuality,
     creativeBrief: string | undefined,
     referenceImageUrl: string | undefined,
-    referenceImageData: { data: string; mimeType: string } | undefined;
+    referenceImageData: { data: string; mimeType: string } | undefined,
+    productId: string | undefined,
+    generationMode: string | undefined; // accepted but unused (informational)
   try {
     ({
       brandId,
       count = 5,
+      batchCount = undefined,
       formats = ["1080x1080"],
       angles = ["benefit", "pain", "social_proof", "curiosity"],
       language = "fr",
@@ -178,7 +182,11 @@ export async function POST(req: NextRequest) {
       creativeBrief = undefined,
       referenceImageUrl = undefined,
       referenceImageData = undefined,
+      productId = undefined,
+      generationMode = undefined,
     } = await req.json());
+    // batchCount (from STA-105 wizard) takes precedence over legacy count field
+    if (batchCount !== undefined) count = batchCount;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -190,6 +198,13 @@ export async function POST(req: NextRequest) {
   if (!Number.isInteger(parsedCount) || parsedCount < BATCH_COUNT_MIN || parsedCount > BATCH_COUNT_MAX) {
     return NextResponse.json(
       { error: `count must be an integer between ${BATCH_COUNT_MIN} and ${BATCH_COUNT_MAX}` },
+      { status: 400 }
+    );
+  }
+  // When batchCount is provided (new wizard), restrict to allowed values: 5, 10, 20
+  if (batchCount !== undefined && ![5, 10, 20].includes(parsedCount)) {
+    return NextResponse.json(
+      { error: "batchCount must be 5, 10, or 20" },
       { status: 400 }
     );
   }
@@ -231,10 +246,11 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // STA-86: Fetch Product records and attach to brandDna so the pipeline uses real product images
+  // Fetch Product records and attach to brandDna so the pipeline uses real product images.
+  // When productId is specified (STA-105), only attach that product.
   const brandDna = brand.brandDnaJson as unknown as Parameters<typeof generateCreative>[0];
   const dbProducts = await prisma.product.findMany({
-    where: { brandId },
+    where: { brandId, ...(productId ? { id: productId } : {}) },
     orderBy: { createdAt: "asc" },
   });
   if (dbProducts.length > 0) {

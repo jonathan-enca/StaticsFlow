@@ -147,7 +147,8 @@ export async function POST(req: NextRequest) {
     referenceImageData: { data: string; mimeType: string } | undefined,
     inspirationId: string | undefined,
     productId: string | undefined,
-    generationMode: string | undefined;
+    generationMode: string | undefined,
+    inspirationImageUrl: string | undefined; // replicate + upload/URL sub-path
 
   try {
     ({
@@ -162,6 +163,7 @@ export async function POST(req: NextRequest) {
       inspirationId = undefined,
       productId = undefined,
       generationMode = undefined,
+      inspirationImageUrl = undefined,
     } = await req.json());
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -202,6 +204,19 @@ export async function POST(req: NextRequest) {
       moodboard: p.moodboardAssets,
     }));
   }
+
+  // Map new "replicate" mode value to the internal "manual" equivalent
+  if (generationMode === "replicate") generationMode = "manual";
+
+  // inspirationImageUrl: new field for replicate + upload/URL sub-path.
+  // Maps directly to referenceImageUrl if no explicit referenceImageUrl was provided.
+  if (inspirationImageUrl && !referenceImageUrl) {
+    referenceImageUrl = inspirationImageUrl;
+  }
+  // Track whether this generation used a temp (upload/URL) reference with no inspirationId,
+  // so we can prompt the user to save it as an inspiration.
+  const usedTempReference =
+    !!(referenceImageUrl || referenceImageData) && !inspirationId;
 
   // Phase B: Resolve inspirationId → referenceImageUrl
   // If inspirationId provided, look up the inspiration and use its imageUrl as reference.
@@ -277,6 +292,8 @@ export async function POST(req: NextRequest) {
           qaResult: result.qaResult,
           inspirationSource: result.inspirationSource,
           ...(inspirationGateWarning && { inspirationGateWarning }),
+          // Prompt the UI to offer "Save as inspiration?" when a temp reference was used
+          ...(usedTempReference && { canSaveAsInspiration: true }),
         },
         { status: 201 }
       );
