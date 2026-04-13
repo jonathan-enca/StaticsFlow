@@ -26,6 +26,7 @@ export interface ScrapedPage {
   logoUrl: string | null;
   trustpilot: TrustpilotData | null;
   links: string[]; // internal links to discover more pages
+  backgroundColors: string[]; // dominant background-color values (hex), sorted by frequency/weight
 }
 
 export interface ScrapeResult {
@@ -159,6 +160,103 @@ async function fetchTrustpilotApi(domain: string): Promise<TrustpilotData | null
   } catch {
     return null;
   }
+}
+
+// ── Background color extraction ─────────────────────────────────────────────
+
+/**
+ * Convert a raw CSS color value to a 6-digit lowercase hex string.
+ * Returns null for transparent, gradients, url(), or unknown formats.
+ */
+function cssColorToHex(value: string): string | null {
+  value = value.trim().split("!")[0].trim(); // strip !important
+  if (!value || value === "transparent" || value === "inherit" || value === "initial" || value === "currentcolor" || value.includes("url(") || value.includes("gradient(")) return null;
+
+  const NAMED: Record<string, string> = {
+    white: "#ffffff", black: "#000000", red: "#ff0000", blue: "#0000ff",
+    green: "#008000", gray: "#808080", grey: "#808080",
+    ivory: "#fffff0", snow: "#fffafa", beige: "#f5f5dc",
+    ghostwhite: "#f8f8ff", aliceblue: "#f0f8ff", lavender: "#e6e6fa",
+    linen: "#faf0e6", seashell: "#fff5ee", mintcream: "#f5fffa",
+    "light gray": "#d3d3d3", "light grey": "#d3d3d3", lightgray: "#d3d3d3",
+    lightgrey: "#d3d3d3", whitesmoke: "#f5f5f5", floralwhite: "#fffaf0",
+  };
+  const named = NAMED[value.toLowerCase()];
+  if (named) return named;
+
+  const shortHex = value.match(/^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/);
+  if (shortHex) return `#${shortHex[1]}${shortHex[1]}${shortHex[2]}${shortHex[2]}${shortHex[3]}${shortHex[3]}`.toLowerCase();
+
+  const fullHex = value.match(/^#([0-9a-fA-F]{6})/);
+  if (fullHex) return `#${fullHex[1]}`.toLowerCase();
+
+  const rgbMatch = value.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1]).toString(16).padStart(2, "0");
+    const g = parseInt(rgbMatch[2]).toString(16).padStart(2, "0");
+    const b = parseInt(rgbMatch[3]).toString(16).padStart(2, "0");
+    return `#${r}${g}${b}`;
+  }
+  return null;
+}
+
+/**
+ * Extract background-color values from the page, weighted by element semantics.
+ * Hero sections, body, and main get higher weights than generic divs.
+ * Returns up to 5 hex colors sorted by weight descending.
+ */
+function extractBackgroundColors($: cheerio.CheerioAPI): string[] {
+  const colorWeights = new Map<string, number>();
+
+  const addColor = (rawValue: string, weight: number) => {
+    const hex = cssColorToHex(rawValue);
+    if (hex && hex !== "#000000") {
+      colorWeights.set(hex, (colorWeights.get(hex) ?? 0) + weight);
+    }
+  };
+
+  // From inline styles — weight by element type and class hints
+  $("[style]").each((_, el) => {
+    const e = $(el);
+    const style = e.attr("style") || "";
+    const bgMatch = style.match(/background-color\s*:\s*([^;]+)/i);
+    if (!bgMatch) return;
+    const tagName = ((el as { tagName?: string }).tagName ?? "").toLowerCase();
+    const cls = (e.attr("class") || "").toLowerCase();
+    const id = (e.attr("id") || "").toLowerCase();
+    let weight = 1;
+    if (tagName === "body" || tagName === "html") weight = 20;
+    else if (tagName === "main") weight = 15;
+    else if (["section", "article", "header"].includes(tagName)) weight = 8;
+    else if (cls.includes("hero") || cls.includes("banner") || cls.includes("masthead") || id.includes("hero")) weight = 12;
+    else if (cls.includes("product") || cls.includes("feature") || cls.includes("showcase")) weight = 7;
+    addColor(bgMatch[1].trim(), weight);
+  });
+
+  // From <style> blocks — parse flat CSS rules for background-color
+  $("style").each((_, el) => {
+    const cssText = $(el).text();
+    const rulePattern = /([^{}]+)\{([^{}]+)\}/g;
+    let ruleMatch;
+    while ((ruleMatch = rulePattern.exec(cssText)) !== null) {
+      const selector = ruleMatch[1].trim().toLowerCase();
+      const declarations = ruleMatch[2];
+      const bgMatch = declarations.match(/background-color\s*:\s*([^;!"']+)/i);
+      if (!bgMatch) continue;
+      let weight = 1;
+      if (selector === "body" || selector === "html" || selector === "body, html" || selector === ":root" || selector === "html, body") weight = 20;
+      else if (selector === "main" || selector === "#main" || selector === "#app" || selector === "#root") weight = 15;
+      else if (/\bsection\b/.test(selector) || /\barticle\b/.test(selector)) weight = 5;
+      else if (selector.includes("hero") || selector.includes("banner") || selector.includes("masthead")) weight = 12;
+      else if (selector.includes("product") || selector.includes("feature") || selector.includes("showcase")) weight = 6;
+      addColor(bgMatch[1].trim(), weight);
+    }
+  });
+
+  return [...colorWeights.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([color]) => color)
+    .slice(0, 5);
 }
 
 // ── Main page scraper ───────────────────────────────────────────────────────
@@ -395,6 +493,8 @@ async function scrapePage(url: string, origin: string): Promise<ScrapedPage> {
     }
   });
 
+  const backgroundColors = extractBackgroundColors($);
+
   return {
     url,
     title,
@@ -407,5 +507,6 @@ async function scrapePage(url: string, origin: string): Promise<ScrapedPage> {
     logoUrl,
     trustpilot,
     links: [...linkSet].slice(0, 20),
+    backgroundColors,
   };
 }
