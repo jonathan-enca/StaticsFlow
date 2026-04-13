@@ -22,15 +22,25 @@ export default async function GeneratePage({ params }: PageProps) {
 
   const { brandId } = await params;
 
-  const brand = await prisma.brand.findFirst({
-    where: { id: brandId, userId: session.user.id },
-    include: {
-      creatives: {
-        orderBy: { createdAt: "desc" },
-        take: 20,
+  const [brand, products, inspirations] = await Promise.all([
+    prisma.brand.findFirst({
+      where: { id: brandId, userId: session.user.id },
+      include: {
+        creatives: {
+          orderBy: { createdAt: "desc" },
+          take: 20,
+        },
       },
-    },
-  });
+    }),
+    prisma.product.findMany({
+      where: { brandId, isActive: true },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    }),
+    prisma.inspiration.findMany({
+      where: { brandId, isActive: true },
+      orderBy: { uploadedAt: "desc" },
+    }),
+  ]);
 
   if (!brand) notFound();
 
@@ -49,6 +59,23 @@ export default async function GeneratePage({ params }: PageProps) {
           format: c.format,
           angle: c.angle,
           createdAt: c.createdAt.toISOString(),
+        }))}
+        products={products.map((p) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          tagline: p.tagline,
+          price: p.price,
+          productImages: p.productImages,
+          isDefault: p.isDefault,
+          benefits: p.benefits,
+        }))}
+        inspirations={inspirations.map((i) => ({
+          id: i.id,
+          imageUrl: i.imageUrl,
+          thumbnailUrl: i.thumbnailUrl,
+          analysisJson: i.analysisJson as Record<string, unknown>,
+          analyzedAt: i.analyzedAt?.toISOString() ?? null,
         }))}
       />
     </main>

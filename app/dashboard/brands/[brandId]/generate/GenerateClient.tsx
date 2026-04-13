@@ -1,12 +1,19 @@
 "use client";
 
-// Creative generation UI
-// Supports: single creative (with progress bar), 3-variant mode, and batch generation
-// Batch mode: polls progress and shows gallery + Download All ZIP
+// Creative generation — 3-step wizard (STA-95 Phase C)
+// Step 1: Pick a Product
+// Step 2: Pick an Inspiration (auto or manual from library)
+// Step 3: Settings (format, quality, brief) + Generate
 
 import { useState, useEffect, useRef } from "react";
 import type { AdFormat } from "@/types/index";
-import CreativePreviewModal, { type InspirationSource, type CreativePreviewData } from "@/components/CreativePreviewModal";
+import CreativePreviewModal, {
+  type InspirationSource,
+  type CreativePreviewData,
+} from "@/components/CreativePreviewModal";
+import { Loader2, Wand2, Zap, Layers, Check, ChevronRight } from "lucide-react";
+
+// ── Prop types ────────────────────────────────────────────────────────────────
 
 interface ExistingCreative {
   id: string;
@@ -18,11 +25,34 @@ interface ExistingCreative {
   createdAt: string;
 }
 
+interface ProductSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  tagline: string | null;
+  price: string | null;
+  productImages: string[];
+  isDefault: boolean;
+  benefits: string[];
+}
+
+interface InspirationSummary {
+  id: string;
+  imageUrl: string;
+  thumbnailUrl: string | null;
+  analysisJson: Record<string, unknown>;
+  analyzedAt: string | null;
+}
+
 interface Props {
   brandId: string;
   brandName: string;
   existingCreatives: ExistingCreative[];
+  products: ProductSummary[];
+  inspirations: InspirationSummary[];
 }
+
+// ── Options ───────────────────────────────────────────────────────────────────
 
 const FORMAT_OPTIONS: { value: AdFormat; label: string; desc: string }[] = [
   { value: "1080x1080", label: "Square", desc: "1080×1080 — Feed" },
@@ -30,47 +60,105 @@ const FORMAT_OPTIONS: { value: AdFormat; label: string; desc: string }[] = [
   { value: "1200x628", label: "Landscape", desc: "1200×628 — Banner" },
 ];
 
-// Batch count range
-const BATCH_MIN = 1;
-const BATCH_MAX = 50;
-const BATCH_PRESETS = [1, 5, 10, 20];
-
 type ImageQuality = "flash" | "pro";
 
-const QUALITY_OPTIONS: { value: ImageQuality; label: string; model: string; desc: string; badge: string; badgeColor: string }[] = [
+const QUALITY_OPTIONS: {
+  value: ImageQuality;
+  label: string;
+  desc: string;
+  badge: string;
+}[] = [
   {
     value: "flash",
-    label: "Flash 3.1",
-    model: "Gemini 3.1 Flash",
-    desc: "Best image quality, highest brand accuracy. Most powerful model — ideal for hero creatives.",
-    badge: "Best quality",
-    badgeColor: "amber",
+    label: "Flash (Best quality)",
+    desc: "Highest brand accuracy — ideal for hero creatives",
+    badge: "Recommended",
   },
   {
     value: "pro",
-    label: "Pro",
-    model: "Gemini 3 Pro",
-    desc: "Good quality at lower cost. Ideal for bulk batches and A/B testing.",
-    badge: "Cost-effective",
-    badgeColor: "green",
+    label: "Pro (Cost-effective)",
+    desc: "Good quality at lower cost — ideal for batch testing",
+    badge: "Budget",
   },
 ];
 
-interface SingleResult {
-  creative: ExistingCreative;
-  qaResult: { approved: boolean; score: number; feedback: string; iterations: number };
-  inspirationSource?: InspirationSource;
+const HOOK_ANGLES = [
+  { value: "benefit", label: "Benefit" },
+  { value: "pain", label: "Pain point" },
+  { value: "social_proof", label: "Social proof" },
+  { value: "curiosity", label: "Curiosity" },
+  { value: "fomo", label: "FOMO" },
+  { value: "urgency", label: "Urgency" },
+  { value: "authority", label: "Authority" },
+];
+
+// Step progress bar steps
+const WIZARD_STEPS = [
+  { label: "Product" },
+  { label: "Inspiration" },
+  { label: "Generate" },
+];
+
+// Generation progress stages (shown during API call)
+const GEN_STAGES = [
+  { label: "Claude is writing the creative brief…", pct: 20 },
+  { label: "Gemini is generating the image…", pct: 65 },
+  { label: "Claude QA is reviewing the result…", pct: 90 },
+];
+
+// ── Subcomponents ─────────────────────────────────────────────────────────────
+
+function StepBar({ currentStep }: { currentStep: number }) {
+  return (
+    <div className="flex items-center gap-0 mb-8">
+      {WIZARD_STEPS.map((step, i) => {
+        const done = i < currentStep;
+        const active = i === currentStep;
+        return (
+          <div key={step.label} className="flex items-center">
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                  done
+                    ? "bg-[var(--sf-accent)] text-white"
+                    : active
+                    ? "border-2 border-[var(--sf-accent)] text-[var(--sf-accent)] bg-transparent"
+                    : "border border-[var(--sf-border)] text-[var(--sf-text-muted)] bg-transparent"
+                }`}
+              >
+                {done ? <Check className="w-3.5 h-3.5" /> : i + 1}
+              </div>
+              <span
+                className={`text-sm font-medium ${
+                  active
+                    ? "text-[var(--sf-text-primary)]"
+                    : done
+                    ? "text-[var(--sf-accent)]"
+                    : "text-[var(--sf-text-muted)]"
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+            {i < WIZARD_STEPS.length - 1 && (
+              <ChevronRight className="w-4 h-4 mx-3 text-[var(--sf-text-muted)]" />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-interface BatchStatus {
-  id: string;
-  totalCount: number;
-  completedCount: number;
-  status: "PENDING" | "RUNNING" | "DONE" | "FAILED";
-  creatives: ExistingCreative[];
-}
-
-function CreativeThumbnail({ c, brandName, onPreview }: { c: ExistingCreative; brandName: string; onPreview?: () => void }) {
+function CreativeThumbnail({
+  c,
+  brandName,
+  onPreview,
+}: {
+  c: ExistingCreative;
+  brandName: string;
+  onPreview?: () => void;
+}) {
   return (
     <div className="space-y-2">
       <div className="rounded-xl overflow-hidden border border-[var(--sf-border)] aspect-square bg-[var(--sf-bg-primary)] flex items-center justify-center relative group">
@@ -85,7 +173,6 @@ function CreativeThumbnail({ c, brandName, onPreview }: { c: ExistingCreative; b
                 (e.target as HTMLImageElement).style.display = "none";
               }}
             />
-            {/* Two-action hover overlay: preview + download */}
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
               {onPreview && (
                 <button
@@ -94,9 +181,19 @@ function CreativeThumbnail({ c, brandName, onPreview }: { c: ExistingCreative; b
                   title="Preview"
                   className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 transition-colors flex items-center justify-center"
                 >
-                  {/* Eye icon */}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
                   </svg>
                 </button>
               )}
@@ -107,8 +204,20 @@ function CreativeThumbnail({ c, brandName, onPreview }: { c: ExistingCreative; b
                 title="Download"
                 className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 transition-colors flex items-center justify-center"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
               </a>
             </div>
@@ -120,12 +229,17 @@ function CreativeThumbnail({ c, brandName, onPreview }: { c: ExistingCreative; b
         )}
       </div>
       <div className="text-xs text-[var(--sf-text-secondary)] flex items-center gap-1 flex-wrap">
-        <span className={`inline-block px-2 py-0.5 rounded-full ${
-          c.status === "APPROVED" ? "bg-green-50 text-green-700"
-          : c.status === "REJECTED" ? "bg-red-50 text-red-700"
-          : c.status === "GENERATING" ? "bg-blue-50 text-blue-600"
-          : "bg-[var(--sf-bg-elevated)] text-[var(--sf-text-secondary)]"
-        }`}>
+        <span
+          className={`inline-block px-2 py-0.5 rounded-full ${
+            c.status === "APPROVED"
+              ? "bg-green-50 text-green-700"
+              : c.status === "REJECTED"
+              ? "bg-red-50 text-red-700"
+              : c.status === "GENERATING"
+              ? "bg-blue-50 text-blue-600"
+              : "bg-[var(--sf-bg-elevated)] text-[var(--sf-text-secondary)]"
+          }`}
+        >
           {c.status === "GENERATING" ? "…" : c.status}
         </span>
         <span className="capitalize">{c.angle}</span>
@@ -135,806 +249,874 @@ function CreativeThumbnail({ c, brandName, onPreview }: { c: ExistingCreative; b
   );
 }
 
-// Step labels for the single-generation progress bar
-const SINGLE_STEPS = [
-  { label: "Claude is writing the creative brief…", pct: 20 },
-  { label: "Gemini is generating the image…", pct: 65 },
-  { label: "Claude QA is reviewing the result…", pct: 90 },
-];
+// ── Main component ────────────────────────────────────────────────────────────
 
-type GenerationMode = "database" | "example";
+interface SingleResult {
+  creative: ExistingCreative;
+  qaResult: {
+    approved: boolean;
+    score: number;
+    feedback: string;
+    iterations: number;
+  };
+  inspirationSource?: InspirationSource;
+}
 
-export default function GenerateClient({ brandId, brandName, existingCreatives }: Props) {
+export default function GenerateClient({
+  brandId,
+  brandName,
+  existingCreatives,
+  products,
+  inspirations,
+}: Props) {
+  // Wizard step: 0 = Product, 1 = Inspiration, 2 = Settings/Generate
+  const [step, setStep] = useState(0);
+
+  // Step 1 — Product
+  const defaultProduct = products.find((p) => p.isDefault) ?? products[0] ?? null;
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(
+    defaultProduct?.id ?? null
+  );
+
+  // Step 2 — Inspiration
+  // "auto" = Claude picks from library, "manual" = user picks from gallery, "none" = skip (use BDD templates)
+  const [inspirationMode, setInspirationMode] = useState<"auto" | "manual" | "none">("auto");
+  const [selectedInspirationId, setSelectedInspirationId] = useState<string | null>(null);
+  const [autoSelecting, setAutoSelecting] = useState(false);
+  const [autoSelectedId, setAutoSelectedId] = useState<string | null>(null);
+  const [inspirationFilter, setInspirationFilter] = useState<string>("");
+  const [hookAngle, setHookAngle] = useState<string>("benefit");
+
+  // Step 3 — Settings
   const [format, setFormat] = useState<AdFormat>("1080x1080");
-  // angle is no longer user-selectable — defaults to "benefit" for single, auto-distributed for batch
-  const angle = "benefit";
   const [imageQuality, setImageQuality] = useState<ImageQuality>("flash");
-  const [batchSize, setBatchSize] = useState<number>(1);
-  const [batchSizeInput, setBatchSizeInput] = useState<string>("1");
   const [creativeBrief, setCreativeBrief] = useState<string>("");
-  const [variantsMode, setVariantsMode] = useState(false);
-  // Generation mode: "database" uses BDD curated templates, "example" uses a single user-provided URL or drag-and-drop
-  const [generationMode, setGenerationMode] = useState<GenerationMode>("database");
-  const [referenceImageUrl, setReferenceImageUrl] = useState<string>("");
-  // Drag-and-drop: uploaded image file converted to base64
-  const [referenceImageData, setReferenceImageData] = useState<{ data: string; mimeType: string } | null>(null);
-  const [referenceImagePreview, setReferenceImagePreview] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const dropZoneRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Generation state
   const [generating, setGenerating] = useState(false);
+  const [stageIndex, setStageIndex] = useState(-1);
+  const stageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Single-generation step progress
-  const [stepIndex, setStepIndex] = useState<number>(-1);
-  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Single / variants result
   const [singleResult, setSingleResult] = useState<SingleResult | null>(null);
-  const [variantResults, setVariantResults] = useState<SingleResult[] | null>(null);
 
-  // Batch state
-  const [batchId, setBatchId] = useState<string | null>(null);
-  const [batchData, setBatchData] = useState<BatchStatus | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Historical creatives
+  // Creative history
   const [creatives, setCreatives] = useState<ExistingCreative[]>(existingCreatives);
 
-  // Lightbox preview state
-  const [previewCreative, setPreviewCreative] = useState<{ creative: CreativePreviewData; inspirationSource?: InspirationSource } | null>(null);
+  // Lightbox
+  const [previewCreative, setPreviewCreative] = useState<{
+    creative: CreativePreviewData;
+    inspirationSource?: InspirationSource;
+  } | null>(null);
 
-  // Poll batch status while running
+  const hasInspiration = inspirations.length > 0;
+  const analyzedInspirations = inspirations.filter((i) => i.analyzedAt);
+
+  // Derive the effective inspirationId for the API call
+  const effectiveInspirationId =
+    inspirationMode === "auto"
+      ? autoSelectedId
+      : inspirationMode === "manual"
+      ? selectedInspirationId
+      : null;
+
+  // Auto-select inspiration via API when entering step 2 in auto mode
   useEffect(() => {
-    if (!batchId) return;
+    if (step !== 1 || inspirationMode !== "auto" || analyzedInspirations.length === 0) return;
+    let cancelled = false;
 
-    const poll = async () => {
+    async function doAutoSelect() {
+      setAutoSelecting(true);
+      setAutoSelectedId(null);
       try {
-        const res = await fetch(`/api/creatives/batch/${batchId}`);
-        if (!res.ok) return;
+        const res = await fetch(
+          `/api/brands/${brandId}/inspirations/auto-select`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ angle: hookAngle }),
+          }
+        );
+        if (!res.ok) throw new Error("Auto-select failed");
         const data = await res.json();
-        const batch: BatchStatus = data.batch;
-        setBatchData(batch);
-
-        if (batch.status === "DONE" || batch.status === "FAILED") {
-          if (pollRef.current) clearInterval(pollRef.current);
-          pollRef.current = null;
-          setGenerating(false);
-          // Add batch creatives to history
-          setCreatives((prev) => {
-            const existingIds = new Set(prev.map((c) => c.id));
-            const newOnes = batch.creatives.filter((c) => !existingIds.has(c.id));
-            return [...newOnes, ...prev];
-          });
-        }
+        if (!cancelled) setAutoSelectedId(data.inspirationId ?? null);
       } catch {
-        // ignore transient poll errors
+        // Fall back silently — generation will use BDD templates
+        if (!cancelled) setAutoSelectedId(null);
+      } finally {
+        if (!cancelled) setAutoSelecting(false);
       }
-    };
+    }
 
-    poll(); // immediate first check
-    pollRef.current = setInterval(poll, 3000);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [batchId]);
+    doAutoSelect();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, inspirationMode, hookAngle]);
 
-  /** Animate through SINGLE_STEPS while generation is running. */
-  const startStepProgress = () => {
-    setStepIndex(0);
+  // Animate through GEN_STAGES while generating
+  const startStages = () => {
+    setStageIndex(0);
     let current = 0;
     const advance = () => {
       current++;
-      if (current < SINGLE_STEPS.length) {
-        setStepIndex(current);
-        // Time each step roughly proportional to its real work
-        const delays = [10000, 30000]; // brief→image ~10s, image→QA ~30s
-        stepTimerRef.current = setTimeout(advance, delays[current - 1] ?? 15000);
+      if (current < GEN_STAGES.length) {
+        setStageIndex(current);
+        const delays = [10000, 30000];
+        stageTimerRef.current = setTimeout(advance, delays[current - 1] ?? 15000);
       }
     };
-    stepTimerRef.current = setTimeout(advance, 8000);
+    stageTimerRef.current = setTimeout(advance, 8000);
   };
 
-  const stopStepProgress = () => {
-    if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
-    setStepIndex(-1);
-  };
-
-  // Convert a File object to base64 + MIME type for the API
-  const fileToImageData = (file: File): Promise<{ data: string; mimeType: string }> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // result is "data:<mimeType>;base64,<data>"
-        const [header, data] = result.split(",");
-        const mimeType = header.replace("data:", "").replace(";base64", "");
-        resolve({ data, mimeType });
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-  const handleReferenceFile = async (file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    const imgData = await fileToImageData(file);
-    setReferenceImageData(imgData);
-    setReferenceImagePreview(URL.createObjectURL(file));
-    setReferenceImageUrl(""); // clear URL input when file is uploaded
-  };
-
-  const clearReferenceImage = () => {
-    setReferenceImageData(null);
-    setReferenceImagePreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  const stopStages = () => {
+    if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+    setStageIndex(-1);
   };
 
   const generate = async () => {
     setGenerating(true);
     setError(null);
     setSingleResult(null);
-    setVariantResults(null);
-    setBatchId(null);
-    setBatchData(null);
-
-    const briefPayload = creativeBrief.trim() || undefined;
-    const refUrl = generationMode === "example" && !referenceImageData ? (referenceImageUrl.trim() || undefined) : undefined;
-    const refData = generationMode === "example" ? (referenceImageData ?? undefined) : undefined;
+    startStages();
 
     try {
-      if (batchSize > 1) {
-        // Batch mode
-        const res = await fetch("/api/creatives/batch-generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            brandId,
-            count: batchSize,
-            formats: [format],
-            angles: ["benefit", "pain", "social_proof", "curiosity"],
-            imageQuality,
-            creativeBrief: briefPayload,
-            referenceImageUrl: refUrl,
-            referenceImageData: refData,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Batch generation failed");
-        setBatchId(data.batchId);
-        // setGenerating stays true — cleared by poller when done
-      } else if (variantsMode) {
-        // Variants mode (3 hooks)
-        startStepProgress();
-        const res = await fetch("/api/creatives/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, format, angle, variants: true, imageQuality, creativeBrief: briefPayload, referenceImageUrl: refUrl, referenceImageData: refData }),
-        });
-        stopStepProgress();
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Generation failed");
-        // Attach inspirationSource to each variant if available
-        const variants: SingleResult[] = (data.variants as SingleResult[]).map((v) => ({
-          ...v,
-          inspirationSource: data.inspirationSource,
-        }));
-        setVariantResults(variants);
-        setCreatives((prev) => [
-          ...variants.map((v) => v.creative),
-          ...prev,
-        ]);
-        setGenerating(false);
-      } else {
-        // Single creative
-        startStepProgress();
-        const res = await fetch("/api/creatives/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brandId, format, angle, imageQuality, creativeBrief: briefPayload, referenceImageUrl: refUrl, referenceImageData: refData }),
-        });
-        stopStepProgress();
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Generation failed");
-        setSingleResult({ creative: data.creative, qaResult: data.qaResult, inspirationSource: data.inspirationSource });
-        setCreatives((prev) => [data.creative, ...prev]);
-        setGenerating(false);
-      }
+      const res = await fetch("/api/creatives/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brandId,
+          format,
+          angle: hookAngle,
+          imageQuality,
+          creativeBrief: creativeBrief.trim() || undefined,
+          inspirationId: effectiveInspirationId ?? undefined,
+          productId: selectedProductId ?? undefined,
+          generationMode:
+            inspirationMode === "auto"
+              ? "auto"
+              : inspirationMode === "manual"
+              ? "manual"
+              : "none",
+        }),
+      });
+      stopStages();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Generation failed");
+      setSingleResult({
+        creative: data.creative,
+        qaResult: data.qaResult,
+        inspirationSource: data.inspirationSource,
+      });
+      setCreatives((prev) => [data.creative, ...prev]);
     } catch (err) {
-      stopStepProgress();
+      stopStages();
       setError((err as Error).message);
+    } finally {
       setGenerating(false);
     }
   };
 
-  const downloadBatchZip = async () => {
-    if (!batchId) return;
-    const a = document.createElement("a");
-    a.href = `/api/creatives/batch/${batchId}/export`;
-    a.download = `${brandName.toLowerCase()}_batch.zip`;
-    a.click();
-  };
+  // Inspiration card for gallery
+  const InspirationCard = ({ ins }: { ins: InspirationSummary }) => {
+    const analysis = ins.analysisJson as {
+      hookAngle?: string;
+      layoutType?: string;
+      adFormat?: string;
+      mood?: string;
+    };
+    const isSelected = selectedInspirationId === ins.id;
 
-  const isBatchMode = batchSize > 1;
-  const selectedFormat = FORMAT_OPTIONS.find((f) => f.value === format);
-  const formatSuffix = selectedFormat ? ` — ${selectedFormat.label} ${selectedFormat.desc.split(" — ")[0]}` : "";
-  const buttonLabel = isBatchMode
-    ? `Generate ${batchSize} Creatives${formatSuffix} →`
-    : variantsMode
-    ? `Generate 3 Variants${formatSuffix} →`
-    : `Generate Creative${formatSuffix} →`;
-
-  return (
-    <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
-      {/* Header */}
-      <div>
-        <p className="text-sm text-[var(--sf-text-secondary)] mb-1 flex items-center gap-1.5 flex-wrap">
-          <a href="/dashboard" className="hover:underline">Dashboard</a>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-[var(--sf-text-muted)]"><path d="M4.5 2.5l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          <a href={`/dashboard/brands/${brandId}`} className="hover:underline">Brand DNA</a>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-[var(--sf-text-muted)]"><path d="M4.5 2.5l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          <span>Generate</span>
-        </p>
-        <h1 className="text-2xl font-bold text-[var(--sf-text-primary)]">{brandName} — Generate Creative</h1>
-        <p className="text-sm text-[var(--sf-text-secondary)] mt-1">
-          Claude writes the brief · Gemini generates the image · Claude QA reviews
-        </p>
-      </div>
-
-      {/* Generation Mode selector — full width above the controls grid */}
-      <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-5">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)] mb-3">Inspiration Source</h2>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setGenerationMode("database")}
-            className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-colors text-left ${
-              generationMode === "database"
-                ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
-                : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] hover:border-gray-400"
-            }`}
-          >
-            <div className="font-semibold mb-0.5">From our database</div>
-            <div className={`text-xs font-normal leading-snug ${generationMode === "database" ? "text-white/70" : "text-[var(--sf-text-secondary)]"}`}>
-              Uses our curated BDD of top-performing Meta Ads as visual reference for Claude &amp; Gemini
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={() => setGenerationMode("example")}
-            className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-colors text-left ${
-              generationMode === "example"
-                ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
-                : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] hover:border-gray-400"
-            }`}
-          >
-            <div className="font-semibold mb-0.5">From a specific example</div>
-            <div className={`text-xs font-normal leading-snug ${generationMode === "example" ? "text-white/70" : "text-[var(--sf-text-secondary)]"}`}>
-              Paste a URL to an ad you want Claude &amp; Gemini to adapt for this brand
-            </div>
-          </button>
+    return (
+      <button
+        type="button"
+        onClick={() => setSelectedInspirationId(isSelected ? null : ins.id)}
+        className={`relative rounded-xl overflow-hidden border-2 transition-all text-left group ${
+          isSelected
+            ? "border-[var(--sf-accent)] ring-2 ring-[var(--sf-accent)]/20"
+            : "border-[var(--sf-border)] hover:border-gray-400"
+        }`}
+      >
+        <div className="aspect-square bg-[var(--sf-bg-primary)] overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={ins.thumbnailUrl ?? ins.imageUrl}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
         </div>
-        {/* Reference image input — drag-and-drop + URL, only shown in "example" mode */}
-        {generationMode === "example" && (
-          <div className="mt-3 space-y-2">
-            {/* Drag-and-drop zone */}
-            {referenceImagePreview ? (
-              /* Preview of uploaded image */
-              <div className="relative rounded-xl border border-[var(--sf-border)] overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={referenceImagePreview} alt="Reference" className="w-full max-h-48 object-contain bg-[var(--sf-bg-primary)]" />
-                <button
-                  type="button"
-                  onClick={clearReferenceImage}
-                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black transition-colors"
-                  title="Remove image"
-                >
-                  ✕
-                </button>
-                <div className="px-3 py-2 bg-[var(--sf-bg-secondary)] border-t border-[var(--sf-border)]">
-                  <p className="text-xs text-[var(--sf-text-secondary)]">Image uploaded — Claude &amp; Gemini will use this as visual reference.</p>
-                </div>
-              </div>
-            ) : (
-              <div
-                ref={dropZoneRef}
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={async (e) => {
-                  e.preventDefault();
-                  setIsDragging(false);
-                  const file = e.dataTransfer.files[0];
-                  if (file) await handleReferenceFile(file);
-                }}
-                onClick={() => fileInputRef.current?.click()}
-                className={`w-full rounded-xl border-2 border-dashed cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 py-6 ${
-                  isDragging
-                    ? "border-[var(--sf-accent)] bg-[var(--sf-bg-elevated)]"
-                    : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] hover:border-gray-400"
-                }`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--sf-text-muted)" }}>
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                </svg>
-                <div className="text-center">
-                  <p className="text-sm font-medium" style={{ color: "var(--sf-text-primary)" }}>Drop an image here</p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--sf-text-secondary)" }}>or click to browse — JPG, PNG, WebP</p>
-                </div>
-              </div>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (file) await handleReferenceFile(file);
-              }}
-            />
-            {/* URL fallback — only shown when no file uploaded */}
-            {!referenceImageData && (
-              <>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-px bg-[var(--sf-border)]" />
-                  <span className="text-xs text-[var(--sf-text-muted)]">or paste URL</span>
-                  <div className="flex-1 h-px bg-[var(--sf-border)]" />
-                </div>
-                <input
-                  type="url"
-                  placeholder="https://example.com/reference-ad.jpg"
-                  value={referenceImageUrl}
-                  onChange={(e) => setReferenceImageUrl(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-[var(--sf-accent)] transition-colors"
-                />
-              </>
+        {isSelected && (
+          <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[var(--sf-accent)] flex items-center justify-center">
+            <Check className="w-3.5 h-3.5 text-white" />
+          </div>
+        )}
+        {analysis.hookAngle && (
+          <div className="px-2 py-1.5 border-t border-[var(--sf-border)] bg-[var(--sf-bg-secondary)]">
+            <p className="text-xs font-medium text-[var(--sf-text-primary)] capitalize truncate">
+              {analysis.hookAngle}
+            </p>
+            {analysis.layoutType && (
+              <p className="text-xs text-[var(--sf-text-muted)] truncate">
+                {analysis.layoutType}
+              </p>
             )}
           </div>
         )}
+      </button>
+    );
+  };
+
+  // Filter inspirations by keyword (hookAngle or layoutType)
+  const filteredInspirations = inspirations.filter((ins) => {
+    if (!inspirationFilter) return true;
+    const a = ins.analysisJson as { hookAngle?: string; layoutType?: string };
+    const q = inspirationFilter.toLowerCase();
+    return (
+      a.hookAngle?.toLowerCase().includes(q) ||
+      a.layoutType?.toLowerCase().includes(q)
+    );
+  });
+
+  // ── Step renders ─────────────────────────────────────────────────────────
+
+  const renderStep0 = () => (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-[var(--sf-text-primary)] mb-1">
+          Which product are you promoting?
+        </h2>
+        <p className="text-sm text-[var(--sf-text-secondary)]">
+          The product DNA drives what Claude writes and what Gemini renders.
+        </p>
       </div>
 
-      {/* Controls + Generate button — single grouped container (Stripe-style) */}
-      <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-6 space-y-5">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Generation Settings</h2>
-
-        {/* Row 1: Number of Creatives (1/3) | Creative Brief (2/3) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Number of Creatives — quick-select chips */}
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Quantity</p>
-              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Up to {BATCH_MAX}</p>
-            </div>
-            <div className="flex gap-1.5 flex-wrap">
-              {BATCH_PRESETS.map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => {
-                    setBatchSize(n);
-                    setBatchSizeInput(String(n));
-                    if (n > 1) setVariantsMode(false);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    batchSize === n
-                      ? "bg-[var(--sf-accent)] text-white"
-                      : "bg-[var(--sf-bg-elevated)] text-[var(--sf-text-primary)] hover:bg-[var(--sf-border)]"
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-            {/* Custom input — shown when value is not a preset */}
-            {!BATCH_PRESETS.includes(batchSize) && (
-              <input
-                type="number"
-                min={BATCH_MIN}
-                max={BATCH_MAX}
-                value={batchSizeInput}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  setBatchSizeInput(raw);
-                  const n = parseInt(raw, 10);
-                  if (!isNaN(n) && n >= BATCH_MIN && n <= BATCH_MAX) {
-                    setBatchSize(n);
-                    if (n > 1) setVariantsMode(false);
-                  }
-                }}
-                onBlur={() => {
-                  const n = Math.min(BATCH_MAX, Math.max(BATCH_MIN, parseInt(batchSizeInput, 10) || 1));
-                  setBatchSize(n);
-                  setBatchSizeInput(String(n));
-                  if (n > 1) setVariantsMode(false);
-                }}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm focus:outline-none focus:border-[var(--sf-accent)] transition-colors"
-                placeholder="Custom…"
-              />
-            )}
-            {BATCH_PRESETS.includes(batchSize) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setBatchSizeInput("");
-                  setBatchSize(0);
-                }}
-                className="text-xs text-[var(--sf-text-muted)] hover:text-[var(--sf-text-secondary)] transition-colors"
-              >
-                Custom quantity…
-              </button>
-            )}
-          </div>
-
-          {/* Creative Brief — primary control, gets 2/3 width */}
-          <div className="sm:col-span-2 space-y-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">
-                Creative Brief <span className="normal-case font-normal">(optional)</span>
-              </p>
-              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
-                Specific guidance for Claude: promo, season, product…
-              </p>
-            </div>
-            <textarea
-              placeholder="e.g. Summer collection, 30% off…"
-              value={creativeBrief}
-              onChange={(e) => setCreativeBrief(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] text-sm placeholder-[var(--sf-text-muted)] focus:outline-none focus:border-[var(--sf-accent)] transition-colors resize-none min-h-[100px]"
-            />
-            {creativeBrief.length > 200 && (
-              <p className="text-xs text-[var(--sf-text-muted)] text-right">{creativeBrief.length} chars</p>
-            )}
-          </div>
+      {products.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-[var(--sf-border)] p-8 text-center">
+          <Layers className="w-8 h-8 mx-auto mb-3 text-[var(--sf-text-muted)]" />
+          <p className="text-sm font-medium text-[var(--sf-text-primary)]">No products yet</p>
+          <p className="text-xs text-[var(--sf-text-secondary)] mt-1 mb-4">
+            Add at least one product to get started
+          </p>
+          <a
+            href={`/dashboard/brands/${brandId}/products/new`}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
+            style={{ background: "var(--sf-accent)" }}
+          >
+            Add product
+          </a>
         </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {products.map((p) => {
+            const selected = selectedProductId === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelectedProductId(p.id)}
+                className={`rounded-xl border-2 p-4 text-left transition-all ${
+                  selected
+                    ? "border-[var(--sf-accent)] bg-[var(--sf-accent-muted,rgba(108,71,255,0.06))]"
+                    : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] hover:border-gray-400"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  {p.productImages[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.productImages[0]}
+                      alt=""
+                      className="w-14 h-14 rounded-lg object-cover flex-shrink-0 border border-[var(--sf-border)]"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg flex-shrink-0 bg-[var(--sf-bg-elevated)] flex items-center justify-center">
+                      <Layers className="w-5 h-5 text-[var(--sf-text-muted)]" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-sm text-[var(--sf-text-primary)] truncate">
+                        {p.name}
+                      </p>
+                      {p.isDefault && (
+                        <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded-full bg-[var(--sf-bg-elevated)] text-[var(--sf-text-muted)]">
+                          Default
+                        </span>
+                      )}
+                    </div>
+                    {p.tagline && (
+                      <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5 truncate">
+                        {p.tagline}
+                      </p>
+                    )}
+                    {p.price && (
+                      <p className="text-xs text-[var(--sf-text-muted)] mt-0.5">{p.price}</p>
+                    )}
+                    {p.benefits.length > 0 && (
+                      <p className="text-xs text-[var(--sf-text-muted)] mt-1 truncate">
+                        {p.benefits.slice(0, 2).join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                  {selected && (
+                    <Check className="w-5 h-5 flex-shrink-0 text-[var(--sf-accent)]" />
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-        {/* Row 2: Image Quality (1/3) | Ad Format (1/3) | Variants toggle (1/3) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-          {/* Image Quality — segmented control */}
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Image Quality</p>
-              <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Gemini model</p>
+      <div className="flex justify-between pt-2">
+        <div />
+        <button
+          type="button"
+          onClick={() => setStep(1)}
+          disabled={!selectedProductId && products.length > 0}
+          className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center gap-2 disabled:opacity-40 transition-opacity"
+          style={{ background: "var(--sf-accent)" }}
+        >
+          Next: Inspiration
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderStep1 = () => (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-[var(--sf-text-primary)] mb-1">
+          Choose an inspiration
+        </h2>
+        <p className="text-sm text-[var(--sf-text-secondary)]">
+          An inspiration teaches Claude &amp; Gemini the exact structure to clone.
+        </p>
+      </div>
+
+      {/* Hook angle picker — used for both auto-select and passed to generation */}
+      <div>
+        <label className="block text-xs font-medium text-[var(--sf-text-muted)] mb-2 uppercase tracking-wide">
+          Hook angle
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {HOOK_ANGLES.map((h) => (
+            <button
+              key={h.value}
+              type="button"
+              onClick={() => setHookAngle(h.value)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                hookAngle === h.value
+                  ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
+                  : "border-[var(--sf-border)] text-[var(--sf-text-secondary)] hover:border-gray-400"
+              }`}
+            >
+              {h.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Inspiration mode */}
+      <div className="grid sm:grid-cols-3 gap-2">
+        {[
+          {
+            value: "auto" as const,
+            icon: <Wand2 className="w-4 h-4" />,
+            title: "Auto-select",
+            desc: "Claude picks the best match from your library",
+            disabled: analyzedInspirations.length === 0,
+          },
+          {
+            value: "manual" as const,
+            icon: <Layers className="w-4 h-4" />,
+            title: "Pick manually",
+            desc: "Choose from your inspiration gallery",
+            disabled: inspirations.length === 0,
+          },
+          {
+            value: "none" as const,
+            icon: <Zap className="w-4 h-4" />,
+            title: "Skip",
+            desc: "Use global BDD template library instead",
+            disabled: false,
+          },
+        ].map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            disabled={opt.disabled}
+            onClick={() => setInspirationMode(opt.value)}
+            className={`relative rounded-xl border-2 p-4 text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+              inspirationMode === opt.value
+                ? "border-[var(--sf-accent)] bg-[var(--sf-accent-muted,rgba(108,71,255,0.06))]"
+                : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] hover:border-gray-400"
+            }`}
+          >
+            <div
+              className={`mb-2 ${
+                inspirationMode === opt.value
+                  ? "text-[var(--sf-accent)]"
+                  : "text-[var(--sf-text-muted)]"
+              }`}
+            >
+              {opt.icon}
             </div>
-            <div className="flex bg-[var(--sf-bg-elevated)] rounded-lg p-1 gap-1">
-              {QUALITY_OPTIONS.map((q) => (
-                <button
-                  key={q.value}
-                  type="button"
-                  onClick={() => setImageQuality(q.value)}
-                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    imageQuality === q.value
-                      ? "bg-[var(--sf-bg-secondary)] shadow-sm text-[var(--sf-text-primary)]"
-                      : "text-[var(--sf-text-secondary)] hover:text-[var(--sf-text-primary)]"
-                  }`}
-                >
-                  {q.label}
-                </button>
+            <p className="text-sm font-semibold text-[var(--sf-text-primary)]">
+              {opt.title}
+            </p>
+            <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5 leading-snug">
+              {opt.desc}
+            </p>
+            {opt.disabled && (
+              <p className="text-xs text-[var(--sf-warning)] mt-1">
+                {opt.value === "auto" ? "Analyze inspirations first" : "Upload inspirations first"}
+              </p>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Auto-select: show the picked inspiration */}
+      {inspirationMode === "auto" && (
+        <div className="rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] p-4">
+          {autoSelecting ? (
+            <div className="flex items-center gap-3 text-sm text-[var(--sf-text-secondary)]">
+              <Loader2 className="w-4 h-4 animate-spin text-[var(--sf-accent)]" />
+              Claude is picking the best inspiration for "{hookAngle}" angle…
+            </div>
+          ) : autoSelectedId ? (
+            (() => {
+              const ins = inspirations.find((i) => i.id === autoSelectedId);
+              if (!ins) return null;
+              const a = ins.analysisJson as { hookAngle?: string; layoutType?: string };
+              return (
+                <div className="flex items-center gap-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={ins.thumbnailUrl ?? ins.imageUrl}
+                    alt=""
+                    className="w-16 h-16 rounded-lg object-cover border border-[var(--sf-border)]"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <Check className="w-4 h-4 text-[var(--sf-success)]" />
+                      <span className="text-sm font-semibold text-[var(--sf-text-primary)]">
+                        Best match selected
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--sf-text-secondary)] capitalize">
+                      {a.hookAngle} · {a.layoutType}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()
+          ) : analyzedInspirations.length === 0 ? (
+            <p className="text-sm text-[var(--sf-text-muted)]">
+              No analyzed inspirations yet.{" "}
+              <a
+                href={`/dashboard/brands/${brandId}/inspirations`}
+                className="text-[var(--sf-accent)] hover:underline"
+              >
+                Add &amp; analyze inspirations →
+              </a>
+            </p>
+          ) : (
+            <p className="text-sm text-[var(--sf-text-muted)]">
+              No match found — will fall back to global templates.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Manual: filterable gallery */}
+      {inspirationMode === "manual" && (
+        <div className="space-y-3">
+          <input
+            type="text"
+            placeholder="Filter by hook or layout…"
+            value={inspirationFilter}
+            onChange={(e) => setInspirationFilter(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-sm text-[var(--sf-text-primary)] placeholder:text-[var(--sf-text-muted)] outline-none focus:border-[var(--sf-accent)] transition-colors"
+          />
+          {filteredInspirations.length === 0 ? (
+            <p className="text-sm text-[var(--sf-text-muted)] text-center py-6">
+              No inspirations match this filter.
+            </p>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 max-h-80 overflow-y-auto pr-1">
+              {filteredInspirations.map((ins) => (
+                <InspirationCard key={ins.id} ins={ins} />
               ))}
             </div>
-            {QUALITY_OPTIONS.filter((q) => q.value === imageQuality).map((q) => (
-              <div key={q.value} className="flex items-start gap-2">
-                <p className="text-xs text-[var(--sf-text-secondary)] leading-snug flex-1">{q.desc}</p>
-                <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                  q.badgeColor === "amber" ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"
-                }`}>
+          )}
+          {!hasInspiration && (
+            <p className="text-sm text-[var(--sf-text-muted)] text-center py-4">
+              No inspirations yet.{" "}
+              <a
+                href={`/dashboard/brands/${brandId}/inspirations`}
+                className="text-[var(--sf-accent)] hover:underline"
+              >
+                Upload some →
+              </a>
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="flex justify-between pt-2">
+        <button
+          type="button"
+          onClick={() => setStep(0)}
+          className="px-4 py-2.5 rounded-lg text-sm font-medium border border-[var(--sf-border)] text-[var(--sf-text-secondary)] hover:border-gray-400 transition-colors"
+        >
+          ← Back
+        </button>
+        <button
+          type="button"
+          onClick={() => setStep(2)}
+          className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center gap-2"
+          style={{ background: "var(--sf-accent)" }}
+        >
+          Next: Settings
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderStep2 = () => (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-[var(--sf-text-primary)] mb-1">
+          Settings &amp; Generate
+        </h2>
+        <p className="text-sm text-[var(--sf-text-secondary)]">
+          Final options before we send it to Claude &amp; Gemini.
+        </p>
+      </div>
+
+      {/* Format */}
+      <div>
+        <label className="block text-xs font-medium text-[var(--sf-text-muted)] mb-2 uppercase tracking-wide">
+          Ad format
+        </label>
+        <div className="flex gap-2 flex-wrap">
+          {FORMAT_OPTIONS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => setFormat(f.value)}
+              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                format === f.value
+                  ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
+                  : "border-[var(--sf-border)] text-[var(--sf-text-secondary)] hover:border-gray-400"
+              }`}
+            >
+              <div>{f.label}</div>
+              <div
+                className={`text-xs font-normal ${format === f.value ? "text-white/70" : "text-[var(--sf-text-muted)]"}`}
+              >
+                {f.desc}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Quality */}
+      <div>
+        <label className="block text-xs font-medium text-[var(--sf-text-muted)] mb-2 uppercase tracking-wide">
+          Image quality
+        </label>
+        <div className="grid sm:grid-cols-2 gap-2">
+          {QUALITY_OPTIONS.map((q) => (
+            <button
+              key={q.value}
+              type="button"
+              onClick={() => setImageQuality(q.value)}
+              className={`rounded-xl border-2 p-4 text-left transition-all ${
+                imageQuality === q.value
+                  ? "border-[var(--sf-accent)] bg-[var(--sf-accent-muted,rgba(108,71,255,0.06))]"
+                  : "border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] hover:border-gray-400"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-semibold text-[var(--sf-text-primary)]">
+                  {q.label}
+                </span>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    q.badge === "Recommended"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-green-100 text-green-700"
+                  }`}
+                >
                   {q.badge}
                 </span>
               </div>
-            ))}
-          </div>
+              <p className="text-xs text-[var(--sf-text-secondary)] leading-snug">{q.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
 
-          {/* Ad Format — horizontal icon pills */}
-          <div className="space-y-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Ad Format</p>
-            <div className="flex gap-2">
-              {FORMAT_OPTIONS.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  onClick={() => setFormat(f.value)}
-                  className={`flex-1 flex flex-col items-center gap-1.5 px-2 py-3 rounded-lg border text-sm transition-colors ${
-                    format === f.value
-                      ? "border-[var(--sf-accent)] bg-[var(--sf-accent)] text-white"
-                      : "border-[var(--sf-border)] bg-[var(--sf-bg-primary)] text-[var(--sf-text-primary)] hover:border-gray-400"
-                  }`}
-                >
-                  <span className={`flex items-center justify-center ${format === f.value ? "text-white" : "text-[var(--sf-text-secondary)]"}`}>
-                    {f.value === "1080x1080" && (
-                      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="1" y="1" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                      </svg>
-                    )}
-                    {f.value === "1080x1350" && (
-                      <svg width="14" height="18" viewBox="0 0 14 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="1" y="1" width="12" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                      </svg>
-                    )}
-                    {f.value === "1200x628" && (
-                      <svg width="20" height="12" viewBox="0 0 20 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="1" y="1" width="18" height="10" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                      </svg>
-                    )}
-                  </span>
-                  <span className="font-medium text-xs">{f.label}</span>
-                  <span className={`text-[10px] leading-tight text-center ${format === f.value ? "text-white/70" : "text-[var(--sf-text-muted)]"}`}>
-                    {f.desc.split(" — ")[0]}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* Optional brief */}
+      <div>
+        <label className="block text-xs font-medium text-[var(--sf-text-muted)] mb-2 uppercase tracking-wide">
+          Creative direction <span className="normal-case font-normal">(optional)</span>
+        </label>
+        <textarea
+          value={creativeBrief}
+          onChange={(e) => setCreativeBrief(e.target.value)}
+          placeholder="E.g. 'Focus on the 30-day free trial offer' or 'Winter season — cold imagery'"
+          rows={3}
+          className="w-full px-3 py-2 rounded-lg border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] text-sm text-[var(--sf-text-primary)] placeholder:text-[var(--sf-text-muted)] resize-none outline-none focus:border-[var(--sf-accent)] transition-colors"
+        />
+        <p className="text-xs text-[var(--sf-text-muted)] mt-1">
+          Priority: Inspiration structure → Product DNA → Brand DNA → your direction above
+        </p>
+      </div>
 
-          {/* Variants — own cell in row 2 (Spec G) */}
-          <div className="space-y-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-[var(--sf-text-muted)]">Variants</p>
-            {batchSize === 1 ? (
-              <>
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div>
-                    <span className="text-sm font-semibold text-[var(--sf-text-primary)]">3 Variants</span>
-                    <p className="text-xs text-[var(--sf-text-secondary)]">Benefit · Pain · Social Proof</p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={variantsMode}
-                    onClick={() => setVariantsMode((v) => !v)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
-                      variantsMode ? "bg-[var(--sf-accent)]" : "bg-[var(--sf-bg-elevated)]"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-[var(--sf-bg-secondary)] transition-transform ${
-                        variantsMode ? "translate-x-6" : "translate-x-1"
-                      }`}
-                    />
-                  </button>
-                </label>
-              </>
-            ) : (
-              <p className="text-xs text-[var(--sf-text-muted)] leading-relaxed">Auto-distributed angles across batch</p>
-            )}
+      {/* Summary card */}
+      <div className="rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] p-4 space-y-2 text-sm">
+        <p className="text-xs font-medium text-[var(--sf-text-muted)] uppercase tracking-wide mb-3">
+          Generation summary
+        </p>
+        <div className="flex justify-between">
+          <span className="text-[var(--sf-text-secondary)]">Product</span>
+          <span className="text-[var(--sf-text-primary)] font-medium">
+            {products.find((p) => p.id === selectedProductId)?.name ?? "None (brand DNA only)"}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[var(--sf-text-secondary)]">Inspiration</span>
+          <span className="text-[var(--sf-text-primary)] font-medium capitalize">
+            {inspirationMode === "auto" && autoSelectedId
+              ? "Auto-selected"
+              : inspirationMode === "manual" && selectedInspirationId
+              ? "Manual pick"
+              : "BDD templates (fallback)"}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[var(--sf-text-secondary)]">Hook angle</span>
+          <span className="text-[var(--sf-text-primary)] font-medium capitalize">{hookAngle}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[var(--sf-text-secondary)]">Format</span>
+          <span className="text-[var(--sf-text-primary)] font-medium">
+            {FORMAT_OPTIONS.find((f) => f.value === format)?.label} ({format})
+          </span>
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-lg p-3 text-sm font-medium text-red-700 bg-red-50 border border-red-200">
+          {error}
+        </div>
+      )}
+
+      {/* Progress bar during generation */}
+      {generating && stageIndex >= 0 && (
+        <div className="rounded-xl border border-[var(--sf-border)] bg-[var(--sf-bg-secondary)] p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm text-[var(--sf-text-secondary)]">
+            <Loader2 className="w-4 h-4 animate-spin text-[var(--sf-accent)]" />
+            <span>{GEN_STAGES[stageIndex]?.label}</span>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-[var(--sf-bg-elevated)] overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-1000"
+              style={{
+                width: `${GEN_STAGES[stageIndex]?.pct ?? 0}%`,
+                background: "var(--sf-accent)",
+              }}
+            />
           </div>
         </div>
+      )}
 
-        {/* Generate button pinned inside container with separator */}
-        <div className="pt-4 border-t border-[var(--sf-border)] space-y-4">
-          <button
-            type="button"
-            onClick={generate}
-            disabled={generating}
-            className="w-full py-4 bg-[var(--sf-accent)] text-white text-sm font-bold rounded-xl hover:bg-[var(--sf-accent-hover)] disabled:opacity-50 transition-colors"
-          >
-            {generating ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                {isBatchMode ? "Generating batch…" : variantsMode ? "Generating variants…" : "Generating…"}
+      {/* Single result */}
+      {singleResult && (
+        <div className="rounded-xl border border-[var(--sf-border)] overflow-hidden">
+          <div className="p-4 flex items-center justify-between border-b border-[var(--sf-border)]">
+            <div>
+              <span
+                className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold mr-2 ${
+                  singleResult.qaResult.approved
+                    ? "bg-green-100 text-green-700"
+                    : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {singleResult.qaResult.approved ? "Approved" : "QA Review"}
               </span>
-            ) : buttonLabel}
-          </button>
-
-          {/* Step progress bar — single / variants mode only */}
-          {generating && !isBatchMode && stepIndex >= 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-[var(--sf-text-secondary)]">
-                <span>{SINGLE_STEPS[stepIndex]?.label}</span>
-                <span>{SINGLE_STEPS[stepIndex]?.pct ?? 0}%</span>
-              </div>
-              <div className="h-1.5 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[var(--sf-accent)] rounded-full transition-all duration-[2000ms] ease-out"
-                  style={{ width: `${SINGLE_STEPS[stepIndex]?.pct ?? 0}%` }}
-                />
-              </div>
-              <div className="flex gap-1 pt-0.5">
-                {SINGLE_STEPS.map((s, i) => (
-                  <div
-                    key={i}
-                    className={`h-1 flex-1 rounded-full transition-colors duration-500 ${
-                      i <= stepIndex ? "bg-[var(--sf-accent)]" : "bg-[var(--sf-bg-elevated)]"
-                    }`}
-                  />
-                ))}
-              </div>
+              <span className="text-sm text-[var(--sf-text-secondary)]">
+                Score: {Math.round(singleResult.qaResult.score * 100)}%
+              </span>
             </div>
+            {singleResult.creative.imageUrl && (
+              <a
+                href={singleResult.creative.imageUrl}
+                download={`${brandName}_creative.png`}
+                className="text-sm font-medium text-[var(--sf-accent)] hover:underline"
+              >
+                Download
+              </a>
+            )}
+          </div>
+          {singleResult.creative.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={singleResult.creative.imageUrl}
+              alt="Generated creative"
+              className="w-full max-h-96 object-contain bg-[var(--sf-bg-primary)]"
+            />
           )}
+        </div>
+      )}
 
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
-              {error}
+      <div className="flex justify-between pt-2">
+        <button
+          type="button"
+          onClick={() => { setStep(1); setSingleResult(null); setError(null); }}
+          className="px-4 py-2.5 rounded-lg text-sm font-medium border border-[var(--sf-border)] text-[var(--sf-text-secondary)] hover:border-gray-400 transition-colors"
+          disabled={generating}
+        >
+          ← Back
+        </button>
+        <button
+          type="button"
+          onClick={generate}
+          disabled={generating}
+          className="px-6 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center gap-2 disabled:opacity-60 transition-opacity"
+          style={{ background: "var(--sf-accent)" }}
+        >
+          {generating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Generating…
+            </>
+          ) : singleResult ? (
+            <>
+              <Wand2 className="w-4 h-4" />
+              Regenerate
+            </>
+          ) : (
+            <>
+              <Wand2 className="w-4 h-4" />
+              Generate Creative
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="max-w-4xl mx-auto px-6 py-10 space-y-8">
+      {/* Header */}
+      <div>
+        <p className="text-sm text-[var(--sf-text-secondary)] mb-1 flex items-center gap-1.5 flex-wrap">
+          <a href="/dashboard" className="hover:underline">
+            Dashboard
+          </a>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            className="flex-shrink-0 text-[var(--sf-text-muted)]"
+          >
+            <path
+              d="M4.5 2.5l4 3.5-4 3.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <a href={`/dashboard/brands/${brandId}`} className="hover:underline">
+            Brand DNA
+          </a>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            className="flex-shrink-0 text-[var(--sf-text-muted)]"
+          >
+            <path
+              d="M4.5 2.5l4 3.5-4 3.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span>Generate</span>
+        </p>
+        <h1 className="text-2xl font-bold text-[var(--sf-text-primary)]">
+          {brandName} — Generate Creative
+        </h1>
+        <p className="text-sm text-[var(--sf-text-secondary)] mt-1">
+          Clone inspiration structure · Fill with product DNA · Brand identity applied throughout
+        </p>
+      </div>
+
+      {/* Two-column: wizard left, history right */}
+      <div className="grid lg:grid-cols-[1fr_300px] gap-8">
+        {/* Wizard */}
+        <div className="bg-[var(--sf-bg-secondary)] rounded-2xl border border-[var(--sf-border)] p-6">
+          <StepBar currentStep={step} />
+          {step === 0 && renderStep0()}
+          {step === 1 && renderStep1()}
+          {step === 2 && renderStep2()}
+        </div>
+
+        {/* Creative history */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-[var(--sf-text-primary)]">
+            Recent creatives
+          </h3>
+          {creatives.length === 0 ? (
+            <p className="text-xs text-[var(--sf-text-muted)]">
+              No creatives yet — generate your first one.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {creatives.slice(0, 12).map((c) => (
+                <CreativeThumbnail
+                  key={c.id}
+                  c={c}
+                  brandName={brandName}
+                  onPreview={() =>
+                    setPreviewCreative({
+                      creative: {
+                        id: c.id,
+                        imageUrl: c.imageUrl,
+                        status: c.status,
+                        score: c.score,
+                        format: c.format,
+                        angle: c.angle,
+                      },
+                    })
+                  }
+                />
+              ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* Results */}
-      <div className="space-y-6">
-          {/* Batch progress */}
-          {batchData && (
-            <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Batch Progress</h2>
-                  <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
-                    {batchData.completedCount} / {batchData.totalCount} generated
-                    {" · "}
-                    <span className={
-                      batchData.status === "DONE" ? "text-green-600 font-medium"
-                      : batchData.status === "FAILED" ? "text-red-600 font-medium"
-                      : "text-blue-600"
-                    }>
-                      {batchData.status}
-                    </span>
-                  </p>
-                </div>
-                {batchData.status === "DONE" && (
-                  <button
-                    type="button"
-                    onClick={downloadBatchZip}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[var(--sf-accent)] text-white rounded-lg hover:bg-[var(--sf-accent-hover)] transition-colors"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    Download All
-                  </button>
-                )}
-              </div>
-
-              {/* Progress bar */}
-              <div className="h-2 bg-[var(--sf-bg-elevated)] rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    batchData.status === "FAILED" ? "bg-red-400" : "bg-[var(--sf-accent)]"
-                  }`}
-                  style={{ width: `${batchData.totalCount > 0 ? (batchData.completedCount / batchData.totalCount) * 100 : 0}%` }}
-                />
-              </div>
-
-              {/* Batch creatives gallery */}
-              {batchData.creatives.length > 0 && (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 pt-2">
-                  {batchData.creatives.map((c) => (
-                    <CreativeThumbnail key={c.id} c={c} brandName={brandName} onPreview={() => setPreviewCreative({ creative: c })} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Variants result */}
-          {variantResults && variantResults.length > 0 && (
-            <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] overflow-hidden">
-              <div className="px-6 py-4 border-b border-[var(--sf-border)]">
-                <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">3 Variants Generated</h2>
-                <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">Variant A · Variant B · Social Proof</p>
-              </div>
-              <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {variantResults.map((v, idx) => (
-                  <div key={v.creative.id} className="space-y-2">
-                    <div className="text-xs font-medium text-[var(--sf-text-secondary)] mb-1">
-                      Variant {["A", "B", "C"][idx]} — {v.creative.angle}
-                    </div>
-                    <div className="rounded-xl overflow-hidden border border-[var(--sf-border)] aspect-square bg-[var(--sf-bg-primary)] flex items-center justify-center relative group">
-                      {v.creative.imageUrl ? (
-                        <>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={v.creative.imageUrl}
-                            alt={`Variant ${["A", "B", "C"][idx]}`}
-                            className="w-full h-full object-cover"
-                          />
-                          {/* Two-action hover overlay */}
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setPreviewCreative({ creative: v.creative, inspirationSource: v.inspirationSource })}
-                              title="Preview"
-                              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 transition-colors flex items-center justify-center"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                              </svg>
-                            </button>
-                            <a
-                              href={v.creative.imageUrl}
-                              download={`${brandName}_variant${["A", "B", "C"][idx]}_${v.creative.angle}.png`}
-                              onClick={(e) => e.stopPropagation()}
-                              title="Download"
-                              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 transition-colors flex items-center justify-center"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                              </svg>
-                            </a>
-                          </div>
-                        </>
-                      ) : (
-                        <span className="text-xs text-[var(--sf-text-muted)]">No preview</span>
-                      )}
-                    </div>
-                    <div className="text-xs text-[var(--sf-text-secondary)]">
-                      Score: {v.qaResult.score != null ? Math.round(v.qaResult.score * 100) : "—"}%
-                      {" · "}
-                      <span className={v.qaResult.approved ? "text-green-600" : "text-amber-600"}>
-                        {v.qaResult.approved ? "Approved" : "Review"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Single result */}
-          {singleResult && (
-            <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] overflow-hidden">
-              <div className="px-6 py-4 border-b border-[var(--sf-border)] flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold text-[var(--sf-text-primary)]">Generated Creative</h2>
-                  <p className="text-xs text-[var(--sf-text-secondary)] mt-0.5">
-                    {singleResult.qaResult.iterations} QA iteration{singleResult.qaResult.iterations !== 1 ? "s" : ""}
-                    {" · "}Score: {Math.round(singleResult.qaResult.score * 100)}%
-                    {" · "}
-                    <span className={singleResult.qaResult.approved ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
-                      {singleResult.qaResult.approved ? "Approved" : "Needs review"}
-                    </span>
-                  </p>
-                </div>
-                {singleResult.creative.imageUrl && (
-                  <a
-                    href={singleResult.creative.imageUrl}
-                    download={`creative-${singleResult.creative.id}.png`}
-                    className="px-3 py-1.5 text-xs font-medium bg-[var(--sf-accent)] text-white rounded-lg hover:bg-[var(--sf-accent-hover)] transition-colors"
-                  >
-                    Download
-                  </a>
-                )}
-              </div>
-
-              {singleResult.creative.imageUrl ? (
-                <div
-                  className="p-4 bg-[var(--sf-bg-primary)] flex items-center justify-center min-h-64 cursor-pointer"
-                  onClick={() => setPreviewCreative({ creative: singleResult.creative, inspirationSource: singleResult.inspirationSource })}
-                  title="Click to preview"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={singleResult.creative.imageUrl}
-                    alt="Generated creative"
-                    className="max-w-full max-h-[600px] rounded-xl shadow-lg object-contain"
-                  />
-                </div>
-              ) : (
-                <div className="p-8 text-center text-sm text-[var(--sf-text-muted)]">Image not available</div>
-              )}
-
-              {singleResult.qaResult.feedback && (
-                <div className="px-6 py-4 border-t border-[var(--sf-border)]">
-                  <p className="text-xs text-[var(--sf-text-secondary)] font-medium mb-1">QA Feedback</p>
-                  <p className="text-sm text-[var(--sf-text-primary)]">{singleResult.qaResult.feedback}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Previous creatives gallery */}
-          {creatives.length > 0 && !batchData && (
-            <div className="bg-[var(--sf-bg-secondary)] rounded-xl border border-[var(--sf-border)] p-6">
-              <h2 className="text-sm font-semibold text-[var(--sf-text-primary)] mb-4">
-                Previous Creatives ({creatives.length})
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {creatives.map((c) => (
-                  <CreativeThumbnail key={c.id} c={c} brandName={brandName} onPreview={() => setPreviewCreative({ creative: c })} />
-                ))}
-              </div>
-            </div>
-          )}
-
-      {/* Lightbox preview modal */}
+      {/* Lightbox */}
       {previewCreative && (
         <CreativePreviewModal
           creative={previewCreative.creative}
@@ -943,19 +1125,6 @@ export default function GenerateClient({ brandId, brandName, existingCreatives }
           onClose={() => setPreviewCreative(null)}
         />
       )}
-
-          {creatives.length === 0 && !singleResult && !variantResults && !batchData && (
-            <div className="bg-[var(--sf-bg-secondary)] rounded-lg border-2 border-dashed border-[var(--sf-border)] p-16 text-center">
-              <div className="w-12 h-12 rounded-md flex items-center justify-center mx-auto mb-4" style={{ background: "var(--sf-accent-muted)" }}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--sf-accent)" }}><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
-              </div>
-              <h2 className="text-lg font-semibold text-[var(--sf-text-primary)] mb-2">No creatives yet</h2>
-              <p className="text-sm text-[var(--sf-text-secondary)]">
-                Configure the options above and hit Generate.
-              </p>
-            </div>
-          )}
-        </div>
     </div>
   );
 }

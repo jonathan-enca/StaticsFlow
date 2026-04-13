@@ -95,6 +95,11 @@ async function generateOne(
       creative.id,
       { anthropicApiKey, geminiApiKey, inspirationTemplates, imageQuality, creativeBrief, referenceImageUrl, referenceImageData }
     );
+    // Phase C: pass inspiration URL for dual scoring (fidelity + brand consistency)
+    // Only used when a brand-library inspiration drove the generation (has inspirationId)
+    const inspirationImageUrlForQA =
+      inspirationId && referenceImageUrl ? referenceImageUrl : undefined;
+
     const qaResult = await qaReviewCreative(
       generated,
       brandDna,
@@ -104,7 +109,8 @@ async function generateOne(
       brandId,
       creative.id,
       2,
-      imageQuality
+      imageQuality,
+      inspirationImageUrlForQA
     );
     const updated = await prisma.creative.update({
       where: { id: creative.id },

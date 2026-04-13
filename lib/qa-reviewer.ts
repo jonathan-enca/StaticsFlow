@@ -29,6 +29,10 @@ export interface QAResult {
  * Claude QA review of a generated creative.
  * If quality is insufficient (score < 0.7), triggers one regeneration with feedback.
  * Returns the best result after max 2 attempts.
+ *
+ * Phase C dual scoring (STA-95):
+ * When inspirationImageUrl is provided, composite score = 0.6 × fidelity + 0.4 × brand_consistency.
+ * Brand-only mode (no inspiration) uses the single brand consistency score as before.
  */
 export async function qaReviewCreative(
   creative: GeneratedCreative,
@@ -39,24 +43,48 @@ export async function qaReviewCreative(
   brandId?: string,
   creativeId?: string,
   maxIterations = 2,
-  imageQuality?: ImageQuality
+  imageQuality?: ImageQuality,
+  inspirationImageUrl?: string // Phase C: if set, enables dual scoring
 ): Promise<QAResult> {
+  // Fetch inspiration image as base64 once (reused across iterations)
+  let inspirationBase64: string | undefined;
+  if (inspirationImageUrl) {
+    try {
+      const res = await fetch(inspirationImageUrl);
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        inspirationBase64 = Buffer.from(buf).toString("base64");
+      }
+    } catch {
+      // Non-fatal — degrade gracefully to brand-only scoring
+      console.warn("[qa] Could not fetch inspiration image for dual scoring");
+    }
+  }
+
   let currentCreative = creative;
   let iteration = 0;
   let lastResult: QAReviewResponse | null = null;
 
   while (iteration < maxIterations) {
     iteration++;
-    lastResult = await runQAReview(currentCreative, brandDna, anthropicApiKey);
+    lastResult = await runQAReview(currentCreative, brandDna, anthropicApiKey, inspirationBase64);
 
-    if (lastResult.score >= 0.7) {
-      // Quality threshold met — approve
+    // Composite score: fidelity (0.6) + brand consistency (0.4) when inspiration present
+    const effectiveScore =
+      inspirationBase64 &&
+      lastResult.fidelityScore !== undefined &&
+      lastResult.brandScore !== undefined
+        ? 0.6 * lastResult.fidelityScore + 0.4 * lastResult.brandScore
+        : lastResult.score;
+
+    if (effectiveScore >= 0.7) {
+      // Inject the composite score so the result reflects dual scoring
+      lastResult = { ...lastResult, score: effectiveScore };
       break;
     }
 
     if (iteration < maxIterations) {
-      // Build structured feedback for Gemini: visual fixes first, then copy fixes
-      console.log(`[qa] Iteration ${iteration} score ${lastResult.score} — regenerating with feedback`);
+      console.log(`[qa] Iteration ${iteration} score ${effectiveScore.toFixed(2)} — regenerating with feedback`);
       const structuredFeedback = buildRegenerationFeedback(lastResult);
       currentCreative = await regenerateImageWithFeedback(
         currentCreative,
@@ -67,6 +95,9 @@ export async function qaReviewCreative(
         geminiApiKey,
         imageQuality
       );
+    } else {
+      // Last iteration — store composite score
+      lastResult = { ...lastResult, score: effectiveScore };
     }
   }
 
@@ -117,12 +148,16 @@ interface QAReviewResponse {
   copyImprovements: string[];
   brandImprovements: string[];
   metaComplianceIssues: string[];
+  // Phase C dual scoring — only set when inspiration image is provided
+  fidelityScore?: number;
+  brandScore?: number;
 }
 
 async function runQAReview(
   creative: GeneratedCreative,
   brandDna: ExtractedBrandDNA,
-  apiKey?: string
+  apiKey?: string,
+  inspirationBase64?: string
 ): Promise<QAReviewResponse> {
   const client = createClaudeClient(apiKey);
 
@@ -134,6 +169,7 @@ async function runQAReview(
   }
 
   const hasImage = Boolean(imageBase64);
+  const hasInspiration = Boolean(inspirationBase64);
 
   // STA-85 + STA-87: Build additional compliance check block for the QA prompt
   const additionalComplianceSection = (() => {
@@ -238,16 +274,39 @@ SCORING GUIDE:
 - 0.5–0.69: Average. Would not pass for a demanding brand. Regeneration needed.
 - 0.3–0.49: Generic or significantly off-brand. Fails the "internal team" test.
 - 0.0–0.29: Clearly wrong — wrong colors, wrong tone, visible errors, or would be rejected by Meta.
-
+${hasInspiration ? `
+INSPIRATION FIDELITY (dual scoring mode — STA-95):
+You have been shown the inspiration image first, then the generated creative.
+In addition to the overall score, score fidelityScore (0–1) for how faithfully the generated creative clones the structural layout of the inspiration:
+- 0.9–1.0: Near-identical structure — same layout zones, visual hierarchy, and composition
+- 0.7–0.89: Clear structural similarity — key zones recognisable, some adaptation is fine
+- 0.5–0.69: Loosely inspired — major structural differences
+- 0.0–0.49: No recognisable structural relationship
+Also score brandScore (0–1) purely for brand DNA alignment (tone, colors, persona, forbidden words).
+Final composite = 0.6 × fidelityScore + 0.4 × brandScore (computed externally — do not set score to the composite).
+` : ""}
 Call the submit_qa_review tool with your full assessment.`;
 
   // Build the message content: include the image when available (Claude vision)
+  // Phase C: prepend inspiration image first when dual scoring is active
   type ContentBlock =
     | { type: "text"; text: string }
     | { type: "image"; source: { type: "base64"; media_type: "image/png"; data: string } };
 
   const content: ContentBlock[] = [];
+
+  if (hasInspiration) {
+    content.push({ type: "text", text: "INSPIRATION IMAGE (structural template to clone):" });
+    content.push({
+      type: "image",
+      source: { type: "base64", media_type: "image/png", data: inspirationBase64! },
+    });
+  }
+
   if (hasImage) {
+    if (hasInspiration) {
+      content.push({ type: "text", text: "GENERATED CREATIVE (what you are reviewing):" });
+    }
     content.push({
       type: "image",
       source: { type: "base64", media_type: "image/png", data: imageBase64! },
@@ -321,6 +380,16 @@ Call the submit_qa_review tool with your full assessment.`;
               items: { type: "string" },
               description: "Combined list of the top 3 most impactful improvements (prioritised by score impact)",
             },
+            ...(hasInspiration && {
+              fidelityScore: {
+                type: "number",
+                description: "Structural fidelity to inspiration image (0–1). How faithfully the generated creative clones the layout, visual hierarchy, and composition of the inspiration.",
+              },
+              brandScore: {
+                type: "number",
+                description: "Brand DNA alignment score (0–1). Tone, colors, personas, forbidden words, required wording — independent of fidelity.",
+              },
+            }),
           },
           required: [
             "score", "approved", "feedback",
