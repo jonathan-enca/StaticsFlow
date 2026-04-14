@@ -131,20 +131,21 @@ function dedupeAndFilter(urls: string[]): string[] {
 // Returns [] if no credentials are available or the call fails.
 //
 // ad_type handling:
-//   - User tokens: support ad_type=IMAGE (server-side filter, clean results)
-//   - App tokens:  only support ad_type=ALL — we filter images client-side via
-//                  the presence of ad_creative_images on each ad object
+//   Meta deprecated ad_type=IMAGE for the ads_archive endpoint — it is now
+//   rejected with code 100 for all token types. Use ad_type=ALL and filter
+//   image ads client-side by checking for the ad_creative_images field.
 
 async function graphApiScrape(pageId: string): Promise<string[]> {
   let token: string | undefined;
-  let isAppToken = false;
 
-  // Path 1: User Access Token (fastest path, no App Review needed)
+  // Path 1: User Access Token (fastest path, no App Review needed).
+  // Requires user to be registered at facebook.com/ads/library/api.
+  // Expires every ~60 days — renew via Graph API Explorer.
   const userToken = process.env.META_USER_TOKEN;
   if (userToken) {
     token = userToken;
   } else {
-    // Path 2: Client credential token (never expires, requires App Review)
+    // Path 2: Client credential token (never expires, requires App Review).
     const appId = process.env.META_APP_ID;
     const appSecret = process.env.META_APP_SECRET;
     if (!appId || !appSecret) return [];
@@ -159,17 +160,16 @@ async function graphApiScrape(pageId: string): Promise<string[]> {
     if (!tokenRes.ok) return [];
     const tokenData = (await tokenRes.json()) as { access_token?: string };
     token = tokenData.access_token;
-    isAppToken = true;
   }
 
   if (!token) return [];
 
-  // App tokens only support ad_type ALL (IMAGE is reserved for user tokens).
-  // We get image URLs client-side by checking for the ad_creative_images field.
+  // Use ad_type=ALL — Meta no longer accepts ad_type=IMAGE on this endpoint.
+  // Image ads are identified client-side by the presence of ad_creative_images.
   const params = new URLSearchParams({
     search_type: "PAGE",
     view_all_page_id: pageId,
-    ad_type: isAppToken ? "ALL" : "IMAGE",
+    ad_type: "ALL",
     ad_reached_countries: '["US"]',
     fields: "id,ad_creative_images",
     limit: "60",
