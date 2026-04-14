@@ -572,6 +572,13 @@ function MetaAdsImportModal({
       setStep("result");
       if (data.summary?.imported > 0) {
         onImported(data.summary.imported);
+        // Auto-analyze each newly imported inspiration (fire-and-forget)
+        const importedIds: string[] = (data.results ?? [])
+          .filter((r: { status: string; inspirationId?: string }) => r.status === "imported" && r.inspirationId)
+          .map((r: { inspirationId: string }) => r.inspirationId);
+        for (const id of importedIds) {
+          fetch(`/api/brands/${brandId}/inspirations/${id}/analyze`, { method: "POST" }).catch(() => {});
+        }
       }
     } catch {
       setSummary({ imported: 0, duplicates: 0, failed: selectedUrls.size });
@@ -641,9 +648,15 @@ function MetaAdsImportModal({
                 <ol className="list-decimal list-inside space-y-1 text-xs" style={{ color: "var(--sf-text-secondary)" }}>
                   <li>
                     Go to{" "}
-                    <span className="font-mono" style={{ color: "var(--sf-accent)" }}>
+                    <a
+                      href="https://www.facebook.com/ads/library"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono underline underline-offset-2 hover:opacity-80"
+                      style={{ color: "var(--sf-accent)" }}
+                    >
                       facebook.com/ads/library
-                    </span>
+                    </a>
                   </li>
                   <li>Search for the brand or page you want to analyze</li>
                   <li>Open the page&apos;s full ad library (click &quot;See all ads&quot;)</li>
