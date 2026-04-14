@@ -12,7 +12,7 @@
 import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import type { Inspiration } from "@prisma/client";
-import { Sparkles, X, Check, Loader2 } from "lucide-react";
+import { Sparkles, X, Check, Loader2, Link as LinkIcon } from "lucide-react";
 
 const MIN_FOR_GENERATION = 5;
 const MAX_PER_BRAND = 50;
@@ -361,6 +361,129 @@ function UploadZone({
   );
 }
 
+// ── Import from URL modal ─────────────────────────────────────────────────────
+function ImportFromUrlModal({
+  brandId,
+  onImported,
+  onClose,
+}: {
+  brandId: string;
+  onImported: (inspiration: Inspiration) => void;
+  onClose: () => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [fetching, setFetching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFetch() {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    setError(null);
+    setFetching(true);
+    try {
+      const res = await fetch(`/api/brands/${brandId}/inspirations/import-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmed }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message ?? data.error ?? "Could not fetch that URL automatically. Try saving the image and uploading it directly.");
+        return;
+      }
+      onImported(data.inspiration);
+      onClose();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setFetching(false);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") handleFetch();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.5)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden"
+        style={{ background: "var(--sf-bg-secondary)", borderColor: "var(--sf-border)" }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--sf-border)" }}>
+          <div>
+            <h2 className="font-bold text-sm" style={{ color: "var(--sf-text-primary)" }}>Import from URL</h2>
+            <p className="text-xs mt-0.5" style={{ color: "var(--sf-text-muted)" }}>
+              Paste a direct image URL or an ad page URL
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: "var(--sf-text-muted)" }}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-4">
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="https://example.com/ad-image.jpg"
+              autoFocus
+              className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
+              style={{
+                background: "var(--sf-bg-primary)",
+                borderColor: "var(--sf-border)",
+                color: "var(--sf-text-primary)",
+              }}
+              disabled={fetching}
+            />
+            <button
+              type="button"
+              onClick={handleFetch}
+              disabled={fetching || !url.trim()}
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-white flex items-center gap-1.5 disabled:opacity-40 transition-opacity hover:opacity-90"
+              style={{ background: "var(--sf-accent)" }}
+            >
+              {fetching ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                "Fetch"
+              )}
+            </button>
+          </div>
+
+          {error && (
+            <p
+              className="rounded-lg px-3 py-2 text-xs"
+              style={{ background: "rgba(255,69,58,0.08)", color: "var(--sf-error)" }}
+            >
+              {error}
+            </p>
+          )}
+
+          {/* Hint */}
+          <p className="text-xs" style={{ color: "var(--sf-text-muted)" }}>
+            Works great with direct image URLs (.jpg, .png, .webp). For Meta Ads Library, save the ad screenshot manually and upload it — Meta blocks automated fetching.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Starter pack picker ───────────────────────────────────────────────────────
 
 interface TemplateSummary {
@@ -620,6 +743,7 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
   const [filterFormat, setFilterFormat] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showStarterPack, setShowStarterPack] = useState(false);
+  const [showImportUrl, setShowImportUrl] = useState(false);
 
   const activeCount = inspirations.filter((i) => i.isActive).length;
 
@@ -671,6 +795,10 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
     return true;
   });
 
+  function handleImported(ins: Inspiration) {
+    setInspirations((prev) => [ins, ...prev]);
+  }
+
   return (
     <div>
       {/* Starter pack modal */}
@@ -682,6 +810,15 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
             window.location.reload();
           }}
           onClose={() => setShowStarterPack(false)}
+        />
+      )}
+
+      {/* Import from URL modal */}
+      {showImportUrl && (
+        <ImportFromUrlModal
+          brandId={brandId}
+          onImported={handleImported}
+          onClose={() => setShowImportUrl(false)}
         />
       )}
 
@@ -733,12 +870,42 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
         ))}
       </div>
 
-      {/* Upload zone */}
+      {/* Upload zone + Import from URL */}
       <UploadZone
         brandId={brandId}
         count={inspirations.length}
         onUploaded={handleUploaded}
       />
+
+      {/* Secondary import actions */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setShowImportUrl(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:opacity-80"
+          style={{
+            borderColor: "var(--sf-border)",
+            background: "var(--sf-bg-secondary)",
+            color: "var(--sf-text-secondary)",
+          }}
+        >
+          <LinkIcon className="w-3.5 h-3.5" />
+          Import from URL
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowStarterPack(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:opacity-80"
+          style={{
+            borderColor: "var(--sf-border)",
+            background: "var(--sf-bg-secondary)",
+            color: "var(--sf-text-secondary)",
+          }}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          Starter pack
+        </button>
+      </div>
 
       {/* Filter bar */}
       {inspirations.length > 0 && (
