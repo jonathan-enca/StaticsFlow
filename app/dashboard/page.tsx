@@ -166,9 +166,9 @@ export default async function DashboardPage() {
                     <PillarCard
                       label="Inspirations"
                       done={pillar3Done}
-                      detail={`${inspirationCount}/5 uploaded`}
+                      detail={`${inspirationCount} uploaded`}
                       href={`/dashboard/brands/${brand.id}/inspirations`}
-                      actionLabel={inspirationCount === 0 ? "Add inspirations →" : `Add ${5 - inspirationCount} more →`}
+                      actionLabel={pillar3Done ? "Manage →" : inspirationCount === 0 ? "Add inspirations →" : `Add ${5 - inspirationCount} more →`}
                     />
                   </div>
 
@@ -278,15 +278,13 @@ function PillarCard({
       <p className="text-xs" style={{ color: "var(--sf-text-muted)" }}>
         {detail}
       </p>
-      {!done && (
-        <a
-          href={href}
-          className="block text-xs font-medium hover:underline"
-          style={{ color: "var(--sf-accent)" }}
-        >
-          {actionLabel}
-        </a>
-      )}
+      <a
+        href={href}
+        className="block text-xs font-medium hover:underline"
+        style={{ color: done ? "var(--sf-text-muted)" : "var(--sf-accent)" }}
+      >
+        {actionLabel}
+      </a>
     </div>
   );
 }
