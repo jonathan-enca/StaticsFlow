@@ -13,13 +13,16 @@
 //   2. Puppeteer with network response interception — fallback when Graph API unavailable.
 //      Uses `domcontentloaded` + fixed wait; wraps goto in its own try-catch.
 //
-// NOTE on Vercel: Puppeteer bundles ~300 MB of Chromium which exceeds Vercel's 50 MB
-// function limit. The Graph API path has no binary-size issue (plain fetch only).
+// NOTE on Vercel: The full `puppeteer` package bundles ~300 MB of Chromium which
+// exceeds Vercel's 50 MB function limit. We use:
+//   - Development: puppeteer (bundled Chromium, zero config)
+//   - Production:  puppeteer-core + @sparticuz/chromium-min (downloads Chromium from S3
+//                  into /tmp at runtime — no binary in the function bundle)
+// Set CHROMIUM_REMOTE_EXEC_PATH to override the remote Chromium tar URL if needed.
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import puppeteer from "puppeteer";
 
 export const maxDuration = 60;
 
@@ -140,18 +143,51 @@ async function graphApiScrape(pageId: string): Promise<string[]> {
 // ── Puppeteer scrape ──────────────────────────────────────────────────────────
 // Uses network response interception to capture images as they are fetched by the
 // browser — more reliable than DOM inspection of virtualized React lists.
+//
+// Browser resolution:
+//   - NODE_ENV !== 'production': use full `puppeteer` with bundled Chromium (local dev).
+//   - NODE_ENV === 'production': use `puppeteer-core` + `@sparticuz/chromium-min`.
+//     chromium-min downloads a compressed Chromium build from S3 into /tmp at runtime,
+//     keeping the Vercel function bundle well under the 50 MB limit.
+
+async function launchBrowser() {
+  if (process.env.NODE_ENV !== "production") {
+    // Local dev: full puppeteer with bundled Chromium
+    const puppeteer = await import("puppeteer");
+    return puppeteer.default.launch({
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-extensions",
+      ],
+    });
+  }
+
+  // Vercel / serverless: puppeteer-core + @sparticuz/chromium-min
+  const [{ default: chromium }, { default: puppeteerCore }] = await Promise.all([
+    import("@sparticuz/chromium-min"),
+    import("puppeteer-core"),
+  ]);
+
+  // Allow overriding the remote Chromium tarball URL via env var
+  const remoteUrl =
+    process.env.CHROMIUM_REMOTE_EXEC_PATH ??
+    "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar";
+
+  const executablePath = await chromium.executablePath(remoteUrl);
+
+  return puppeteerCore.launch({
+    args: chromium.args,
+    executablePath,
+    headless: true,
+  });
+}
 
 async function puppeteerScrape(url: string): Promise<string[]> {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--disable-extensions",
-    ],
-  });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();
