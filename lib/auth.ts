@@ -44,13 +44,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
 
   callbacks: {
-    // Persist user id in the JWT so it's available in server components via auth()
+    // Persist user id and isAdmin in the JWT so they're available in server components via auth()
     async jwt({ token, user }) {
-      if (user) token.id = user.id;
+      if (user) {
+        token.id = user.id;
+        // Fetch isAdmin from DB on initial sign-in
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id as string },
+          select: { isAdmin: true },
+        });
+        token.isAdmin = dbUser?.isAdmin ?? false;
+      }
       return token;
     },
     async session({ session, token }) {
       if (token.id) session.user.id = token.id as string;
+      if (token.isAdmin !== undefined) session.user.isAdmin = token.isAdmin as boolean;
       return session;
     },
   },

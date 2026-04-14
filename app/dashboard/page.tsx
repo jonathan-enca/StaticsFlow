@@ -30,7 +30,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
-      <AppNavbar email={session.user?.email} />
+      <AppNavbar email={session.user?.email} brandId={brands[0]?.id ?? null} isAdmin={session.user?.isAdmin} />
 
       <div className="max-w-5xl mx-auto px-6 py-12">
         <div className="flex items-center justify-between mb-10">

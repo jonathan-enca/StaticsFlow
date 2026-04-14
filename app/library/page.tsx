@@ -33,9 +33,15 @@ export default async function LibraryPage() {
   // Count all templates for the header stat
   const totalTemplates = await prisma.template.count();
 
+  const lastBrand = await prisma.brand.findFirst({
+    where: { userId: session.user.id },
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true },
+  });
+
   return (
     <main className="min-h-screen" style={{ background: 'var(--sf-bg-primary)' }}>
-      <AppNavbar email={session.user?.email} />
+      <AppNavbar email={session.user?.email} brandId={lastBrand?.id ?? null} isAdmin={session.user?.isAdmin} />
 
       {/* Header */}
       <div className="max-w-7xl mx-auto px-6 py-10">

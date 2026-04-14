@@ -4,6 +4,7 @@
 
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import AppNavbar from "@/components/AppNavbar";
 
 export const metadata = {
@@ -15,9 +16,15 @@ export default async function HistoryPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
+  const lastBrand = await prisma.brand.findFirst({
+    where: { userId: session.user.id },
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true },
+  });
+
   return (
     <main className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
-      <AppNavbar email={session.user?.email} />
+      <AppNavbar email={session.user?.email} brandId={lastBrand?.id ?? null} isAdmin={session.user?.isAdmin} />
 
       <div className="max-w-4xl mx-auto px-6 py-16 text-center">
         <div

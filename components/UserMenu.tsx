@@ -9,15 +9,15 @@ import { signOut } from 'next-auth/react'
 
 interface UserMenuProps {
   email?: string | null
+  isAdmin?: boolean
 }
 
 const MENU_ITEMS = [
   { label: 'Account settings', href: '/dashboard/settings' },
   { label: 'API Keys',         href: '/dashboard/settings?tab=api-keys' },
-  { label: 'Billing & Plan',   href: '/dashboard/settings?tab=billing' },
 ]
 
-export default function UserMenu({ email }: UserMenuProps) {
+export default function UserMenu({ email, isAdmin }: UserMenuProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -97,6 +97,23 @@ export default function UserMenu({ email }: UserMenuProps) {
           ))}
 
           <div className="my-1 border-t" style={{ borderColor: 'var(--sf-border)' }} />
+
+          {isAdmin && (
+            <a
+              href="/admin"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 px-3 py-2 text-sm transition-colors"
+              style={{ color: 'var(--sf-text-primary)' }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = 'var(--sf-bg-secondary)')
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = 'transparent')
+              }
+            >
+              Admin
+            </a>
+          )}
 
           <button
             type="button"

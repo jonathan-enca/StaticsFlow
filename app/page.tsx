@@ -509,8 +509,6 @@ function Footer() {
         <div className="flex items-center gap-6">
           <a href="#features" className="hover:opacity-80 transition-opacity">Features</a>
           <a href="#pricing" className="hover:opacity-80 transition-opacity">Pricing</a>
-          <a href="/privacy" className="hover:opacity-80 transition-opacity">Privacy</a>
-          <a href="/terms" className="hover:opacity-80 transition-opacity">Terms</a>
         </div>
       </div>
     </footer>

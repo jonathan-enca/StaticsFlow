@@ -12,24 +12,23 @@ import UserMenu from '@/components/UserMenu'
 
 interface AppNavbarProps {
   email?: string | null
-  brandId?: string | null // Active brand context — needed for Generator deep-link
+  brandId?: string | null   // Active brand context — needed for Generator deep-link
+  isAdmin?: boolean
 }
 
 const NAV_LINKS = [
-  { label: 'Dashboard',  href: '/dashboard' },
-  { label: 'Library',    href: '/library' },
-  { label: 'Brand DNA',  href: '/brand-dna' },
-  { label: 'Generator',  href: null }, // dynamic — requires brandId; see below
-  { label: 'History',    href: '/history' },
+  { label: 'Dashboard', href: '/dashboard' },
+  { label: 'Library',   href: '/library' },
+  { label: 'Brand DNA', href: '/brand-dna' },
+  { label: 'Generator', href: null }, // dynamic — requires brandId; see below
 ]
 
 const MOBILE_UTILITY = [
   { label: 'Account settings', href: '/dashboard/settings' },
   { label: 'API Keys',         href: '/dashboard/settings?tab=api-keys' },
-  { label: 'Billing & Plan',   href: '/dashboard/settings?tab=billing' },
 ]
 
-export default function AppNavbar({ email, brandId }: AppNavbarProps) {
+export default function AppNavbar({ email, brandId, isAdmin }: AppNavbarProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const overlayRef = useRef<HTMLDivElement>(null)
@@ -51,8 +50,12 @@ export default function AppNavbar({ email, brandId }: AppNavbarProps) {
 
   function isActive(href: string | null): boolean {
     if (!href) return pathname.includes('/generate')
-    if (href === '/dashboard') {
-      return pathname === '/dashboard' || pathname.startsWith('/dashboard/brands')
+    if (href === '/dashboard') return pathname === '/dashboard'
+    if (href === '/brand-dna') {
+      return pathname.startsWith('/dashboard/brands') &&
+        !pathname.includes('/generate') &&
+        !pathname.includes('/products') &&
+        !pathname.includes('/inspirations')
     }
     return pathname.startsWith(href)
   }
@@ -125,7 +128,7 @@ export default function AppNavbar({ email, brandId }: AppNavbarProps) {
         <div className="flex items-center gap-3">
           {/* User menu avatar — desktop only (mobile uses slide panel) */}
           <div className="hidden md:block">
-            <UserMenu email={email} />
+            <UserMenu email={email} isAdmin={isAdmin} />
           </div>
 
           {/* Hamburger button — mobile only */}
