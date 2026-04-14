@@ -53,14 +53,22 @@ function extractPageId(raw: string): string | null {
   }
 }
 
+// CDN type codes that indicate profile/page photos, NOT ad creatives.
+// Meta's scontent CDN uses /tX.YYYYY-Z/ path segments to encode asset types:
+//   t1.30497-1, t1.6435-1, t1.0-9 → profile pictures / page logos
+//   t45.5-23, t39.30808-6         → ad creative images / sprites
+// Filtering these out removes repeated brand logos from the result set.
+const META_PROFILE_CDN_RE = /\/t1\.\d/;
+
 function dedupeAndFilter(urls: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const u of urls) {
     if (seen.has(u)) continue;
     seen.add(u);
-    // Skip profile pics, tiny thumbnails, UI assets
+    // Skip profile pics, tiny thumbnails, page logos, UI assets
     if (
+      META_PROFILE_CDN_RE.test(u) ||   // brand logos / profile photos (/t1.XXXXX/)
       u.includes("/profile") ||
       u.includes("emoji_") ||
       u.includes("_t.") ||
@@ -199,7 +207,8 @@ async function puppeteerScrape(url: string): Promise<string[]> {
     await page.setViewport({ width: 1280, height: 900 });
     await page.setExtraHTTPHeaders({ "Accept-Language": "en-US,en;q=0.9" });
 
-    // Intercept responses to capture image URLs as they stream in
+    // Intercept responses to capture image URLs as they stream in.
+    // We collect raw URLs here and filter logos/dupes in dedupeAndFilter().
     const capturedUrls: string[] = [];
     page.on("response", (response) => {
       const resUrl = response.url();
@@ -215,7 +224,7 @@ async function puppeteerScrape(url: string): Promise<string[]> {
     // A navigation timeout here is NOT fatal — the page may have partially loaded
     // and we still get intercepted images.
     try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25_000 });
     } catch {
       // Partial navigation — continue and use whatever was intercepted
     }
@@ -226,14 +235,16 @@ async function puppeteerScrape(url: string): Promise<string[]> {
       return [];
     }
 
-    // Wait for initial JS render
-    await new Promise<void>((r) => setTimeout(r, 3_000));
+    // Wait for initial JS render (reduced from 3s → 2s)
+    await new Promise<void>((r) => setTimeout(r, 2_000));
 
-    // Scroll to trigger lazy-loading of more ads
-    await page.evaluate(() => window.scrollBy(0, 700));
-    await new Promise<void>((r) => setTimeout(r, 1_500));
-    await page.evaluate(() => window.scrollBy(0, 700));
-    await new Promise<void>((r) => setTimeout(r, 1_000));
+    // Scroll to trigger lazy-loading of more ads; bail early if we already
+    // have enough candidate images to fill MAX_RESULTS after filtering.
+    for (const delay of [1_000, 800]) {
+      if (dedupeAndFilter(capturedUrls).length >= MAX_RESULTS) break;
+      await page.evaluate(() => window.scrollBy(0, 800));
+      await new Promise<void>((r) => setTimeout(r, delay));
+    }
 
     // Also collect <img> src values from the DOM as a secondary source
     const domSrcs: string[] = await page
