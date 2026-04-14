@@ -1,29 +1,30 @@
 // POST /api/brands/[brandId]/inspirations/meta-scrape
-// Puppeteer headless scrape of a Meta Ads Library URL.
-// Returns up to 15 candidate static ad image URLs. Does NOT import — that's meta-import.
+// Scrapes a Meta Ads Library URL and returns up to 15 static ad image URLs (no import).
 //
-// NOTE: Puppeteer ships with a bundled Chromium (~300MB) that may exceed Vercel's 50MB
-// serverless function limit. If that becomes an issue in production, proxy this route through
-// a Railway server using puppeteer-core + @sparticuz/chromium instead.
+// Strategy (in order):
+//   1. Meta Ads Library Graph API — uses META_APP_ID + META_APP_SECRET env vars if set.
+//      This is the reliable path. Requires a registered Facebook App.
+//   2. Puppeteer with network response interception — captures images as they load over
+//      the network, avoiding DOM-inspection issues with React virtualised lists.
+//      Uses `domcontentloaded` + fixed wait; wraps goto in its own try-catch so a
+//      partial navigation timeout still yields whatever content loaded.
 //
-// Constraints:
-//   - Only accepts facebook.com/ads/library URLs
-//   - Filters to Meta CDN image URLs (scontent*.fbcdn.net)
-//   - Returns at most 15 unique image URLs
-//   - Graceful fallback on scraping failure → friendly error
+// NOTE on Vercel: Puppeteer bundles ~300 MB of Chromium which exceeds Vercel's 50 MB
+// function limit. In that case, proxy via a Railway server using puppeteer-core +
+// @sparticuz/chromium. The Graph API path has no binary-size issue.
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import puppeteer from "puppeteer";
 
-// Longer timeout needed for Puppeteer
 export const maxDuration = 60;
 
 const MAX_RESULTS = 15;
-
-// Meta ad image CDN — scontent-*.fbcdn.net or scontent.fbcdn.net
 const META_CDN_RE = /scontent[-\w.]*\.(fbcdn|facebook)\.net/i;
+const META_GRAPH_VERSION = "v19.0";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isMetaAdsLibraryUrl(raw: string): boolean {
   try {
@@ -37,11 +38,182 @@ function isMetaAdsLibraryUrl(raw: string): boolean {
   }
 }
 
+function extractPageId(raw: string): string | null {
+  try {
+    const u = new URL(raw);
+    return u.searchParams.get("view_all_page_id") ?? u.searchParams.get("id");
+  } catch {
+    return null;
+  }
+}
+
+function dedupeAndFilter(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const u of urls) {
+    if (seen.has(u)) continue;
+    seen.add(u);
+    // Skip profile pics, tiny thumbnails, UI assets
+    if (
+      u.includes("/profile") ||
+      u.includes("emoji_") ||
+      u.includes("_t.") ||
+      u.includes("/rsrc.php")
+    ) {
+      continue;
+    }
+    out.push(u);
+    if (out.length >= MAX_RESULTS) break;
+  }
+  return out;
+}
+
+// ── Graph API scrape ──────────────────────────────────────────────────────────
+// Requires META_APP_ID + META_APP_SECRET env vars (system-level Facebook App).
+// Returns [] if credentials are absent or the API call fails.
+
+async function graphApiScrape(pageId: string): Promise<string[]> {
+  const appId = process.env.META_APP_ID;
+  const appSecret = process.env.META_APP_SECRET;
+  if (!appId || !appSecret) return [];
+
+  // Generate a client credential access token
+  const tokenRes = await fetch(
+    `https://graph.facebook.com/oauth/access_token` +
+      `?client_id=${encodeURIComponent(appId)}` +
+      `&client_secret=${encodeURIComponent(appSecret)}` +
+      `&grant_type=client_credentials`,
+    { signal: AbortSignal.timeout(10_000) }
+  );
+  if (!tokenRes.ok) return [];
+  const tokenData = (await tokenRes.json()) as { access_token?: string };
+  const token = tokenData.access_token;
+  if (!token) return [];
+
+  // Query the Ads Library API for image ads from this page
+  const params = new URLSearchParams({
+    search_type: "PAGE",
+    view_all_page_id: pageId,
+    ad_type: "ALL",
+    ad_reached_countries: '["US"]',
+    fields: "id,ad_creative_images",
+    limit: "30",
+    access_token: token,
+  });
+
+  const adsRes = await fetch(
+    `https://graph.facebook.com/${META_GRAPH_VERSION}/ads_archive?${params}`,
+    { signal: AbortSignal.timeout(15_000) }
+  );
+  if (!adsRes.ok) return [];
+
+  const adsData = (await adsRes.json()) as {
+    data?: Array<{ id: string; ad_creative_images?: Array<{ url: string }> }>;
+  };
+
+  const imageUrls: string[] = [];
+  for (const ad of adsData.data ?? []) {
+    for (const img of ad.ad_creative_images ?? []) {
+      if (img.url && META_CDN_RE.test(img.url)) {
+        imageUrls.push(img.url);
+      }
+    }
+  }
+
+  return dedupeAndFilter(imageUrls);
+}
+
+// ── Puppeteer scrape ──────────────────────────────────────────────────────────
+// Uses network response interception to capture images as they are fetched by the
+// browser — more reliable than DOM inspection of virtualized React lists.
+
+async function puppeteerScrape(url: string): Promise<string[]> {
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-extensions",
+    ],
+  });
+
+  try {
+    const page = await browser.newPage();
+
+    await page.setUserAgent(
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    );
+    await page.setViewport({ width: 1280, height: 900 });
+    await page.setExtraHTTPHeaders({ "Accept-Language": "en-US,en;q=0.9" });
+
+    // Intercept responses to capture image URLs as they stream in
+    const capturedUrls: string[] = [];
+    page.on("response", (response) => {
+      const resUrl = response.url();
+      if (
+        META_CDN_RE.test(resUrl) &&
+        response.request().resourceType() === "image"
+      ) {
+        capturedUrls.push(resUrl);
+      }
+    });
+
+    // domcontentloaded is far more reliable than networkidle2 for Meta's SPA.
+    // A navigation timeout here is NOT fatal — the page may have partially loaded
+    // and we still get intercepted images.
+    try {
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    } catch {
+      // Partial navigation — continue and use whatever was intercepted
+    }
+
+    // Bail early if Meta redirected to login
+    const finalUrl = page.url();
+    if (finalUrl.includes("/login") || finalUrl.includes("checkpoint")) {
+      return [];
+    }
+
+    // Wait for initial JS render
+    await new Promise<void>((r) => setTimeout(r, 3_000));
+
+    // Scroll to trigger lazy-loading of more ads
+    await page.evaluate(() => window.scrollBy(0, 700));
+    await new Promise<void>((r) => setTimeout(r, 1_500));
+    await page.evaluate(() => window.scrollBy(0, 700));
+    await new Promise<void>((r) => setTimeout(r, 1_000));
+
+    // Also collect <img> src values from the DOM as a secondary source
+    const domSrcs: string[] = await page
+      .evaluate(() =>
+        Array.from(document.querySelectorAll("img"))
+          .map((img) => img.src)
+          .filter((s) => s.startsWith("http"))
+      )
+      .catch(() => []);
+
+    await browser.close();
+
+    const allUrls = [
+      ...capturedUrls,
+      ...domSrcs.filter((s) => META_CDN_RE.test(s)),
+    ];
+
+    return dedupeAndFilter(allUrls);
+  } catch (err) {
+    await browser.close().catch(() => {});
+    throw err;
+  }
+}
+
+// ── Route handler ─────────────────────────────────────────────────────────────
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ brandId: string }> }
 ) {
-  // ── Auth ──────────────────────────────────────────────────────────────────────
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -56,7 +228,6 @@ export async function POST(
     return NextResponse.json({ error: "Brand not found" }, { status: 404 });
   }
 
-  // ── Parse body ────────────────────────────────────────────────────────────────
   let body: { url?: string };
   try {
     body = await req.json();
@@ -83,108 +254,59 @@ export async function POST(
     );
   }
 
-  // ── Puppeteer scrape ──────────────────────────────────────────────────────────
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
+  const pageId = extractPageId(rawUrl);
+  if (!pageId) {
+    return NextResponse.json(
+      {
+        error: "missing_page_id",
+        message:
+          "Could not find a page ID in the URL. Make sure it contains " +
+          "view_all_page_id=… or id=… (see instructions above).",
+      },
+      { status: 422 }
+    );
+  }
+
+  // ── Try Graph API first (reliable, no scraping) ───────────────────────────────
+  let imageUrls: string[] = [];
+
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--disable-extensions",
-        "--disable-background-networking",
-      ],
-    });
+    imageUrls = await graphApiScrape(pageId);
+  } catch {
+    // Graph API unavailable — continue to Puppeteer
+  }
 
-    const page = await browser.newPage();
-
-    // Realistic browser fingerprint to reduce bot detection
-    await page.setUserAgent(
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
-        "AppleWebKit/537.36 (KHTML, like Gecko) " +
-        "Chrome/124.0.0.0 Safari/537.36"
-    );
-    await page.setViewport({ width: 1280, height: 900 });
-    await page.setExtraHTTPHeaders({ "Accept-Language": "en-US,en;q=0.9" });
-
-    // Navigate to Meta Ads Library
-    await page.goto(rawUrl, { waitUntil: "networkidle2", timeout: 30_000 });
-
-    // Wait for ad image content to appear (up to 10s)
-    await page
-      .waitForSelector('img[src*="scontent"]', { timeout: 10_000 })
-      .catch(() => {
-        // No images found within timeout — continue and collect whatever is there
-      });
-
-    // Scroll down to trigger lazy loading of more ads
-    await page.evaluate(() => window.scrollBy(0, 800));
-    await new Promise<void>((resolve) => setTimeout(resolve, 2000));
-    await page.evaluate(() => window.scrollBy(0, 800));
-    await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-
-    // Collect all <img> src values from the page
-    const allImgSrcs: string[] = await page.evaluate(() =>
-      Array.from(document.querySelectorAll("img"))
-        .map((img) => img.src)
-        .filter((src) => src.startsWith("http"))
-    );
-
-    // Keep only Meta CDN images (actual ad content)
-    const metaImages = allImgSrcs.filter((src) => META_CDN_RE.test(src));
-
-    // Deduplicate and remove likely non-ad images (profile pics, icons, emoji)
-    const seen = new Set<string>();
-    const filtered: string[] = [];
-    for (const src of metaImages) {
-      if (seen.has(src)) continue;
-      seen.add(src);
-      // Skip obvious non-ad images
-      if (
-        src.includes("/profile") ||
-        src.includes("emoji_") ||
-        src.includes("_t.") || // tiny thumbnails
-        src.includes("/rsrc.php") // static UI assets
-      ) {
-        continue;
-      }
-      filtered.push(src);
-      if (filtered.length >= MAX_RESULTS) break;
-    }
-
-    if (filtered.length === 0) {
+  // ── Fall back to Puppeteer ────────────────────────────────────────────────────
+  if (imageUrls.length === 0) {
+    try {
+      imageUrls = await puppeteerScrape(rawUrl);
+    } catch (err) {
+      console.error("[meta-scrape] Puppeteer error:", err);
       return NextResponse.json(
         {
-          error: "no_images_found",
+          error: "scrape_failed",
           message:
-            "No static ad images found at that URL. Meta may have blocked automated access, " +
-            "or the page may require a login. Try again or use the manual Import from URL option.",
+            "Could not load the Meta Ads Library page. This usually means Meta has " +
+            "blocked automated access. Try again in a few minutes, or use the " +
+            "Import from URL option to add individual ad images manually.",
         },
         { status: 422 }
       );
     }
+  }
 
-    return NextResponse.json({ imageUrls: filtered });
-  } catch (err) {
-    console.error("[meta-scrape] Puppeteer error:", err);
+  if (imageUrls.length === 0) {
     return NextResponse.json(
       {
-        error: "scrape_failed",
+        error: "no_images_found",
         message:
-          "Could not scrape the Meta Ads Library page. Meta may have blocked automated access. " +
-          "Try again in a few minutes, or use the manual Import from URL option.",
+          "No static ad images were found on that page. The page may require a " +
+          "Facebook login to show ads, or there are no active image ads for this " +
+          "account. Use Import from URL to add images individually.",
       },
       { status: 422 }
     );
-  } finally {
-    if (browser) {
-      try {
-        await browser.close();
-      } catch {
-        // ignore close errors
-      }
-    }
   }
+
+  return NextResponse.json({ imageUrls });
 }
