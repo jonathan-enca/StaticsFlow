@@ -125,18 +125,26 @@ function dedupeAndFilter(urls: string[]): string[] {
 // ── Graph API scrape ──────────────────────────────────────────────────────────
 // Uses the Meta Ads Library API. Token resolution:
 //   1. META_USER_TOKEN — User Access Token (ads_read scope). No App Review needed.
-//   2. META_APP_ID + META_APP_SECRET — client credential token. Requires App Review.
+//      Expires every ~60 days. Renew via Graph API Explorer.
+//   2. META_APP_ID + META_APP_SECRET — client credential token (never expires).
+//      Requires App Review for ads_read. Only works once Meta approves the app.
 // Returns [] if no credentials are available or the call fails.
+//
+// ad_type handling:
+//   - User tokens: support ad_type=IMAGE (server-side filter, clean results)
+//   - App tokens:  only support ad_type=ALL — we filter images client-side via
+//                  the presence of ad_creative_images on each ad object
 
 async function graphApiScrape(pageId: string): Promise<string[]> {
   let token: string | undefined;
+  let isAppToken = false;
 
   // Path 1: User Access Token (fastest path, no App Review needed)
   const userToken = process.env.META_USER_TOKEN;
   if (userToken) {
     token = userToken;
   } else {
-    // Path 2: Client credential token (requires App Review for ads_read)
+    // Path 2: Client credential token (never expires, requires App Review)
     const appId = process.env.META_APP_ID;
     const appSecret = process.env.META_APP_SECRET;
     if (!appId || !appSecret) return [];
@@ -151,15 +159,17 @@ async function graphApiScrape(pageId: string): Promise<string[]> {
     if (!tokenRes.ok) return [];
     const tokenData = (await tokenRes.json()) as { access_token?: string };
     token = tokenData.access_token;
+    isAppToken = true;
   }
 
   if (!token) return [];
 
-  // Query the Ads Library API for IMAGE ads only from this page
+  // App tokens only support ad_type ALL (IMAGE is reserved for user tokens).
+  // We get image URLs client-side by checking for the ad_creative_images field.
   const params = new URLSearchParams({
     search_type: "PAGE",
     view_all_page_id: pageId,
-    ad_type: "IMAGE",            // Only static image ads — no videos/reels
+    ad_type: isAppToken ? "ALL" : "IMAGE",
     ad_reached_countries: '["US"]',
     fields: "id,ad_creative_images",
     limit: "60",
@@ -173,11 +183,20 @@ async function graphApiScrape(pageId: string): Promise<string[]> {
   if (!adsRes.ok) return [];
 
   const adsData = (await adsRes.json()) as {
+    error?: { code: number; error_subcode?: number };
     data?: Array<{ id: string; ad_creative_images?: Array<{ url: string }> }>;
   };
 
+  // Surface known blocking errors to the console for diagnostics
+  if (adsData.error) {
+    console.error("[meta-scrape] Graph API error:", JSON.stringify(adsData.error));
+    return [];
+  }
+
   const imageUrls: string[] = [];
   for (const ad of adsData.data ?? []) {
+    // ad_creative_images is only present on image ads — acts as the image filter
+    // when using ad_type=ALL (app token path)
     for (const img of ad.ad_creative_images ?? []) {
       if (img.url && META_CDN_RE.test(img.url)) {
         imageUrls.push(img.url);
