@@ -114,6 +114,50 @@ const GEN_STAGES = [
 
 // ── Subcomponents ─────────────────────────────────────────────────────────────
 
+// STA-123: Inline CTA card surfacing the Inspiration Library to users with 0 inspirations.
+// Appears between row 1 and row 2 of the creative history grid, or above the empty state.
+// Dismissed permanently via localStorage key "inspirations_cta_dismissed".
+function InspirationUploadCta({
+  brandId,
+  onDismiss,
+}: {
+  brandId: string;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      className="rounded-xl border p-4 space-y-2"
+      style={{ background: "var(--sf-bg-elevated)", borderColor: "var(--sf-border)" }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-semibold" style={{ color: "var(--sf-text-primary)" }}>
+          Level up your creatives
+        </p>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss inspiration CTA"
+          className="flex-shrink-0 text-xs hover:opacity-60 transition-opacity"
+          style={{ color: "var(--sf-text-muted)" }}
+        >
+          ✕
+        </button>
+      </div>
+      <p className="text-xs leading-snug" style={{ color: "var(--sf-text-secondary)" }}>
+        Add inspiration ads from your brand or competitors. The more examples you give
+        StaticsFlow, the more on-brand your output becomes.
+      </p>
+      <a
+        href={`/dashboard/brands/${brandId}/inspirations`}
+        className="inline-block text-xs font-semibold hover:underline"
+        style={{ color: "var(--sf-accent)" }}
+      >
+        Add inspirations →
+      </a>
+    </div>
+  );
+}
+
 function StepBar({ currentStep }: { currentStep: number }) {
   return (
     <div className="flex items-center gap-0 mb-8">
@@ -328,6 +372,22 @@ export default function GenerateClient({
   // Post-generation prompt (replicate + upload/URL)
   const [canSaveAsInspiration, setCanSaveAsInspiration] = useState(false);
   const [inspirationPromptDismissed, setInspirationPromptDismissed] = useState(false);
+
+  // STA-123: Inspiration Library upload CTA (dismissed via localStorage)
+  const [inspirationCtaDismissed, setInspirationCtaDismissed] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setInspirationCtaDismissed(
+        localStorage.getItem("inspirations_cta_dismissed") === "true"
+      );
+    }
+  }, []);
+  const dismissInspirationCta = () => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("inspirations_cta_dismissed", "true");
+    }
+    setInspirationCtaDismissed(true);
+  };
 
   // STA-111: soft nudge when selected product has no images (dismissable, non-blocking)
   const [productNudgeDismissed, setProductNudgeDismissed] = useState(false);
@@ -1365,13 +1425,54 @@ export default function GenerateClient({
           <h3 className="text-sm font-semibold text-[var(--sf-text-primary)]">
             Recent creatives
           </h3>
+
+          {/* STA-123: show CTA above empty state when there are no creatives yet */}
+          {inspirations.length === 0 && !inspirationCtaDismissed && creatives.length === 0 && (
+            <InspirationUploadCta
+              brandId={brandId}
+              onDismiss={dismissInspirationCta}
+            />
+          )}
+
           {creatives.length === 0 ? (
-            <p className="text-xs text-[var(--sf-text-muted)]">
+            <p className="text-xs" style={{ color: "var(--sf-text-muted)" }}>
               No creatives yet — generate your first one.
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {creatives.slice(0, 12).map((c) => (
+              {/* Row 1: first 2 creatives */}
+              {creatives.slice(0, 2).map((c) => (
+                <CreativeThumbnail
+                  key={c.id}
+                  c={c}
+                  brandName={brandName}
+                  onPreview={() =>
+                    setPreviewCreative({
+                      creative: {
+                        id: c.id,
+                        imageUrl: c.imageUrl,
+                        status: c.status,
+                        score: c.score,
+                        format: c.format,
+                        angle: c.angle,
+                      },
+                    })
+                  }
+                />
+              ))}
+
+              {/* STA-123: CTA between row 1 and row 2 (col-span-2) */}
+              {inspirations.length === 0 && !inspirationCtaDismissed && (
+                <div className="col-span-2">
+                  <InspirationUploadCta
+                    brandId={brandId}
+                    onDismiss={dismissInspirationCta}
+                  />
+                </div>
+              )}
+
+              {/* Remaining rows */}
+              {creatives.slice(2, 12).map((c) => (
                 <CreativeThumbnail
                   key={c.id}
                   c={c}
