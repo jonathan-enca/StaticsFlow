@@ -31,6 +31,7 @@ interface InspirationAnalysis {
 interface Props {
   brandId: string;
   initialInspirations: Inspiration[];
+  products: { id: string; name: string }[];
 }
 
 // ── Status badge ─────────────────────────────────────────────────────────────
@@ -65,17 +66,20 @@ function AnalysisBadge({ inspiration }: { inspiration: Inspiration }) {
 function InspirationCard({
   inspiration,
   brandId,
+  products,
   onDeleted,
   onAnalyzed,
   onToggle,
 }: {
   inspiration: Inspiration;
   brandId: string;
+  products: { id: string; name: string }[];
   onDeleted: (id: string) => void;
   onAnalyzed: (updated: Inspiration) => void;
   onToggle: (updated: Inspiration) => void;
 }) {
   const [analyzing, setAnalyzing] = useState(false);
+  const [assigningProduct, setAssigningProduct] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const analysis = inspiration.analysisJson as InspirationAnalysis | null;
 
@@ -121,6 +125,26 @@ function InspirationCard({
       if (res.ok) onDeleted(inspiration.id);
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleAssignProduct(productId: string | null) {
+    setAssigningProduct(true);
+    try {
+      const res = await fetch(
+        `/api/brands/${brandId}/inspirations/${inspiration.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId }),
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        onToggle(data.inspiration);
+      }
+    } finally {
+      setAssigningProduct(false);
     }
   }
 
@@ -238,6 +262,29 @@ function InspirationCard({
             🗑
           </button>
         </div>
+
+        {/* Product assignment — only shown if brand has products */}
+        {products.length > 0 && (
+          <div className="mt-2">
+            <select
+              value={(inspiration as Inspiration & { productId?: string | null }).productId ?? ""}
+              onChange={(e) => handleAssignProduct(e.target.value || null)}
+              disabled={assigningProduct}
+              className="w-full rounded-lg border px-2 py-1 text-xs outline-none disabled:opacity-50"
+              style={{
+                background: "var(--sf-bg-primary)",
+                borderColor: "var(--sf-border)",
+                color: "var(--sf-text-secondary)",
+              }}
+              title="Assign to product"
+            >
+              <option value="">— No product —</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1155,7 +1202,7 @@ function StarterPackPicker({
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function InspirationLibraryClient({ brandId, initialInspirations }: Props) {
+export default function InspirationLibraryClient({ brandId, initialInspirations, products }: Props) {
   const [inspirations, setInspirations] = useState<Inspiration[]>(initialInspirations);
   const [filterHook, setFilterHook] = useState<string>("all");
   const [filterFormat, setFilterFormat] = useState<string>("all");
@@ -1466,6 +1513,7 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
               key={ins.id}
               inspiration={ins}
               brandId={brandId}
+              products={products}
               onDeleted={handleDeleted}
               onAnalyzed={handleAnalyzed}
               onToggle={handleToggle}

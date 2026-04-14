@@ -91,9 +91,9 @@ export async function POST(
     );
   }
 
-  if (urls.length > 15) {
+  if (urls.length > 30) {
     return NextResponse.json(
-      { error: "Maximum 15 URLs per request." },
+      { error: "Maximum 30 URLs per request." },
       { status: 400 }
     );
   }

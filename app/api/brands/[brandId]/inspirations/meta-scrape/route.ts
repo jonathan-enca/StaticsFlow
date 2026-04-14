@@ -26,7 +26,7 @@ import { prisma } from "@/lib/prisma";
 
 export const maxDuration = 60;
 
-const MAX_RESULTS = 15;
+const MAX_RESULTS = 30;
 const META_CDN_RE = /scontent[-\w.]*\.(fbcdn|facebook)\.net/i;
 const META_GRAPH_VERSION = "v19.0";
 
@@ -122,7 +122,7 @@ async function graphApiScrape(pageId: string): Promise<string[]> {
     ad_type: "ALL",
     ad_reached_countries: '["US"]',
     fields: "id,ad_creative_images",
-    limit: "30",
+    limit: "60",
     access_token: token,
   });
 
@@ -240,9 +240,9 @@ async function puppeteerScrape(url: string): Promise<string[]> {
 
     // Scroll to trigger lazy-loading of more ads; bail early if we already
     // have enough candidate images to fill MAX_RESULTS after filtering.
-    for (const delay of [1_000, 800]) {
+    for (const delay of [1_000, 800, 800, 600]) {
       if (dedupeAndFilter(capturedUrls).length >= MAX_RESULTS) break;
-      await page.evaluate(() => window.scrollBy(0, 800));
+      await page.evaluate(() => window.scrollBy(0, 900));
       await new Promise<void>((r) => setTimeout(r, delay));
     }
 

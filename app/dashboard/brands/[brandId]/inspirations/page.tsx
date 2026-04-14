@@ -27,7 +27,10 @@ export default async function InspirationLibraryPage({ params }: PageProps) {
   const [brand, userBrands] = await Promise.all([
     prisma.brand.findFirst({
       where: { id: brandId, userId: session.user.id },
-      include: { inspirations: { orderBy: { uploadedAt: "desc" } } },
+      include: {
+        inspirations: { orderBy: { uploadedAt: "desc" } },
+        products: { where: { isActive: true }, select: { id: true, name: true }, orderBy: { createdAt: "asc" } },
+      },
     }),
     prisma.brand.findMany({
       where: { userId: session.user.id },
@@ -84,6 +87,7 @@ export default async function InspirationLibraryPage({ params }: PageProps) {
         <InspirationLibraryClient
           brandId={brandId}
           initialInspirations={brand.inspirations as Inspiration[]}
+          products={brand.products}
         />
       </main>
     </div>

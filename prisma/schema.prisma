@@ -145,8 +145,9 @@ model Product {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  brand     Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  creatives Creative[]
+  brand        Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  creatives    Creative[]
+  inspirations Inspiration[]
 
   @@index([brandId])
 }
@@ -181,6 +182,7 @@ model Creative {
 model Inspiration {
   id           String    @id @default(cuid())
   brandId      String
+  productId    String?   // Optional: link to a specific Product (for product-specific inspiration)
   imageUrl     String    // R2 URL of the original uploaded image
   thumbnailUrl String?   // R2 URL of resized thumbnail
   imageHash    String?   // SHA-256 hash for deduplication
@@ -193,9 +195,11 @@ model Inspiration {
   updatedAt DateTime @updatedAt
 
   brand     Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  product   Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
   creatives Creative[]
 
   @@index([brandId])
+  @@index([productId])
 }
 
 // Batch generation job — tracks progress of a multi-creative generation request

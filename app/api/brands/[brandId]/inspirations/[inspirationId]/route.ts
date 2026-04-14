@@ -1,4 +1,4 @@
-// PATCH  /api/brands/[brandId]/inspirations/[inspirationId] — toggle isActive
+// PATCH  /api/brands/[brandId]/inspirations/[inspirationId] — update isActive and/or productId
 // DELETE /api/brands/[brandId]/inspirations/[inspirationId] — delete inspiration + R2 objects
 // Auth required — user must own the brand.
 
@@ -34,17 +34,28 @@ export async function PATCH(
     return NextResponse.json({ error: "Inspiration not found" }, { status: 404 });
   }
 
-  let body: { isActive?: boolean };
+  let body: { isActive?: boolean; productId?: string | null };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  // If assigning a productId, verify it belongs to this brand
+  if (body.productId) {
+    const product = await prisma.product.findFirst({
+      where: { id: body.productId, brandId },
+    });
+    if (!product) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+  }
+
   const updated = await prisma.inspiration.update({
     where: { id: inspirationId },
     data: {
       ...(typeof body.isActive === "boolean" && { isActive: body.isActive }),
+      ...("productId" in body && { productId: body.productId ?? null }),
     },
   });
 
