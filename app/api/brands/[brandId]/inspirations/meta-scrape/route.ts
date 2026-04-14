@@ -53,6 +53,31 @@ function extractPageId(raw: string): string | null {
   }
 }
 
+/**
+ * Build a canonical Meta Ads Library URL optimised for image scraping:
+ *   - media_type=image_and_meme   → only static images, no videos/reels
+ *   - active_status=all           → include paused ads (more content)
+ *   - country=ALL                 → worldwide, not just one country
+ *   - sort by total_impressions   → best-performing ads first
+ *
+ * Whatever filters the user had in their original URL are replaced so
+ * Puppeteer always lands on the image-only view.
+ */
+function buildImageOnlyUrl(pageId: string): string {
+  const params = new URLSearchParams({
+    active_status: "all",
+    ad_type: "all",
+    country: "ALL",
+    is_targeted_country: "false",
+    media_type: "image_and_meme",
+    search_type: "page",
+    "sort_data[mode]": "total_impressions",
+    "sort_data[direction]": "desc",
+    view_all_page_id: pageId,
+  });
+  return `https://www.facebook.com/ads/library/?${params.toString()}`;
+}
+
 // CDN type codes that indicate profile/page photos, NOT ad creatives.
 // Meta's scontent CDN uses /tX.YYYYY-Z/ path segments to encode asset types:
 //   t1.30497-1, t1.6435-1, t1.0-9 → profile pictures / page logos
@@ -115,11 +140,11 @@ async function graphApiScrape(pageId: string): Promise<string[]> {
 
   if (!token) return [];
 
-  // Query the Ads Library API for image ads from this page
+  // Query the Ads Library API for IMAGE ads only from this page
   const params = new URLSearchParams({
     search_type: "PAGE",
     view_all_page_id: pageId,
-    ad_type: "ALL",
+    ad_type: "IMAGE",            // Only static image ads — no videos/reels
     ad_reached_countries: '["US"]',
     fields: "id,ad_creative_images",
     limit: "60",
@@ -338,9 +363,13 @@ export async function POST(
   }
 
   // ── Fall back to Puppeteer ────────────────────────────────────────────────────
+  // Use a canonical URL with media_type=image_and_meme + worldwide + sort by impressions
+  // instead of the user's original URL (which may have active-only or country filters
+  // that reduce the image count significantly).
   if (imageUrls.length === 0) {
+    const canonicalUrl = buildImageOnlyUrl(pageId);
     try {
-      imageUrls = await puppeteerScrape(rawUrl);
+      imageUrls = await puppeteerScrape(canonicalUrl);
     } catch (err) {
       console.error("[meta-scrape] Puppeteer error:", err);
       return NextResponse.json(

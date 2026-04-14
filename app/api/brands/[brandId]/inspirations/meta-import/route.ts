@@ -67,10 +67,16 @@ export async function POST(
 
   const brand = await prisma.brand.findFirst({
     where: { id: brandId, userId: session.user.id },
+    include: {
+      products: { where: { isDefault: true, isActive: true }, select: { id: true }, take: 1 },
+    },
   });
   if (!brand) {
     return NextResponse.json({ error: "Brand not found" }, { status: 404 });
   }
+
+  // Default product to auto-assign (null if brand has no default product)
+  const defaultProductId = brand.products[0]?.id ?? null;
 
   // ── Parse body ────────────────────────────────────────────────────────────────
   let body: { urls?: unknown };
@@ -168,7 +174,7 @@ export async function POST(
 
       // Create DB record
       const inspiration = await prisma.inspiration.create({
-        data: { brandId, imageUrl: "", imageHash: hash, analysisJson: {} },
+        data: { brandId, productId: defaultProductId, imageUrl: "", imageHash: hash, analysisJson: {} },
       });
 
       const extMap: Record<string, string> = {
