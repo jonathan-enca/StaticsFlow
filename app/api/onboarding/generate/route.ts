@@ -31,6 +31,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "dna is required" }, { status: 400 });
   }
 
+  // If no products are defined, build a minimal fallback from productImages
+  // so Gemini always receives product images and Claude has a product name.
+  if (!dna.products?.length && dna.productImages?.length) {
+    dna.products = [{
+      id: "onboarding-default",
+      name: dna.name,
+      description: "",
+      images: dna.productImages.slice(0, 3),
+      icons: [],
+      moodboard: [],
+    }];
+  }
+
   try {
     // Run the full pipeline: Claude brief → Gemini image → QA
     // Using guest IDs since this is a no-auth preview
