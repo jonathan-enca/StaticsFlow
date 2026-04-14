@@ -81,19 +81,34 @@ function buildImageOnlyUrl(pageId: string): string {
 // CDN type codes that indicate profile/page photos, NOT ad creatives.
 // Meta's scontent CDN uses /tX.YYYYY-Z/ path segments to encode asset types:
 //   t1.30497-1, t1.6435-1, t1.0-9 → profile pictures / page logos
-//   t45.5-23, t39.30808-6         → ad creative images / sprites
-// Filtering these out removes repeated brand logos from the result set.
+//   t45.5-23, t39.30808-6         → ad creative images
+// Filtering these out removes the brand logo from the result set.
 const META_PROFILE_CDN_RE = /\/t1\.\d/;
 
+/**
+ * Strip query parameters from a CDN URL to get a stable base path for dedup.
+ *
+ * Facebook CDN serves the SAME image with different query params on every
+ * page load (signing tokens, cache hints, expiry hashes like oh= and oe=).
+ * Without this normalisation, the brand's profile picture appears 30 times
+ * in the captured URL list — once per ad card — and passes URL-based dedup.
+ * By keying the seen-set on the base path we collapse all those duplicates.
+ */
+function baseUrl(u: string): string {
+  const q = u.indexOf("?");
+  return q >= 0 ? u.slice(0, q) : u;
+}
+
 function dedupeAndFilter(urls: string[]): string[] {
-  const seen = new Set<string>();
+  const seenBase = new Set<string>();
   const out: string[] = [];
   for (const u of urls) {
-    if (seen.has(u)) continue;
-    seen.add(u);
+    const base = baseUrl(u);
+    if (seenBase.has(base)) continue;
+    seenBase.add(base);
     // Skip profile pics, tiny thumbnails, page logos, UI assets
     if (
-      META_PROFILE_CDN_RE.test(u) ||   // brand logos / profile photos (/t1.XXXXX/)
+      META_PROFILE_CDN_RE.test(u) ||  // brand logos / profile photos (/t1.XXXXX/)
       u.includes("/profile") ||
       u.includes("emoji_") ||
       u.includes("_t.") ||
