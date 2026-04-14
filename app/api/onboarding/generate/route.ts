@@ -15,6 +15,8 @@ export async function POST(req: NextRequest) {
   let geminiApiKey: string | undefined;
   let format: AdFormat;
   let angle: CreativeAngle;
+  // STA-122: explicit product data from the "Your Product" step (Step 3)
+  let product: { name: string; description: string; images: string[]; price: string } | undefined;
 
   try {
     const body = await req.json();
@@ -23,6 +25,7 @@ export async function POST(req: NextRequest) {
     geminiApiKey = body.geminiApiKey || undefined;
     format = body.format ?? "1080x1080";
     angle = body.angle ?? "benefit";
+    product = body.product ?? undefined;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -31,9 +34,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "dna is required" }, { status: 400 });
   }
 
-  // If no products are defined, build a minimal fallback from productImages
-  // so Gemini always receives product images and Claude has a product name.
-  if (!dna.products?.length && dna.productImages?.length) {
+  // STA-122: if the user confirmed a product on Step 3, inject it as dna.products[0].
+  // Price is appended to the description so Claude can include it in copy.
+  if (product?.name) {
+    const productDesc = [product.description, product.price ? `Price: ${product.price}` : ""]
+      .filter(Boolean)
+      .join(" — ");
+    dna.products = [{
+      id: "onboarding-product",
+      name: product.name,
+      description: productDesc,
+      images: product.images,
+      icons: [],
+      moodboard: [],
+    }];
+  } else if (!dna.products?.length && dna.productImages?.length) {
+    // P0a fallback: build a minimal product from productImages when no explicit product provided
     dna.products = [{
       id: "onboarding-default",
       name: dna.name,

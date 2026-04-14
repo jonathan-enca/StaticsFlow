@@ -1,17 +1,26 @@
 "use client";
 
-// Onboarding flow: URL → Brand DNA → First Creative
+// Onboarding flow: URL → Brand DNA → Your Product → First Creative
+// STA-122: added "Your Product" confirmation step (P0b) — 4-step flow
 // Target: < 3 minutes end-to-end (SPECS.md §6.2, KPI §11.1)
 // BYOK: users enter their own Claude + Gemini API keys directly in this page (SPECS.md §7.3)
 // UX fixes C5/M6/M7: keys expanded by default, mobile stepper, back navigation
 // STA-49: demo mode — investors can complete the full flow without real API keys
 
 import { useState } from "react";
-import { Key, Sparkles, PartyPopper, CheckCircle, ThumbsUp, RefreshCw } from "lucide-react";
+import { Key, Sparkles, PartyPopper, CheckCircle, ThumbsUp, RefreshCw, X, Link } from "lucide-react";
 
-type Step = "url" | "dna" | "creative";
-const STEPS: Step[] = ["url", "dna", "creative"];
-const STEP_LABELS: Record<Step, string> = { url: "Enter URL", dna: "Brand DNA", creative: "First Creative" };
+type Step = "url" | "dna" | "product" | "creative";
+const STEPS: Step[] = ["url", "dna", "product", "creative"];
+const STEP_LABELS: Record<Step, string> = { url: "Enter URL", dna: "Brand DNA", product: "Your Product", creative: "First Creative" };
+
+// Product data held in onboarding state (STA-122 P0b)
+interface ProductData {
+  name: string;
+  description: string;
+  images: string[];
+  price: string;
+}
 
 interface BrandDNA {
   name: string;
@@ -19,6 +28,7 @@ interface BrandDNA {
   colors: { primary: string; secondary: string; accent: string };
   fonts: string[];
   logoUrl: string | null;
+  productImages?: string[];   // product image URLs extracted from the site (STA-122)
   toneOfVoice: string;
   keyBenefits: string[];
   personas: string[];
@@ -179,25 +189,16 @@ function Stepper({ step, onNavigate }: { step: Step; onNavigate: (s: Step) => vo
 }
 
 // ── DNA Review Step (STA-55): grouped editable fields ────────────────────────
+// STA-122: removed generate props — step now navigates to "product" via onContinue
 function DnaReviewStep({
   dna,
   onDnaChange,
-  isDemo,
-  geminiKey,
-  onGeminiKeyChange,
-  generating,
-  generateError,
-  onGenerate,
+  onContinue,
   onBack,
 }: {
   dna: BrandDNA;
   onDnaChange: (dna: BrandDNA) => void;
-  isDemo: boolean;
-  geminiKey: string;
-  onGeminiKeyChange: (key: string) => void;
-  generating: boolean;
-  generateError: string | null;
-  onGenerate: () => void;
+  onContinue: () => void;
   onBack: () => void;
 }) {
   const [campaignOpen, setCampaignOpen] = useState(false);
@@ -497,18 +498,253 @@ function DnaReviewStep({
 
       </div>
 
-      {/* Gemini key reminder — hidden in demo mode */}
+      {/* STA-122: Continue to Your Product step instead of generating directly */}
+      <button
+        onClick={onContinue}
+        className="w-full py-3.5 px-6 text-white font-semibold rounded-md hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+        style={{ background: 'var(--sf-accent)' }}
+      >
+        Continue to Your Product →
+      </button>
+
+      <button
+        onClick={onBack}
+        className="mt-3 w-full py-2.5 text-sm hover:opacity-80"
+        style={{ color: 'var(--sf-text-secondary)' }}
+      >
+        ← Try a different URL
+      </button>
+    </div>
+  );
+}
+
+// ── Your Product Step (STA-122 P0b) ──────────────────────────────────────────
+// Review screen (NOT a form). Auto-populated from DNA state, no extra API call.
+function ProductConfirmStep({
+  dna,
+  isDemo,
+  geminiKey,
+  onGeminiKeyChange,
+  generating,
+  generateError,
+  onGenerate,
+  onSkip,
+  onBack,
+  anthropicKey,
+}: {
+  dna: BrandDNA;
+  isDemo: boolean;
+  geminiKey: string;
+  onGeminiKeyChange: (key: string) => void;
+  generating: boolean;
+  generateError: string | null;
+  onGenerate: (product: ProductData) => void;
+  onSkip: () => void;
+  onBack: () => void;
+  anthropicKey: string;
+}) {
+  // Pre-fill from DNA — product name defaults to brand name
+  const [name, setName] = useState(dna.name ?? "");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("");
+  // Show first 3 product images; user can dismiss any
+  const [images, setImages] = useState<string[]>(() =>
+    (dna.productImages ?? []).slice(0, 3)
+  );
+
+  // Optional power-user URL override
+  const [productUrl, setProductUrl] = useState("");
+  const [urlLoading, setUrlLoading] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+
+  function dismissImage(idx: number) {
+    setImages((imgs) => imgs.filter((_, i) => i !== idx));
+  }
+
+  async function handleUrlOverride() {
+    if (!productUrl.trim()) return;
+    setUrlError(null);
+    setUrlLoading(true);
+    try {
+      const res = await fetch("/api/brands/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: productUrl.trim(), anthropicApiKey: anthropicKey }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setUrlError(d.error ?? "Extraction failed.");
+      } else {
+        const d = await res.json();
+        const extracted = d.dna;
+        if (extracted.name) setName(extracted.name);
+        if ((extracted.productImages ?? []).length > 0) setImages(extracted.productImages.slice(0, 3));
+        setProductUrl("");
+      }
+    } catch {
+      setUrlError("Request failed. Check the URL and try again.");
+    }
+    setUrlLoading(false);
+  }
+
+  const product: ProductData = { name, description, images, price };
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <div
+          className="w-10 h-10 rounded-md border flex items-center justify-center overflow-hidden"
+          style={{ backgroundColor: dna.colors?.primary ?? "#000", borderColor: "var(--sf-border)" }}
+        >
+          {dna.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={dna.logoUrl} alt={dna.name} className="w-8 h-8 object-contain" />
+          ) : (
+            <span className="text-white font-bold text-sm">{dna.name.charAt(0)}</span>
+          )}
+        </div>
+        <div>
+          <h2 className="font-bold" style={{ color: "var(--sf-text-primary)" }}>{dna.name}</h2>
+          <p className="text-sm" style={{ color: "var(--sf-text-secondary)" }}>{dna.url}</p>
+        </div>
+      </div>
+
+      <h1
+        className="text-3xl font-bold mb-2 font-display"
+        style={{ color: "var(--sf-text-primary)", letterSpacing: "-0.02em" }}
+      >
+        Confirm your product
+      </h1>
+      <p className="mb-8" style={{ color: "var(--sf-text-secondary)" }}>
+        We extracted this from your Brand DNA. Review and tweak before generating.
+      </p>
+
+      <div className="space-y-4 mb-8">
+        {/* Product images */}
+        {images.length > 0 && (
+          <div className="rounded-md p-5 border" style={{ borderColor: "var(--sf-border)", background: "var(--sf-bg-secondary)" }}>
+            <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--sf-text-primary)" }}>Product Images</h3>
+            <div className="flex gap-3 flex-wrap">
+              {images.map((src, i) => (
+                <div key={i} className="relative group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={src}
+                    alt={`Product image ${i + 1}`}
+                    className="w-20 h-20 object-cover rounded-md border"
+                    style={{ borderColor: "var(--sf-border)" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => dismissImage(i)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: "var(--sf-error)", color: "#fff" }}
+                    title="Remove image"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Product details */}
+        <div className="rounded-md p-5 border space-y-4" style={{ borderColor: "var(--sf-border)", background: "var(--sf-bg-secondary)" }}>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--sf-text-primary)" }}>Product Details</h3>
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: "var(--sf-text-secondary)" }}>Product Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-md border focus:outline-none"
+              style={{ background: "var(--sf-bg-elevated)", borderColor: "var(--sf-border)", color: "var(--sf-text-primary)" }}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: "var(--sf-text-secondary)" }}>Price <span style={{ color: "var(--sf-text-muted)" }}>(optional)</span></label>
+              <input
+                type="text"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="e.g. €49.90"
+                className="w-full px-3 py-2 text-sm rounded-md border focus:outline-none"
+                style={{ background: "var(--sf-bg-elevated)", borderColor: "var(--sf-border)", color: "var(--sf-text-primary)" }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: "var(--sf-text-secondary)" }}>Short Description <span style={{ color: "var(--sf-text-muted)" }}>(optional)</span></label>
+              <input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="One-line product pitch"
+                className="w-full px-3 py-2 text-sm rounded-md border focus:outline-none"
+                style={{ background: "var(--sf-bg-elevated)", borderColor: "var(--sf-border)", color: "var(--sf-text-primary)" }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Optional URL override — power-user only */}
+        {!isDemo && (
+          <div className="rounded-md border overflow-hidden" style={{ borderColor: "var(--sf-border)" }}>
+            <button
+              type="button"
+              disabled
+              className="w-full px-5 py-3.5 flex items-center gap-2 text-left cursor-default"
+              style={{ background: "var(--sf-bg-secondary)" }}
+            >
+              <Link className="w-4 h-4" style={{ color: "var(--sf-text-muted)" }} />
+              <span className="text-sm font-medium" style={{ color: "var(--sf-text-secondary)" }}>
+                Paste a specific product page URL to override
+              </span>
+              <span className="ml-auto text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--sf-bg-elevated)", color: "var(--sf-text-muted)" }}>Optional</span>
+            </button>
+            <div className="px-5 pb-4 pt-1 flex gap-2" style={{ background: "var(--sf-bg-secondary)" }}>
+              <input
+                type="url"
+                value={productUrl}
+                onChange={(e) => setProductUrl(e.target.value)}
+                placeholder="https://yourstore.com/product/…"
+                className="flex-1 px-3 py-2 text-sm rounded-md border focus:outline-none"
+                style={{ background: "var(--sf-bg-elevated)", borderColor: "var(--sf-border)", color: "var(--sf-text-primary)" }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleUrlOverride(); } }}
+              />
+              <button
+                type="button"
+                onClick={handleUrlOverride}
+                disabled={urlLoading || !productUrl.trim()}
+                className="px-4 py-2 text-sm font-medium rounded-md hover:opacity-90 disabled:opacity-50 text-white"
+                style={{ background: "var(--sf-accent)" }}
+              >
+                {urlLoading ? "…" : "Extract"}
+              </button>
+            </div>
+            {urlError && (
+              <p className="px-5 pb-3 text-xs" style={{ color: "var(--sf-error)" }}>{urlError}</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Gemini key reminder — only on this step since it's needed to generate */}
       {!isDemo && !geminiKey && (
         <div
           className="mb-4 p-4 rounded-md border"
-          style={{ background: 'rgba(255,159,10,0.1)', borderColor: 'rgba(255,159,10,0.25)' }}
+          style={{ background: "rgba(255,159,10,0.1)", borderColor: "rgba(255,159,10,0.25)" }}
         >
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--sf-warning)' }}>
+            <p className="text-sm font-semibold flex items-center gap-2" style={{ color: "var(--sf-warning)" }}>
               <Key className="w-4 h-4" />
               Gemini API key needed
             </p>
-            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-xs font-medium hover:opacity-80" style={{ color: 'var(--sf-warning)' }}>Get key →</a>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-xs font-medium hover:opacity-80" style={{ color: "var(--sf-warning)" }}>Get key →</a>
           </div>
           <input
             type="password"
@@ -517,7 +753,7 @@ function DnaReviewStep({
             placeholder="AIza..."
             autoComplete="off"
             className="w-full px-3 py-2 text-sm rounded-md border focus:outline-none font-mono"
-            style={{ background: 'var(--sf-bg-elevated)', borderColor: 'var(--sf-border)', color: 'var(--sf-text-primary)' }}
+            style={{ background: "var(--sf-bg-elevated)", borderColor: "var(--sf-border)", color: "var(--sf-text-primary)" }}
           />
         </div>
       )}
@@ -525,17 +761,17 @@ function DnaReviewStep({
       {generateError && (
         <p
           className="text-sm px-4 py-3 rounded-md border mb-4"
-          style={{ color: 'var(--sf-error)', background: 'rgba(255,69,58,0.1)', borderColor: 'rgba(255,69,58,0.2)' }}
+          style={{ color: "var(--sf-error)", background: "rgba(255,69,58,0.1)", borderColor: "rgba(255,69,58,0.2)" }}
         >
           {generateError}
         </p>
       )}
 
       <button
-        onClick={onGenerate}
+        onClick={() => onGenerate(product)}
         disabled={generating}
         className="w-full py-3.5 px-6 text-white font-semibold rounded-md hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
-        style={{ background: 'var(--sf-accent)' }}
+        style={{ background: "var(--sf-accent)" }}
       >
         {generating ? (
           <>
@@ -546,16 +782,25 @@ function DnaReviewStep({
             {isDemo ? "Generating demo creative…" : "Generating your first ad… (~30s)"}
           </>
         ) : (
-          "Generate First Ad Creative →"
+          "Looks good → Generate my first ad"
         )}
       </button>
 
       <button
-        onClick={onBack}
-        className="mt-3 w-full py-2.5 text-sm hover:opacity-80"
-        style={{ color: 'var(--sf-text-secondary)' }}
+        type="button"
+        onClick={onSkip}
+        className="mt-3 w-full py-2.5 text-sm text-center hover:opacity-80"
+        style={{ color: "var(--sf-text-muted)" }}
       >
-        ← Try a different URL
+        Skip for now (use brand images as fallback)
+      </button>
+
+      <button
+        onClick={onBack}
+        className="mt-1 w-full py-2 text-sm hover:opacity-80"
+        style={{ color: "var(--sf-text-secondary)" }}
+      >
+        ← Back to Brand DNA
       </button>
     </div>
   );
@@ -597,6 +842,7 @@ export default function OnboardingPage() {
     setStep(s);
     if (s === "url") { setDna(null); setCreative(null); setIsDemo(false); }
     if (s === "dna") { setCreative(null); }
+    if (s === "product") { setCreative(null); setGenerateError(null); }
   }
 
   function handleTryDemo() {
@@ -633,7 +879,9 @@ export default function OnboardingPage() {
     setStep("dna");
   }
 
-  async function handleGenerate() {
+  // STA-122: handleGenerate now accepts optional ProductData from Step 3.
+  // When product is null it falls back to P0a behavior (productImages from DNA).
+  async function handleGenerate(product: ProductData | null = null) {
     if (!dna) return;
 
     if (isDemo) {
@@ -657,6 +905,7 @@ export default function OnboardingPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         dna,
+        product: product ?? undefined,
         anthropicApiKey: anthropicKey.trim(),
         geminiApiKey: geminiKey.trim(),
         format: "1080x1080",
@@ -866,17 +1115,28 @@ export default function OnboardingPage() {
           <DnaReviewStep
             dna={dna}
             onDnaChange={setDna}
+            onContinue={() => navigateTo("product")}
+            onBack={() => navigateTo("url")}
+          />
+        )}
+
+        {/* ── Step 3: Your Product (STA-122 P0b) ───────────────────── */}
+        {step === "product" && dna && (
+          <ProductConfirmStep
+            dna={dna}
             isDemo={isDemo}
             geminiKey={geminiKey}
             onGeminiKeyChange={setGeminiKey}
             generating={generating}
             generateError={generateError}
             onGenerate={handleGenerate}
-            onBack={() => navigateTo("url")}
+            onSkip={() => handleGenerate(null)}
+            onBack={() => navigateTo("dna")}
+            anthropicKey={anthropicKey}
           />
         )}
 
-        {/* ── Step 3: Generated creative ────────────────────────────── */}
+        {/* ── Step 4: Generated creative ────────────────────────────── */}
         {step === "creative" && creative && dna && (
           <div>
             <div className="flex items-center gap-2 mb-6">
@@ -974,14 +1234,14 @@ export default function OnboardingPage() {
 
             <div className="flex gap-3 mt-3">
               <button
-                onClick={() => navigateTo("dna")}
+                onClick={() => navigateTo("product")}
                 className="flex-1 py-2.5 text-sm hover:opacity-80"
                 style={{ color: 'var(--sf-text-secondary)' }}
               >
-                ← Back to Brand DNA
+                ← Back to Your Product
               </button>
               <button
-                onClick={handleGenerate}
+                onClick={() => handleGenerate(null)}
                 disabled={generating}
                 className="flex-1 py-2.5 text-sm font-medium hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-1"
                 style={{ color: 'var(--sf-accent)' }}
