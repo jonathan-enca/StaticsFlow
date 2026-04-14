@@ -290,9 +290,14 @@ export async function regenerateImageWithFeedback(
 }
 
 /**
- * STA-108: Map a hex color to a short human-readable semantic name.
- * Used to pair hex codes with descriptive names in the imagePrompt so
- * Gemini can apply them more accurately than hex alone.
+ * STA-108 / STA-127 #7: Map a hex color to a human-readable semantic name.
+ * Expanded from ~12 to ~48 names with lightness qualifiers (e.g. "light navy",
+ * "deep coral") so Gemini prompt color descriptions are precise and actionable.
+ *
+ * Methodology:
+ *  1. Achromatic shortcuts (white/black/grey bands)
+ *  2. Hue wheel split into 24 segments (~15° each)
+ *  3. Each hue has 3 lightness variants: light / mid / deep
  */
 function colorSemanticName(hex: string): string {
   const h = hex.replace("#", "").toLowerCase();
@@ -300,31 +305,65 @@ function colorSemanticName(hex: string): string {
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
   if (isNaN(r)) return "brand color";
-  // Simple hue-based classification
+
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
-  const lightness = (max + min) / 2 / 255;
-  if (lightness > 0.9) return "near-white";
-  if (lightness < 0.1) return "near-black";
-  if (max === min) return lightness > 0.5 ? "light grey" : "dark grey";
+  const lightness = (max + min) / 2 / 255; // HSL lightness 0–1
+  const chroma = max - min;
+
+  // ── Achromatic ─────────────────────────────────────────────────────────────
+  if (lightness > 0.93) return "off-white";
+  if (lightness > 0.85) return "pale grey";
+  if (lightness < 0.08) return "near-black";
+  if (chroma < 18) {
+    if (lightness > 0.70) return "light grey";
+    if (lightness > 0.45) return "medium grey";
+    if (lightness > 0.22) return "dark grey";
+    return "charcoal";
+  }
+
+  // ── Hue calculation ────────────────────────────────────────────────────────
   const hue = (() => {
-    if (max === r) return ((g - b) / (max - min) + (g < b ? 6 : 0)) / 6;
-    if (max === g) return ((b - r) / (max - min) + 2) / 6;
-    return ((r - g) / (max - min) + 4) / 6;
+    if (max === r) return ((g - b) / chroma + (g < b ? 6 : 0)) / 6;
+    if (max === g) return ((b - r) / chroma + 2) / 6;
+    return ((r - g) / chroma + 4) / 6;
   })();
-  if (hue < 1 / 12) return "warm red";
-  if (hue < 2 / 12) return "orange-red";
-  if (hue < 3 / 12) return "warm orange";
-  if (hue < 4 / 12) return "golden yellow";
-  if (hue < 5 / 12) return "yellow-green";
-  if (hue < 6 / 12) return "fresh green";
-  if (hue < 7 / 12) return "teal-green";
-  if (hue < 8 / 12) return "teal";
-  if (hue < 9 / 12) return "sky blue";
-  if (hue < 10 / 12) return "medium blue";
-  if (hue < 11 / 12) return "blue-violet";
-  if (hue < 11.5 / 12) return "deep violet";
-  return "warm red";
+
+  // Lightness qualifier helper
+  const lq = (light: string, mid: string, deep: string): string => {
+    if (lightness > 0.65) return light;
+    if (lightness > 0.35) return mid;
+    return deep;
+  };
+
+  // ── 24 hue segments (~15° each) with 3-way lightness split ────────────────
+  if (hue < 1 / 24)  return lq("light rose",       "crimson red",   "deep crimson");
+  if (hue < 2 / 24)  return lq("light coral",       "warm red",      "dark red");
+  if (hue < 3 / 24)  return lq("salmon",            "tomato red",    "brick red");
+  if (hue < 4 / 24)  return lq("light coral-orange","orange-red",    "deep rust");
+  if (hue < 5 / 24)  return lq("peach",             "burnt orange",  "dark rust");
+  if (hue < 6 / 24)  return lq("light orange",      "warm orange",   "deep amber");
+  if (hue < 7 / 24)  return lq("pale amber",        "golden amber",  "dark amber");
+  if (hue < 8 / 24)  return lq("pale gold",         "golden yellow", "deep gold");
+  if (hue < 9 / 24)  return lq("pale yellow",       "warm yellow",   "dark yellow");
+  if (hue < 10 / 24) return lq("lime yellow",       "yellow-green",  "olive");
+  if (hue < 11 / 24) return lq("light lime",        "lime green",    "dark olive");
+  if (hue < 12 / 24) return lq("pale green",        "fresh green",   "deep green");
+  if (hue < 13 / 24) return lq("mint",              "medium green",  "forest green");
+  if (hue < 14 / 24) return lq("light seafoam",     "seafoam green", "deep emerald");
+  if (hue < 15 / 24) return lq("pale teal",         "teal-green",    "dark teal-green");
+  if (hue < 16 / 24) return lq("light teal",        "teal",          "deep teal");
+  if (hue < 17 / 24) return lq("pale cyan",         "cyan",          "deep cyan");
+  if (hue < 18 / 24) return lq("light sky blue",    "sky blue",      "deep sky blue");
+  if (hue < 19 / 24) return lq("pale blue",         "medium blue",   "cobalt blue");
+  if (hue < 20 / 24) return lq("light navy",        "navy blue",     "deep navy");
+  if (hue < 21 / 24) return lq("light periwinkle",  "blue-violet",   "deep blue-violet");
+  if (hue < 21.5 / 24) return lq("light lavender",  "violet",        "deep violet");
+  if (hue < 22 / 24) return lq("lavender",          "purple",        "deep purple");
+  if (hue < 22.5 / 24) return lq("light orchid",    "orchid",        "deep plum");
+  if (hue < 23 / 24) return lq("light mauve",       "mauve",         "deep mauve");
+  if (hue < 23.5 / 24) return lq("light pink",      "deep coral",    "burgundy");
+  return lq("blush pink", "rose red", "deep crimson"); // wraps back to red
 }
 
 /**
@@ -598,7 +637,7 @@ Call the submit_creative_brief tool with the completed brief. For imagePrompt: w
             layout:        { type: "string", description: "Visual layout: product placement, text zones, hierarchy" },
             colorGuidance: { type: "string", description: `brand colors — primary ${brandDna.colors.primary} for CTA button, text accents, and small graphic elements ONLY — NEVER as background fill, accent ${brandDna.colors.accent} for CTA` },
             fontGuidance:  { type: "string", description: `Font hierarchy — ${brandDna.fonts?.[0] ?? "sans-serif"} bold for headline, regular for body` },
-            imagePrompt:   { type: "string", description: `Gemini image generation prompt — single continuous paragraph, no line breaks. Rules: (0) BACKGROUND: Unless the inspiration ad clearly shows a colored background, the ad background MUST be white (#FFFFFF) or a very light neutral (>=95% lightness). The primary brand color must NEVER fill the background. (1) MUST incorporate all Visual Style Directives and Category Visual Constraints verbatim. (2) Specify every brand color with BOTH its uppercase hex code AND a semantic name, e.g. "CTA button fill: exact color ${brandDna.colors.primary.toUpperCase()} (${colorSemanticName(brandDna.colors.primary)}), NOT approximated". (3) ${(brandDna.products?.length ?? 0) > 0 ? "Include explicit product framing: primary product occupies center-lower third of frame, fully recognizable, not abstracted." : "Product as primary hero subject."} (4) Include layout, text positions, visual style${brandDna.visualStyleKeywords?.length ? ` (${brandDna.visualStyleKeywords.slice(0, 3).join(", ")})` : ""}${brandDna.creativeDoList?.length ? `, DO: ${brandDna.creativeDoList.slice(0, 2).join("; ")}` : ""}${brandDna.creativeDontList?.length ? `, NEVER: ${brandDna.creativeDontList.slice(0, 2).join("; ")}` : ""}. Must look like ${brandDna.name}'s in-house design team. Category: ${brandDna.productCategory}. Format: ${format}. Photorealistic professional ad quality.${brandDna.logoUrl ? ' (5) LOGO SAFE ZONE (mandatory): The bottom-right corner area (approximately 20% of image width × 15% of image height) MUST remain free of CTA buttons, text overlays, decorative frames, or any overlapping element. This zone is reserved for the brand logo that will be composited after generation. Violation of this zone is a layout failure.' : ''} (${brandDna.logoUrl ? "6" : "5"}) ALWAYS end with: "AVOID: generic stock imagery, watermarks, unrelated products, cluttered backgrounds, low-quality textures, cartoon style unless brand uses it."` },
+            imagePrompt:   { type: "string", description: `Gemini image generation prompt — single continuous paragraph, no line breaks. CRITICAL FIRST RULE — THE AD BACKGROUND MUST BE WHITE (#FFFFFF) OR A VERY LIGHT NEUTRAL (>=95% LIGHTNESS). THE PRIMARY BRAND COLOR MUST NEVER FILL THE BACKGROUND — RESERVE IT FOR CTA BUTTONS, TEXT ACCENTS, AND SMALL GRAPHIC ELEMENTS ONLY. VIOLATION OF THIS RULE IS A LAYOUT FAILURE. Rules: (1) MUST incorporate all Visual Style Directives and Category Visual Constraints verbatim. (2) Specify every brand color with BOTH its uppercase hex code AND a semantic name, e.g. "CTA button fill: exact color ${brandDna.colors.primary.toUpperCase()} (${colorSemanticName(brandDna.colors.primary)}), NOT approximated". (3) ${(brandDna.products?.length ?? 0) > 0 ? "Include explicit product framing: primary product occupies center-lower third of frame, fully recognizable, not abstracted." : "Product as primary hero subject."} (4) Include layout, text positions, visual style${brandDna.visualStyleKeywords?.length ? ` (${brandDna.visualStyleKeywords.slice(0, 3).join(", ")})` : ""}${brandDna.creativeDoList?.length ? `, DO: ${brandDna.creativeDoList.slice(0, 2).join("; ")}` : ""}${brandDna.creativeDontList?.length ? `, NEVER: ${brandDna.creativeDontList.slice(0, 2).join("; ")}` : ""}. Must look like ${brandDna.name}'s in-house design team. Category: ${brandDna.productCategory}. Format: ${format}. Photorealistic professional ad quality.${brandDna.logoUrl ? ' (5) LOGO SAFE ZONE (mandatory): The bottom-right corner area (approximately 20% of image width × 15% of image height) MUST remain free of CTA buttons, text overlays, decorative frames, or any overlapping element. This zone is reserved for the brand logo that will be composited after generation. Violation of this zone is a layout failure.' : ''} (${brandDna.logoUrl ? "6" : "5"}) ALWAYS end with: "AVOID: generic stock imagery, watermarks, unrelated products, cluttered backgrounds, low-quality textures, cartoon style unless brand uses it."` },
           },
           required: ["headline", "subheadline", "copy", "callToAction", "angle", "format", "layout", "colorGuidance", "fontGuidance", "imagePrompt"],
         },

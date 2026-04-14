@@ -22,7 +22,7 @@ export default async function GeneratePage({ params }: PageProps) {
 
   const { brandId } = await params;
 
-  const [brand, products, inspirations] = await Promise.all([
+  const [brand, products, inspirations, templateCount] = await Promise.all([
     prisma.brand.findFirst({
       where: { id: brandId, userId: session.user.id },
       include: {
@@ -40,6 +40,7 @@ export default async function GeneratePage({ params }: PageProps) {
       where: { brandId, isActive: true },
       orderBy: { uploadedAt: "desc" },
     }),
+    prisma.template.count(),
   ]);
 
   if (!brand) notFound();
@@ -57,6 +58,7 @@ export default async function GeneratePage({ params }: PageProps) {
         brandId={brand.id}
         brandName={brand.name}
         hasLogo={hasLogo}
+        templateCount={templateCount}
         existingCreatives={brand.creatives.map((c) => ({
           id: c.id,
           imageUrl: c.imageUrl,

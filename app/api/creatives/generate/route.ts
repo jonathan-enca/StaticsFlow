@@ -110,7 +110,8 @@ async function generateOne(
       creative.id,
       2,
       imageQuality,
-      inspirationImageUrlForQA
+      inspirationImageUrlForQA,
+      0.75 // STA-127 #6: higher bar for single-creative generation
     );
     const updated = await prisma.creative.update({
       where: { id: creative.id },
@@ -156,7 +157,7 @@ export async function POST(req: NextRequest) {
       format = "1080x1080",
       angle = "benefit",
       variants = false,
-      imageQuality = "flash",
+      imageQuality = "pro", // STA-127 #3: single generation defaults to pro
       creativeBrief = undefined,
       referenceImageUrl = undefined,
       referenceImageData = undefined,
@@ -203,6 +204,29 @@ export async function POST(req: NextRequest) {
       icons: p.iconsAndUiElements,
       moodboard: p.moodboardAssets,
     }));
+  }
+
+  // STA-127 #4: If no DB product records have images, fall back to scraped brandDna.productImages
+  // so Gemini always has real product photos rather than hallucinating a generic product.
+  const hasProductImages = brandDna.products?.some((p) => p.images.length > 0) ?? false;
+  if (!hasProductImages && (brandDna as { productImages?: string[] }).productImages?.length) {
+    const scrapedImages = (brandDna as { productImages?: string[] }).productImages ?? [];
+    if (brandDna.products && brandDna.products.length > 0) {
+      // Attach scraped images to the first product that has none
+      brandDna.products = brandDna.products.map((p, i) =>
+        i === 0 && p.images.length === 0 ? { ...p, images: scrapedImages.slice(0, 3) } : p
+      );
+    } else {
+      // No products at all — inject scraped images as an anonymous product entry
+      brandDna.products = [{
+        id: "scraped",
+        name: brandDna.name,
+        description: "",
+        images: scrapedImages.slice(0, 3),
+        icons: [],
+        moodboard: [],
+      }];
+    }
   }
 
   // Map new "replicate" mode value to the internal "manual" equivalent

@@ -44,7 +44,8 @@ export async function qaReviewCreative(
   creativeId?: string,
   maxIterations = 2,
   imageQuality?: ImageQuality,
-  inspirationImageUrl?: string // Phase C: if set, enables dual scoring
+  inspirationImageUrl?: string, // Phase C: if set, enables dual scoring
+  qaThreshold = 0.7 // STA-127 #6: 0.75 for single gen, 0.7 for batch
 ): Promise<QAResult> {
   // Fetch inspiration image as base64 once (reused across iterations)
   let inspirationBase64: string | undefined;
@@ -93,14 +94,14 @@ export async function qaReviewCreative(
       effectiveScore = Math.min(effectiveScore, 0.55);
     }
 
-    // STA-115 Phase 3.1: If QA flagged PRIMARY_COLOR_BACKGROUND, deduct 0.2 from score.
-    // This forces a regeneration pass with explicit background correction feedback.
+    // STA-115 Phase 3.1 / STA-127 #5: If QA flagged PRIMARY_COLOR_BACKGROUND, deduct 0.3 from score.
+    // Raised from 0.2 → 0.3 to guarantee a regeneration pass whenever this critical rule fires.
     const primaryColorBackground = lastResult.visualImprovements.includes("PRIMARY_COLOR_BACKGROUND");
     if (primaryColorBackground) {
-      effectiveScore = Math.max(0, effectiveScore - 0.2);
+      effectiveScore = Math.max(0, effectiveScore - 0.3);
     }
 
-    if (effectiveScore >= 0.7) {
+    if (effectiveScore >= qaThreshold) {
       // Inject the composite score so the result reflects dual scoring
       lastResult = { ...lastResult, score: effectiveScore };
       break;
@@ -125,7 +126,7 @@ export async function qaReviewCreative(
   }
 
   return {
-    approved: (lastResult?.score ?? 0) >= 0.7,
+    approved: (lastResult?.score ?? 0) >= qaThreshold,
     score: lastResult?.score ?? 0,
     feedback: lastResult?.feedback ?? "",
     imageUrl: currentCreative.imageUrl,

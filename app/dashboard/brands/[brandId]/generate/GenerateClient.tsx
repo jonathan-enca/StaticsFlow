@@ -60,6 +60,8 @@ interface Props {
   existingCreatives: ExistingCreative[];
   products: ProductSummary[];
   inspirations: InspirationSummary[];
+  /** Global BDD template count — warning shown when below 1 000 */
+  templateCount: number;
 }
 
 // ── Options ───────────────────────────────────────────────────────────────────
@@ -79,14 +81,14 @@ const QUALITY_OPTIONS: {
   badge: string;
 }[] = [
   {
-    value: "flash",
-    label: "Flash (Best quality)",
+    value: "pro",
+    label: "Pro (Highest quality)",
     desc: "Highest brand accuracy — ideal for hero creatives",
     badge: "Recommended",
   },
   {
-    value: "pro",
-    label: "Pro (Cost-effective)",
+    value: "flash",
+    label: "Flash (Fast & cost-effective)",
     desc: "Good quality at lower cost — ideal for batch testing",
     badge: "Budget",
   },
@@ -319,6 +321,7 @@ export default function GenerateClient({
   existingCreatives,
   products,
   inspirations,
+  templateCount,
 }: Props) {
   // Wizard step: 0 = Product, 1 = Inspiration mode, 2 = Settings/Generate
   const [step, setStep] = useState(0);
@@ -349,7 +352,9 @@ export default function GenerateClient({
   // Step 3 — Settings
   const [batchCount, setBatchCount] = useState<5 | 10 | 20>(5);
   const [format, setFormat] = useState<AdFormat>("1080x1080");
-  const [imageQuality, setImageQuality] = useState<ImageQuality>("flash");
+  // Default to "pro" for single-creative generation (STA-127 #3).
+  // Batch mode keeps "flash" since volume runs where speed/cost matter more.
+  const [imageQuality, setImageQuality] = useState<ImageQuality>("pro");
   const [creativeBrief, setCreativeBrief] = useState<string>("");
 
   // Generation state (replicate — single result)
@@ -991,16 +996,37 @@ export default function GenerateClient({
         </p>
       </div>
 
-      {/* STA-111: soft nudge when no product images exist */}
+      {/* BDD library size warning — shown when global template count < 1 000 */}
+      {templateCount < 1000 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <p className="text-sm font-semibold text-amber-800">
+            Inspiration library is still growing — results may be less on-brand.
+          </p>
+          <p className="text-xs text-amber-700 leading-snug">
+            The global template library currently has {templateCount.toLocaleString()} categorized
+            creatives (target: 1 000+). Brand accuracy improves significantly once the library is
+            fully populated.
+          </p>
+          <a
+            href="/admin/library"
+            className="inline-block text-xs font-semibold text-amber-800 underline hover:no-underline"
+          >
+            Upload more inspirations →
+          </a>
+        </div>
+      )}
+
+      {/* STA-111 / STA-127 #4: soft warning when no product images exist */}
       {!hasProductWithImages && !productNudgeDismissed && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start justify-between gap-4">
           <p className="text-sm text-amber-800">
-            Add a product photo to make your ad more on-brand.{" "}
+            No product images found — Gemini may render a generic product instead of yours.
+            Add a product photo for accurate brand identity.{" "}
             <a
               href={`/dashboard/brands/${brandId}/products`}
               className="font-medium underline hover:no-underline"
             >
-              Add Product
+              Add product images
             </a>
           </p>
           <button
