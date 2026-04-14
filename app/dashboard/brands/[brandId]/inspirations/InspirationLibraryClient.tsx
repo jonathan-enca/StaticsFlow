@@ -12,7 +12,7 @@
 import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import type { Inspiration } from "@prisma/client";
-import { Sparkles, X, Check, Loader2, Link as LinkIcon } from "lucide-react";
+import { Sparkles, X, Check, Loader2, Link as LinkIcon, Building2 } from "lucide-react";
 
 const MIN_FOR_GENERATION = 5;
 const MAX_PER_BRAND = 50;
@@ -484,6 +484,411 @@ function ImportFromUrlModal({
   );
 }
 
+// ── Meta Ads Library import modal ─────────────────────────────────────────────
+// 3-step flow: URL input → image selection gallery → import result
+
+interface MetaScrapeResult {
+  imageUrls: string[];
+}
+
+interface MetaImportSummary {
+  imported: number;
+  duplicates: number;
+  failed: number;
+}
+
+type MetaStep = "url" | "select" | "result";
+
+function MetaAdsImportModal({
+  brandId,
+  onImported,
+  onClose,
+}: {
+  brandId: string;
+  onImported: (count: number) => void;
+  onClose: () => void;
+}) {
+  const [step, setStep] = useState<MetaStep>("url");
+  const [url, setUrl] = useState("");
+  const [scraping, setScraping] = useState(false);
+  const [scrapeError, setScrapeError] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
+  const [importing, setImporting] = useState(false);
+  const [summary, setSummary] = useState<MetaImportSummary | null>(null);
+
+  async function handleScrape() {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    setScrapeError(null);
+    setScraping(true);
+    try {
+      const res = await fetch(`/api/brands/${brandId}/inspirations/meta-scrape`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmed }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setScrapeError(
+          data.message ??
+            data.error ??
+            "Could not scrape that page. Try again or use Import from URL."
+        );
+        return;
+      }
+      const result = data as MetaScrapeResult;
+      setImageUrls(result.imageUrls);
+      // Pre-select all found images
+      setSelectedUrls(new Set(result.imageUrls));
+      setStep("select");
+    } catch {
+      setScrapeError("Network error. Please try again.");
+    } finally {
+      setScraping(false);
+    }
+  }
+
+  function toggleUrl(imgUrl: string) {
+    setSelectedUrls((prev) => {
+      const next = new Set(prev);
+      if (next.has(imgUrl)) next.delete(imgUrl);
+      else next.add(imgUrl);
+      return next;
+    });
+  }
+
+  async function handleImport() {
+    if (selectedUrls.size === 0) return;
+    setImporting(true);
+    try {
+      const res = await fetch(`/api/brands/${brandId}/inspirations/meta-import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls: Array.from(selectedUrls) }),
+      });
+      const data = await res.json();
+      setSummary(data.summary as MetaImportSummary);
+      setStep("result");
+      if (data.summary?.imported > 0) {
+        onImported(data.summary.imported);
+      }
+    } catch {
+      setSummary({ imported: 0, duplicates: 0, failed: selectedUrls.size });
+      setStep("result");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.5)" }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden"
+        style={{
+          background: "var(--sf-bg-secondary)",
+          borderColor: "var(--sf-border)",
+          maxHeight: "90vh",
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-6 py-4 border-b"
+          style={{ borderColor: "var(--sf-border)" }}
+        >
+          <div>
+            <h2 className="font-bold text-sm" style={{ color: "var(--sf-text-primary)" }}>
+              Import from Meta Ads Library
+            </h2>
+            <p className="text-xs mt-0.5" style={{ color: "var(--sf-text-muted)" }}>
+              {step === "url" && "Paste your Meta Ads Library URL to find static ads"}
+              {step === "select" && `${imageUrls.length} ads found — select which to import`}
+              {step === "result" && "Import complete"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: "var(--sf-text-muted)" }}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto" style={{ maxHeight: "calc(90vh - 130px)" }}>
+          {/* Step 1: URL input */}
+          {step === "url" && (
+            <div className="p-6 space-y-5">
+              {/* Instructions */}
+              <div
+                className="rounded-xl border p-4 space-y-2 text-sm"
+                style={{
+                  background: "var(--sf-bg-elevated)",
+                  borderColor: "var(--sf-border)",
+                }}
+              >
+                <p className="font-semibold" style={{ color: "var(--sf-text-primary)" }}>
+                  How to get your Meta Ads Library URL:
+                </p>
+                <ol className="list-decimal list-inside space-y-1 text-xs" style={{ color: "var(--sf-text-secondary)" }}>
+                  <li>
+                    Go to{" "}
+                    <span className="font-mono" style={{ color: "var(--sf-accent)" }}>
+                      facebook.com/ads/library
+                    </span>
+                  </li>
+                  <li>Search for the brand or page you want to analyze</li>
+                  <li>Open the page&apos;s full ad library (click &quot;See all ads&quot;)</li>
+                  <li>Copy the URL from your browser — it will contain <span className="font-mono">view_all_page_id</span> or <span className="font-mono">id=</span></li>
+                </ol>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium" style={{ color: "var(--sf-text-secondary)" }}>
+                  Meta Ads Library URL
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleScrape(); }}
+                    placeholder="https://www.facebook.com/ads/library/?view_all_page_id=..."
+                    autoFocus
+                    className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
+                    style={{
+                      background: "var(--sf-bg-primary)",
+                      borderColor: "var(--sf-border)",
+                      color: "var(--sf-text-primary)",
+                    }}
+                    disabled={scraping}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleScrape}
+                    disabled={scraping || !url.trim()}
+                    className="rounded-lg px-4 py-2 text-sm font-semibold text-white flex items-center gap-1.5 disabled:opacity-40 transition-opacity hover:opacity-90"
+                    style={{ background: "var(--sf-accent)" }}
+                  >
+                    {scraping ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      "Scan"
+                    )}
+                  </button>
+                </div>
+                {scraping && (
+                  <p className="text-xs" style={{ color: "var(--sf-text-muted)" }}>
+                    Loading the page… this can take 15–30 seconds.
+                  </p>
+                )}
+              </div>
+
+              {scrapeError && (
+                <div
+                  className="rounded-lg px-4 py-3 text-sm space-y-1"
+                  style={{ background: "rgba(255,69,58,0.08)", color: "var(--sf-error)" }}
+                >
+                  <p>{scrapeError}</p>
+                  <p className="text-xs" style={{ color: "var(--sf-text-muted)" }}>
+                    Tip: Use the manual &quot;Import from URL&quot; option to add individual ad images directly.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 2: Image selection gallery */}
+          {step === "select" && (
+            <div className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm" style={{ color: "var(--sf-text-secondary)" }}>
+                  {selectedUrls.size} of {imageUrls.length} selected
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUrls(new Set(imageUrls))}
+                    className="text-xs hover:opacity-80"
+                    style={{ color: "var(--sf-accent)" }}
+                  >
+                    Select all
+                  </button>
+                  <span style={{ color: "var(--sf-border)" }}>·</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUrls(new Set())}
+                    className="text-xs hover:opacity-80"
+                    style={{ color: "var(--sf-text-muted)" }}
+                  >
+                    Deselect all
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {imageUrls.map((imgUrl) => {
+                  const sel = selectedUrls.has(imgUrl);
+                  return (
+                    <button
+                      key={imgUrl}
+                      type="button"
+                      onClick={() => toggleUrl(imgUrl)}
+                      className={`relative rounded-xl border-2 overflow-hidden transition-all ${
+                        sel
+                          ? "border-[var(--sf-accent)] ring-2 ring-[var(--sf-accent)]/20"
+                          : "border-[var(--sf-border)] hover:border-gray-400"
+                      }`}
+                    >
+                      <div className="aspect-square bg-[var(--sf-bg-primary)] overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={imgUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                      {sel && (
+                        <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[var(--sf-accent)] flex items-center justify-center">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Result */}
+          {step === "result" && summary && (
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  {
+                    label: "Imported",
+                    value: summary.imported,
+                    color: "var(--sf-success)",
+                    bg: "rgba(52,199,89,0.08)",
+                  },
+                  {
+                    label: "Duplicates skipped",
+                    value: summary.duplicates,
+                    color: "var(--sf-warning)",
+                    bg: "rgba(255,159,10,0.08)",
+                  },
+                  {
+                    label: "Failed",
+                    value: summary.failed,
+                    color: "var(--sf-error)",
+                    bg: "rgba(255,69,58,0.08)",
+                  },
+                ].map(({ label, value, color, bg }) => (
+                  <div
+                    key={label}
+                    className="rounded-xl p-4 text-center"
+                    style={{ background: bg }}
+                  >
+                    <p className="text-2xl font-bold" style={{ color }}>
+                      {value}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: "var(--sf-text-muted)" }}>
+                      {label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {summary.imported > 0 && (
+                <p className="text-sm text-center" style={{ color: "var(--sf-text-secondary)" }}>
+                  {summary.imported} ad{summary.imported > 1 ? "s" : ""} added to your inspiration library.
+                </p>
+              )}
+              {summary.imported === 0 && summary.duplicates > 0 && (
+                <p className="text-sm text-center" style={{ color: "var(--sf-text-muted)" }}>
+                  All selected ads were already in your library.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="flex items-center justify-end gap-2 px-6 py-4 border-t"
+          style={{ borderColor: "var(--sf-border)" }}
+        >
+          {step === "url" && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
+              style={{
+                borderColor: "var(--sf-border)",
+                color: "var(--sf-text-secondary)",
+              }}
+            >
+              Cancel
+            </button>
+          )}
+
+          {step === "select" && (
+            <>
+              <button
+                type="button"
+                onClick={() => { setStep("url"); setScrapeError(null); }}
+                className="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
+                style={{
+                  borderColor: "var(--sf-border)",
+                  color: "var(--sf-text-secondary)",
+                }}
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                onClick={handleImport}
+                disabled={selectedUrls.size === 0 || importing}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white flex items-center gap-1.5 disabled:opacity-40 transition-opacity hover:opacity-90"
+                style={{ background: "var(--sf-accent)" }}
+              >
+                {importing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Importing…
+                  </>
+                ) : (
+                  `Import ${selectedUrls.size} ad${selectedUrls.size !== 1 ? "s" : ""}`
+                )}
+              </button>
+            </>
+          )}
+
+          {step === "result" && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ background: "var(--sf-accent)" }}
+            >
+              Done
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Starter pack picker ───────────────────────────────────────────────────────
 
 interface TemplateSummary {
@@ -744,6 +1149,7 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showStarterPack, setShowStarterPack] = useState(false);
   const [showImportUrl, setShowImportUrl] = useState(false);
+  const [showMetaImport, setShowMetaImport] = useState(false);
 
   const activeCount = inspirations.filter((i) => i.isActive).length;
 
@@ -822,6 +1228,18 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
         />
       )}
 
+      {/* Meta Ads Library bulk import modal */}
+      {showMetaImport && (
+        <MetaAdsImportModal
+          brandId={brandId}
+          onImported={() => {
+            // Reload page to show newly imported inspirations from server
+            window.location.reload();
+          }}
+          onClose={() => setShowMetaImport(false)}
+        />
+      )}
+
       {/* Soft gate banner — fewer than MIN_FOR_GENERATION active inspirations */}
       {activeCount < MIN_FOR_GENERATION && (
         <div className="mb-6 flex items-start gap-3 rounded-xl border px-4 py-3"
@@ -841,15 +1259,30 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
               Upload at least {MIN_FOR_GENERATION} ad creatives to enable inspiration-driven generation.
               Below that threshold, generation will fall back to the global template library.
             </p>
-            <button
-              type="button"
-              onClick={() => setShowStarterPack(true)}
-              className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
-              style={{ background: "var(--sf-accent)", color: "#fff" }}
-            >
-              <Sparkles className="w-3 h-3" />
-              Start with a starter pack
-            </button>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowStarterPack(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
+                style={{ background: "var(--sf-accent)", color: "#fff" }}
+              >
+                <Sparkles className="w-3 h-3" />
+                Start with a starter pack
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowMetaImport(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80 border"
+                style={{
+                  background: "transparent",
+                  borderColor: "rgba(255,159,10,0.4)",
+                  color: "var(--sf-warning)",
+                }}
+              >
+                <Building2 className="w-3 h-3" />
+                Import from Meta Ads Library
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -879,6 +1312,19 @@ export default function InspirationLibraryClient({ brandId, initialInspirations 
 
       {/* Secondary import actions */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setShowMetaImport(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:opacity-80"
+          style={{
+            borderColor: "var(--sf-accent)",
+            background: "var(--sf-accent-muted)",
+            color: "var(--sf-accent)",
+          }}
+        >
+          <Building2 className="w-3.5 h-3.5" />
+          Import from Meta Ads Library
+        </button>
         <button
           type="button"
           onClick={() => setShowImportUrl(true)}
