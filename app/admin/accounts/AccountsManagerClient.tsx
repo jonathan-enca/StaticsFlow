@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 // Accounts Manager — admin interface for user account management
 // Features:
 //   1. Searchable, paginated table of all registered accounts
@@ -541,16 +543,29 @@ export function AccountsManagerClient() {
 
                     {/* Actions */}
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => setDeleteTarget(user)}
-                        className="text-xs px-2 py-1 rounded-md transition-opacity hover:opacity-80"
-                        style={{
-                          background: "#fee2e2",
-                          color: "#dc2626",
-                        }}
-                      >
-                        Delete
-                      </button>
+                      <div className="flex gap-2">
+                        <Link
+                          href={`/admin/users/${user.id}`}
+                          className="text-xs px-2 py-1 rounded-md transition-opacity hover:opacity-80"
+                          style={{
+                            background: "var(--sf-bg-elevated)",
+                            border: "1px solid var(--sf-border)",
+                            color: "var(--sf-text-secondary)",
+                          }}
+                        >
+                          Manage
+                        </Link>
+                        <button
+                          onClick={() => setDeleteTarget(user)}
+                          className="text-xs px-2 py-1 rounded-md transition-opacity hover:opacity-80"
+                          style={{
+                            background: "#fee2e2",
+                            color: "#dc2626",
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
