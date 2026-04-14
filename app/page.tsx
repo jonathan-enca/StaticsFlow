@@ -518,13 +518,11 @@ function Footer() {
 }
 
 // ---------------------------------------------------------------------------
-// Page — landing page uses light theme
+// Page — landing page
 // ---------------------------------------------------------------------------
 export default function Home() {
   return (
-    // data-theme="light" overrides the root html dark default for the landing page.
-    // The [data-theme='light'] rule in globals.css re-declares the light palette.
-    <main data-theme="light" className="min-h-screen" style={{ background: 'var(--sf-bg-secondary)' }}>
+    <main className="min-h-screen" style={{ background: 'var(--sf-bg-secondary)' }}>
       <Navbar />
       <Hero />
       <StatsBar />

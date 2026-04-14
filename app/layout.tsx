@@ -19,9 +19,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    // data-theme="dark" — app pages are dark by default.
-    // Landing & auth pages override locally with data-theme="light" on their wrapper.
-    <html lang="en" className={inter.variable} data-theme="dark" suppressHydrationWarning>
+    // data-theme="light" — app-wide light theme. No dark mode.
+    <html lang="en" className={inter.variable} data-theme="light" suppressHydrationWarning>
       <head>
         {/* Satoshi — display font for headlines and logo wordmark (Fontshare CDN) */}
         <link rel="preconnect" href="https://api.fontshare.com" />
