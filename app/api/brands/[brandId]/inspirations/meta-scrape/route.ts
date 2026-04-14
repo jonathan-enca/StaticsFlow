@@ -2,16 +2,19 @@
 // Scrapes a Meta Ads Library URL and returns up to 15 static ad image URLs (no import).
 //
 // Strategy (in order):
-//   1. Meta Ads Library Graph API — uses META_APP_ID + META_APP_SECRET env vars if set.
-//      This is the reliable path. Requires a registered Facebook App.
-//   2. Puppeteer with network response interception — captures images as they load over
-//      the network, avoiding DOM-inspection issues with React virtualised lists.
-//      Uses `domcontentloaded` + fixed wait; wraps goto in its own try-catch so a
-//      partial navigation timeout still yields whatever content loaded.
+//   1. Meta Ads Library Graph API — preferred path, no scraping.
+//      Token resolution order:
+//        a) META_USER_TOKEN env var — a User Access Token with ads_read permission.
+//           Generated from Graph API Explorer by an app admin. Valid 60 days.
+//           Best for dev/staging while App Review is pending.
+//        b) META_APP_ID + META_APP_SECRET — generates a client credential token.
+//           Requires the app to have passed Meta's App Review for ads_read permission.
+//           Best for production once App Review is approved.
+//   2. Puppeteer with network response interception — fallback when Graph API unavailable.
+//      Uses `domcontentloaded` + fixed wait; wraps goto in its own try-catch.
 //
 // NOTE on Vercel: Puppeteer bundles ~300 MB of Chromium which exceeds Vercel's 50 MB
-// function limit. In that case, proxy via a Railway server using puppeteer-core +
-// @sparticuz/chromium. The Graph API path has no binary-size issue.
+// function limit. The Graph API path has no binary-size issue (plain fetch only).
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -69,25 +72,36 @@ function dedupeAndFilter(urls: string[]): string[] {
 }
 
 // ── Graph API scrape ──────────────────────────────────────────────────────────
-// Requires META_APP_ID + META_APP_SECRET env vars (system-level Facebook App).
-// Returns [] if credentials are absent or the API call fails.
+// Uses the Meta Ads Library API. Token resolution:
+//   1. META_USER_TOKEN — User Access Token (ads_read scope). No App Review needed.
+//   2. META_APP_ID + META_APP_SECRET — client credential token. Requires App Review.
+// Returns [] if no credentials are available or the call fails.
 
 async function graphApiScrape(pageId: string): Promise<string[]> {
-  const appId = process.env.META_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
-  if (!appId || !appSecret) return [];
+  let token: string | undefined;
 
-  // Generate a client credential access token
-  const tokenRes = await fetch(
-    `https://graph.facebook.com/oauth/access_token` +
-      `?client_id=${encodeURIComponent(appId)}` +
-      `&client_secret=${encodeURIComponent(appSecret)}` +
-      `&grant_type=client_credentials`,
-    { signal: AbortSignal.timeout(10_000) }
-  );
-  if (!tokenRes.ok) return [];
-  const tokenData = (await tokenRes.json()) as { access_token?: string };
-  const token = tokenData.access_token;
+  // Path 1: User Access Token (fastest path, no App Review needed)
+  const userToken = process.env.META_USER_TOKEN;
+  if (userToken) {
+    token = userToken;
+  } else {
+    // Path 2: Client credential token (requires App Review for ads_read)
+    const appId = process.env.META_APP_ID;
+    const appSecret = process.env.META_APP_SECRET;
+    if (!appId || !appSecret) return [];
+
+    const tokenRes = await fetch(
+      `https://graph.facebook.com/oauth/access_token` +
+        `?client_id=${encodeURIComponent(appId)}` +
+        `&client_secret=${encodeURIComponent(appSecret)}` +
+        `&grant_type=client_credentials`,
+      { signal: AbortSignal.timeout(10_000) }
+    );
+    if (!tokenRes.ok) return [];
+    const tokenData = (await tokenRes.json()) as { access_token?: string };
+    token = tokenData.access_token;
+  }
+
   if (!token) return [];
 
   // Query the Ads Library API for image ads from this page
