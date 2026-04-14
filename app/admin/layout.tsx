@@ -38,6 +38,13 @@ export default async function AdminLayout({
         >
           BDD Manager
         </Link>
+        <Link
+          href="/admin/accounts"
+          style={{ color: "var(--sf-text-secondary)" }}
+          className="hover:opacity-80 transition-opacity"
+        >
+          Accounts
+        </Link>
         <span className="ml-auto">
           <Link
             href="/dashboard"
