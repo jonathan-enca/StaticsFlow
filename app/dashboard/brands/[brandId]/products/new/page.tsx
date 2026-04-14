@@ -23,15 +23,20 @@ export default async function NewProductPage({ params }: PageProps) {
 
   const { brandId } = await params;
 
-  const brand = await prisma.brand.findFirst({
-    where: { id: brandId, userId: session.user.id },
-  });
+  const [brand, userBrands] = await Promise.all([
+    prisma.brand.findFirst({ where: { id: brandId, userId: session.user.id } }),
+    prisma.brand.findMany({
+      where: { userId: session.user.id },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   if (!brand) notFound();
 
   return (
     <div className="min-h-screen bg-[var(--sf-bg)]">
-      <AppNavbar email={session.user.email} brandId={brandId} />
+      <AppNavbar email={session.user.email} brands={userBrands} isAdmin={session.user?.isAdmin} />
       <main className="mx-auto max-w-3xl px-4 py-10">
         <div className="mb-8">
           <div className="mb-1 flex items-center gap-2 text-sm text-[var(--sf-muted)]">

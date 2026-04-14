@@ -24,9 +24,14 @@ export default async function BrandDnaPage({ params }: PageProps) {
 
   const { brandId } = await params;
 
-  const brand = await prisma.brand.findFirst({
-    where: { id: brandId, userId: session.user.id },
-  });
+  const [brand, userBrands] = await Promise.all([
+    prisma.brand.findFirst({ where: { id: brandId, userId: session.user.id } }),
+    prisma.brand.findMany({
+      where: { userId: session.user.id },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   if (!brand) notFound();
 
@@ -94,7 +99,7 @@ export default async function BrandDnaPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
-      <AppNavbar email={session.user?.email} brandId={brand.id} />
+      <AppNavbar email={session.user?.email} brands={userBrands} isAdmin={session.user?.isAdmin} />
 
       <BrandDnaClient
         brandId={brand.id}

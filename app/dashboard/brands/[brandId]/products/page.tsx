@@ -23,16 +23,23 @@ export default async function ProductsPage({ params }: PageProps) {
 
   const { brandId } = await params;
 
-  const brand = await prisma.brand.findFirst({
-    where: { id: brandId, userId: session.user.id },
-    include: { products: { orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] } },
-  });
+  const [brand, userBrands] = await Promise.all([
+    prisma.brand.findFirst({
+      where: { id: brandId, userId: session.user.id },
+      include: { products: { orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] } },
+    }),
+    prisma.brand.findMany({
+      where: { userId: session.user.id },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   if (!brand) notFound();
 
   return (
     <div className="min-h-screen bg-[var(--sf-bg)]">
-      <AppNavbar email={session.user.email} brandId={brandId} />
+      <AppNavbar email={session.user.email} brands={userBrands} isAdmin={session.user?.isAdmin} />
       <main className="mx-auto max-w-5xl px-4 py-10">
         <div className="mb-8 flex items-center justify-between">
           <div>

@@ -19,15 +19,19 @@ export default async function SettingsPage() {
     select: { anthropicApiKey: true, geminiApiKey: true, email: true },
   });
 
-  const lastBrand = await prisma.brand.findFirst({
+  const userBrands = await prisma.brand.findMany({
     where: { userId: session.user!.id as string },
     orderBy: { updatedAt: 'desc' },
-    select: { id: true },
+    select: { id: true, name: true },
   });
 
   return (
     <main className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
-      <AppNavbar email={session.user?.email} brandId={lastBrand?.id ?? null} isAdmin={session.user?.isAdmin} />
+      <AppNavbar
+        email={session.user?.email}
+        brands={userBrands}
+        isAdmin={session.user?.isAdmin}
+      />
 
       <div className="max-w-2xl mx-auto px-6 py-12">
         <div className="mb-8">

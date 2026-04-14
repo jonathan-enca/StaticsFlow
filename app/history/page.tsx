@@ -16,15 +16,19 @@ export default async function HistoryPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const lastBrand = await prisma.brand.findFirst({
+  const userBrands = await prisma.brand.findMany({
     where: { userId: session.user.id },
     orderBy: { updatedAt: 'desc' },
-    select: { id: true },
+    select: { id: true, name: true },
   });
 
   return (
     <main className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
-      <AppNavbar email={session.user?.email} brandId={lastBrand?.id ?? null} isAdmin={session.user?.isAdmin} />
+      <AppNavbar
+        email={session.user?.email}
+        brands={userBrands}
+        isAdmin={session.user?.isAdmin}
+      />
 
       <div className="max-w-4xl mx-auto px-6 py-16 text-center">
         <div

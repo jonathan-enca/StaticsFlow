@@ -24,18 +24,23 @@ export default async function InspirationLibraryPage({ params }: PageProps) {
 
   const { brandId } = await params;
 
-  const brand = await prisma.brand.findFirst({
-    where: { id: brandId, userId: session.user.id },
-    include: {
-      inspirations: { orderBy: { uploadedAt: "desc" } },
-    },
-  });
+  const [brand, userBrands] = await Promise.all([
+    prisma.brand.findFirst({
+      where: { id: brandId, userId: session.user.id },
+      include: { inspirations: { orderBy: { uploadedAt: "desc" } } },
+    }),
+    prisma.brand.findMany({
+      where: { userId: session.user.id },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   if (!brand) notFound();
 
   return (
     <div className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
-      <AppNavbar email={session.user.email} brandId={brandId} />
+      <AppNavbar email={session.user.email} brands={userBrands} isAdmin={session.user?.isAdmin} />
 
       <main className="mx-auto max-w-6xl px-4 py-10">
         {/* Breadcrumb + header */}

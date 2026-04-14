@@ -22,7 +22,7 @@ export default async function GeneratePage({ params }: PageProps) {
 
   const { brandId } = await params;
 
-  const [brand, products, inspirations, templateCount] = await Promise.all([
+  const [brand, products, inspirations, templateCount, userBrands] = await Promise.all([
     prisma.brand.findFirst({
       where: { id: brandId, userId: session.user.id },
       include: {
@@ -41,6 +41,11 @@ export default async function GeneratePage({ params }: PageProps) {
       orderBy: { uploadedAt: "desc" },
     }),
     prisma.template.count(),
+    prisma.brand.findMany({
+      where: { userId: session.user.id },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, name: true },
+    }),
   ]);
 
   if (!brand) notFound();
@@ -52,7 +57,7 @@ export default async function GeneratePage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
-      <AppNavbar email={session.user?.email} brandId={brand.id} />
+      <AppNavbar email={session.user?.email} brands={userBrands} isAdmin={session.user?.isAdmin} />
 
       <GenerateClient
         brandId={brand.id}
