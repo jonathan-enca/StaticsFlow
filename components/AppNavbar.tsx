@@ -4,11 +4,12 @@
 //   Right: brand picker (multi-brand) + user menu avatar dropdown
 //   Mobile: hamburger → slide-over panel covering all nav + utility links
 // STA-134: brand picker shown when user has 2+ brands; persisted in localStorage.
+// STA-135: brand switch now navigates to the equivalent page for the new brand.
 
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import UserMenu from '@/components/UserMenu'
 
 interface Brand {
@@ -38,6 +39,7 @@ const LS_KEY = 'sf_active_brand'
 
 export default function AppNavbar({ email, brands = [], isAdmin }: AppNavbarProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const overlayRef = useRef<HTMLDivElement>(null)
@@ -67,6 +69,17 @@ export default function AppNavbar({ email, brands = [], isAdmin }: AppNavbarProp
     setActiveBrandId(id)
     try { localStorage.setItem(LS_KEY, id) } catch { /* ignore */ }
     setPickerOpen(false)
+    setMobileOpen(false)
+
+    // If the user is currently viewing a brand-specific page, navigate them to
+    // the equivalent page for the newly selected brand so the switch takes effect
+    // immediately rather than silently keeping the old brand's data in view.
+    // Pattern: /dashboard/brands/[currentBrandId][/rest]
+    const brandPathMatch = pathname.match(/^\/dashboard\/brands\/([^/]+)(\/.*)?$/)
+    if (brandPathMatch) {
+      const rest = brandPathMatch[2] ?? ''
+      router.push(`/dashboard/brands/${id}${rest}`)
+    }
   }
 
   const activeBrand = brands.find((b) => b.id === activeBrandId) ?? brands[0] ?? null
