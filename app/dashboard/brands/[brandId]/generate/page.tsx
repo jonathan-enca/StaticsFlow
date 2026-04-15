@@ -50,10 +50,14 @@ export default async function GeneratePage({ params }: PageProps) {
 
   if (!brand) notFound();
 
-  // Check if the brand has a logo asset — required to unlock generation
+  // Check if the brand has a logo asset — required to unlock generation.
+  // The logo upload API stores the URL at brandDnaJson.logoUrl; fall back to
+  // checking brandAssets[] for any legacy entries with type === "logo".
   const brandDnaJson = (brand.brandDnaJson ?? {}) as Record<string, unknown>;
   const brandAssets = Array.isArray(brandDnaJson.brandAssets) ? brandDnaJson.brandAssets as { type: string }[] : [];
-  const hasLogo = brandAssets.some((a) => a.type === "logo");
+  const hasLogo =
+    (typeof brandDnaJson.logoUrl === "string" && brandDnaJson.logoUrl.length > 0) ||
+    brandAssets.some((a) => a.type === "logo");
 
   return (
     <main className="min-h-screen" style={{ background: "var(--sf-bg-primary)" }}>
