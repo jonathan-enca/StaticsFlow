@@ -24,14 +24,16 @@ import type { ImageQuality } from "@/types/index";
 /**
  * Gemini image generation model tiers.
  *
- * flash → gemini-2.0-flash-preview-image-generation  Fast, cost-effective. Good for bulk / drafts.
- * pro   → gemini-2.0-flash-preview-image-generation  Highest quality available via Gemini native.
+ * flash → gemini-2.0-flash-exp-image-generation  Fast, cost-effective. Good for bulk / drafts.
+ * pro   → gemini-2.0-flash-exp-image-generation  Highest quality available via Gemini native.
  *         (A distinct higher-quality model will be wired in when Google releases one.)
  *
  * Both require responseModalities: ["IMAGE", "TEXT"] at model instantiation.
+ *
+ * NOTE: "preview" model was removed by Google. "exp" is the current replacement.
  */
-export const GEMINI_IMAGE_MODEL_FLASH = "gemini-2.0-flash-preview-image-generation";
-export const GEMINI_IMAGE_MODEL_PRO   = "gemini-2.0-flash-preview-image-generation";
+export const GEMINI_IMAGE_MODEL_FLASH = "gemini-2.0-flash-exp-image-generation";
+export const GEMINI_IMAGE_MODEL_PRO   = "gemini-2.0-flash-exp-image-generation";
 
 /** Default model (flash) kept for backward compatibility. */
 export const GEMINI_IMAGE_MODEL = GEMINI_IMAGE_MODEL_FLASH;
