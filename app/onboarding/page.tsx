@@ -190,16 +190,19 @@ function Stepper({ step, onNavigate }: { step: Step; onNavigate: (s: Step) => vo
 
 // ── DNA Review Step (STA-55): grouped editable fields ────────────────────────
 // STA-122: removed generate props — step now navigates to "product" via onContinue
+// STA-139: added inspirationSeed prop to show pre-loaded inspirations banner
 function DnaReviewStep({
   dna,
   onDnaChange,
   onContinue,
   onBack,
+  inspirationSeed,
 }: {
   dna: BrandDNA;
   onDnaChange: (dna: BrandDNA) => void;
   onContinue: () => void;
   onBack: () => void;
+  inspirationSeed?: { seeded: number; category: string; message: string } | null;
 }) {
   const [campaignOpen, setCampaignOpen] = useState(false);
 
@@ -211,6 +214,17 @@ function DnaReviewStep({
 
   return (
     <div>
+      {/* STA-139: Inspiration pre-load banner — shown only when BDD templates were seeded */}
+      {inspirationSeed && inspirationSeed.seeded > 0 && (
+        <div
+          className="flex items-start gap-3 mb-5 px-4 py-3 rounded-md border text-sm"
+          style={{ background: 'rgba(52,199,89,0.08)', borderColor: 'rgba(52,199,89,0.25)', color: 'var(--sf-text-primary)' }}
+        >
+          <span className="mt-0.5 text-base" aria-hidden>✨</span>
+          <span>{inspirationSeed.message}</span>
+        </div>
+      )}
+
       {/* Brand header */}
       <div className="flex items-center gap-3 mb-6">
         <div
@@ -830,6 +844,10 @@ export default function OnboardingPage() {
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [dna, setDna] = useState<BrandDNA | null>(null);
+  // STA-139: brand ID (set when authenticated user extracts DNA — null for guests)
+  const [brandId, setBrandId] = useState<string | null>(null);
+  // STA-139: inspiration seeding result shown on the DNA review step
+  const [inspirationSeed, setInspirationSeed] = useState<{ seeded: number; category: string; message: string } | null>(null);
 
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
@@ -840,7 +858,7 @@ export default function OnboardingPage() {
 
   function navigateTo(s: Step) {
     setStep(s);
-    if (s === "url") { setDna(null); setCreative(null); setIsDemo(false); }
+    if (s === "url") { setDna(null); setCreative(null); setIsDemo(false); setBrandId(null); setInspirationSeed(null); }
     if (s === "dna") { setCreative(null); }
     if (s === "product") { setCreative(null); setGenerateError(null); }
   }
@@ -876,6 +894,11 @@ export default function OnboardingPage() {
 
     const data = await res.json();
     setDna(data.dna);
+    // STA-139: capture brand ID and inspiration seed result (both null for guests)
+    setBrandId(data.brand?.id ?? null);
+    if (data.inspirationSeed?.seeded > 0) {
+      setInspirationSeed(data.inspirationSeed);
+    }
     setStep("dna");
   }
 
@@ -1117,6 +1140,7 @@ export default function OnboardingPage() {
             onDnaChange={setDna}
             onContinue={() => navigateTo("product")}
             onBack={() => navigateTo("url")}
+            inspirationSeed={inspirationSeed}
           />
         )}
 

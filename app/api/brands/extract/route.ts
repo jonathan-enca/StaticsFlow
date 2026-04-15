@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { extractBrandDNA } from "@/lib/brand-dna-extractor";
+import { seedInspirations } from "@/app/api/brands/[brandId]/seed-inspirations/route";
 
 export async function POST(req: NextRequest) {
   let url: string;
@@ -61,7 +62,32 @@ export async function POST(req: NextRequest) {
           brandDnaJson: dna as object,
         },
       });
-      return NextResponse.json({ brand, dna }, { status: 201 });
+
+      // STA-139: auto-seed inspiration library on first extraction (cold-start fix).
+      // Fast DB operation — included in response so the UI can show the banner.
+      let inspirationSeed: { seeded: number; category: string; message: string } | null = null;
+      try {
+        const seed = await seedInspirations(
+          brand.id,
+          dna.productCategory ?? "other",
+          dna.language ?? "fr"
+        );
+        if (!seed.alreadySeeded) {
+          const categoryLabel = seed.category === "other" ? "" : seed.category;
+          inspirationSeed = {
+            seeded: seed.seeded,
+            category: seed.category,
+            message: seed.seeded > 0
+              ? `We pre-loaded ${seed.seeded} top-performing${categoryLabel ? ` ${categoryLabel}` : ""} ads as inspiration.`
+              : "",
+          };
+        }
+      } catch (seedErr) {
+        // Non-fatal: seeding failure must not break brand creation
+        console.warn("[brands/extract] inspiration seed failed:", seedErr);
+      }
+
+      return NextResponse.json({ brand, dna, inspirationSeed }, { status: 201 });
     }
 
     // Guest (onboarding): return DNA without DB write
