@@ -1,18 +1,32 @@
 "use client";
 
-// Onboarding flow: URL → Brand DNA → Your Product → First Creative
-// STA-122: added "Your Product" confirmation step (P0b) — 4-step flow
+// Onboarding flow: URL → Brand DNA → Inspirations → Your Product → First Creative
+// STA-145: redesigned to 5-step flow aligned with dashboard pillar vocabulary
+// STA-122: added "Your Product" confirmation step (P0b)
 // Target: < 3 minutes end-to-end (SPECS.md §6.2, KPI §11.1)
-// BYOK: users enter their own Claude + Gemini API keys directly in this page (SPECS.md §7.3)
-// UX fixes C5/M6/M7: keys expanded by default, mobile stepper, back navigation
+// BYOK: Gemini key moved to Step 4 (Your Product) to reduce first-impression friction
 // STA-49: demo mode — investors can complete the full flow without real API keys
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Key, Sparkles, PartyPopper, CheckCircle, ThumbsUp, RefreshCw, X, Link } from "lucide-react";
 
-type Step = "url" | "dna" | "product" | "creative";
-const STEPS: Step[] = ["url", "dna", "product", "creative"];
-const STEP_LABELS: Record<Step, string> = { url: "Enter URL", dna: "Brand DNA", product: "Your Product", creative: "First Creative" };
+type Step = "url" | "dna" | "inspirations" | "product" | "creative";
+const STEPS: Step[] = ["url", "dna", "inspirations", "product", "creative"];
+const STEP_LABELS: Record<Step, string> = {
+  url: "Your Brand",
+  dna: "Brand DNA",
+  inspirations: "Inspirations",
+  product: "Your Product",
+  creative: "Generate",
+};
+// Per-step motivational subtitles shown in the stepper (STA-145)
+const STEP_SUBTITLES: Record<Step, string> = {
+  url: "Your URL → Brand DNA in 30 seconds",
+  dna: "Check what we extracted — edit anything",
+  inspirations: "Reference ads we will learn from",
+  product: "Pick the product to feature",
+  creative: "Your first on-brand ad",
+};
 
 // Product data held in onboarding state (STA-122 P0b)
 interface ProductData {
@@ -111,61 +125,83 @@ const DEMO_CREATIVE: GeneratedCreative = {
   score: 0.92,
 };
 
-// ── Progress stepper ──────────────────────────────────────────────────────────
+// ── Progress stepper (STA-145: 5-step redesign) ───────────────────────────────
 function Stepper({ step, onNavigate }: { step: Step; onNavigate: (s: Step) => void }) {
   const currentIdx = STEPS.indexOf(step);
 
   return (
     <>
-      {/* Desktop stepper (≥640px) */}
-      <div className="hidden sm:flex items-center gap-3 mb-10">
+      {/* Desktop stepper (≥640px): all 5 steps + labels + subtitles always visible */}
+      <div className="hidden sm:flex items-start justify-between gap-1 mb-10">
         {STEPS.map((s, i) => {
           const done = currentIdx > i;
           const active = step === s;
           const clickable = done;
           return (
-            <div key={s} className="flex items-center gap-3">
+            <div key={s} className="flex flex-col items-center flex-1 gap-1.5 relative">
+              {/* Connector line */}
+              {i < STEPS.length - 1 && (
+                <div
+                  className="absolute top-4 left-1/2 w-full h-px"
+                  style={{
+                    background: done ? 'var(--sf-success)' : 'var(--sf-border)',
+                    opacity: done ? 0.5 : 1,
+                  }}
+                />
+              )}
+              {/* Step circle */}
               <button
                 type="button"
                 disabled={!clickable}
                 onClick={() => clickable && onNavigate(s)}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors
-                  ${active
-                    ? 'text-white'
+                className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all
+                  ${clickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                style={
+                  active
+                    ? { background: 'var(--sf-accent)', color: '#fff' }
                     : done
-                    ? 'bg-green-500 text-white cursor-pointer hover:bg-green-600'
-                    : 'text-gray-400 cursor-default'
-                  }`}
-                style={active ? { background: 'var(--sf-accent)' } : done ? undefined : { background: 'var(--sf-bg-elevated)' }}
+                    ? { background: 'var(--sf-success)', color: '#fff' }
+                    : { background: 'var(--sf-bg-elevated)', color: 'var(--sf-text-muted)' }
+                }
               >
                 {done ? "✓" : i + 1}
               </button>
+              {/* Step label */}
               <span
-                className={`text-sm font-medium ${done ? "text-green-500 cursor-pointer" : ""}`}
+                className="text-xs font-semibold text-center"
                 style={active
                   ? { color: 'var(--sf-text-primary)' }
                   : done
-                  ? undefined
+                  ? { color: 'var(--sf-success)', cursor: 'pointer' }
                   : { color: 'var(--sf-text-muted)' }
                 }
                 onClick={() => done && onNavigate(s)}
               >
                 {STEP_LABELS[s]}
               </span>
-              {i < STEPS.length - 1 && (
-                <div className="w-8 h-px" style={{ background: 'var(--sf-border)' }} />
-              )}
+              {/* Per-step subtitle */}
+              <span
+                className="text-xs text-center leading-tight hidden md:block"
+                style={{ color: active ? 'var(--sf-text-secondary)' : 'var(--sf-text-muted)', maxWidth: '80px' }}
+              >
+                {STEP_SUBTITLES[s]}
+              </span>
             </div>
           );
         })}
       </div>
 
-      {/* Mobile stepper (<640px) */}
+      {/* Mobile stepper (<640px): Step X of 5 · Name + progress bar */}
       <div className="sm:hidden mb-8">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--sf-text-muted)' }}>
-            Step {currentIdx + 1}/{STEPS.length} · {STEP_LABELS[step]}
-          </span>
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--sf-text-muted)' }}>
+              Step {currentIdx + 1} of {STEPS.length}
+            </span>
+            <span className="text-xs font-semibold ml-1.5" style={{ color: 'var(--sf-text-primary)' }}>
+              · {STEP_LABELS[step]}
+            </span>
+          </div>
           {currentIdx > 0 && (
             <button
               type="button"
@@ -183,6 +219,7 @@ function Stepper({ step, onNavigate }: { step: Step; onNavigate: (s: Step) => vo
             style={{ width: `${((currentIdx + 1) / STEPS.length) * 100}%`, background: 'var(--sf-accent)' }}
           />
         </div>
+        <p className="mt-1.5 text-xs" style={{ color: 'var(--sf-text-muted)' }}>{STEP_SUBTITLES[step]}</p>
       </div>
     </>
   );
@@ -512,13 +549,13 @@ function DnaReviewStep({
 
       </div>
 
-      {/* STA-122: Continue to Your Product step instead of generating directly */}
+      {/* STA-145: Continue to Inspirations step (new Step 3) */}
       <button
         onClick={onContinue}
         className="w-full py-3.5 px-6 text-white font-semibold rounded-md hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
         style={{ background: 'var(--sf-accent)' }}
       >
-        Continue to Your Product →
+        Continue to Inspirations →
       </button>
 
       <button
@@ -527,6 +564,201 @@ function DnaReviewStep({
         style={{ color: 'var(--sf-text-secondary)' }}
       >
         ← Try a different URL
+      </button>
+    </div>
+  );
+}
+
+// ── Inspirations Step (STA-145 P0) ───────────────────────────────────────────
+// Shows auto-seeded inspiration ads from BDD templates.
+// Seeding happens in STA-139 during extraction — this step only reads.
+function InspirationConfirmStep({
+  inspirationSeed,
+  brandId,
+  isDemo,
+  onContinue,
+  onBack,
+}: {
+  inspirationSeed: { seeded: number; category: string; message: string } | null;
+  brandId: string | null;
+  isDemo: boolean;
+  onContinue: () => void;
+  onBack: () => void;
+}) {
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
+  const [loadingThumbs, setLoadingThumbs] = useState(false);
+
+  // Fetch 2 thumbnails if authenticated user has a brand
+  useEffect(() => {
+    if (!brandId || isDemo) return;
+    setLoadingThumbs(true);
+    fetch(`/api/brands/${brandId}/inspirations`)
+      .then((r) => r.json())
+      .then((d) => {
+        const urls: string[] = (d.inspirations ?? [])
+          .slice(0, 2)
+          .map((ins: { thumbnailUrl?: string | null; imageUrl: string }) => ins.thumbnailUrl ?? ins.imageUrl)
+          .filter(Boolean);
+        setThumbnails(urls);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingThumbs(false));
+  }, [brandId, isDemo]);
+
+  const seededCount = inspirationSeed?.seeded ?? 0;
+  const categoryLabel = inspirationSeed?.category && inspirationSeed.category !== "other"
+    ? inspirationSeed.category
+    : null;
+
+  return (
+    <div>
+      <h1
+        className="text-3xl font-bold mb-2 font-display"
+        style={{ color: "var(--sf-text-primary)", letterSpacing: "-0.02em" }}
+      >
+        Your inspiration library is ready
+      </h1>
+      <p className="mb-8" style={{ color: "var(--sf-text-secondary)" }}>
+        These are the winning ads StaticsFlow will learn from to keep your creatives on-brand.
+      </p>
+
+      {seededCount > 0 ? (
+        <div
+          className="rounded-md p-5 border mb-6"
+          style={{ borderColor: "var(--sf-border)", background: "var(--sf-bg-secondary)" }}
+        >
+          {/* Thumbnails */}
+          {(thumbnails.length > 0 || loadingThumbs) && (
+            <div className="flex gap-3 mb-4">
+              {loadingThumbs && thumbnails.length === 0 ? (
+                <div className="flex gap-3">
+                  {[0, 1].map((i) => (
+                    <div
+                      key={i}
+                      className="w-20 h-20 rounded-md animate-pulse"
+                      style={{ background: "var(--sf-bg-elevated)" }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                thumbnails.map((url, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i}
+                    src={url}
+                    alt={`Inspiration ad ${i + 1}`}
+                    className="w-20 h-20 object-cover rounded-md border"
+                    style={{ borderColor: "var(--sf-border)" }}
+                  />
+                ))
+              )}
+              {seededCount > 2 && !loadingThumbs && (
+                <div
+                  className="w-20 h-20 rounded-md border flex items-center justify-center text-sm font-semibold"
+                  style={{ borderColor: "var(--sf-border)", background: "var(--sf-bg-elevated)", color: "var(--sf-text-secondary)" }}
+                >
+                  +{seededCount - thumbnails.length}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Count + category */}
+          <div className="flex items-center gap-2 mb-2">
+            <span
+              className="text-sm font-semibold"
+              style={{ color: "var(--sf-success)" }}
+            >
+              ✓ {seededCount} inspiration ad{seededCount !== 1 ? "s" : ""} pre-loaded
+            </span>
+            {categoryLabel && (
+              <span
+                className="text-xs px-2 py-0.5 rounded-full capitalize"
+                style={{ background: "var(--sf-bg-elevated)", color: "var(--sf-text-muted)" }}
+              >
+                {categoryLabel}
+              </span>
+            )}
+          </div>
+          <p className="text-sm" style={{ color: "var(--sf-text-secondary)" }}>
+            These are the winning ads we will learn from to generate your creatives.
+          </p>
+        </div>
+      ) : isDemo ? (
+        /* Demo mode: show placeholder */
+        <div
+          className="rounded-md p-5 border mb-6"
+          style={{ borderColor: "var(--sf-border)", background: "var(--sf-bg-secondary)" }}
+        >
+          <div className="flex gap-3 mb-4">
+            {[
+              { bg: "#1A1A2E", label: "Aspiration", copy: "Wear Less. Mean More." },
+              { bg: "#2D4A3E", label: "Social Proof", copy: "10,000+ happy customers" },
+            ].map((mock, i) => (
+              <div
+                key={i}
+                className="w-20 h-20 rounded-md flex flex-col items-center justify-center p-1.5 text-center"
+                style={{ background: mock.bg }}
+              >
+                <span className="text-white text-xs font-bold leading-tight">{mock.copy}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-sm font-semibold mb-1" style={{ color: "var(--sf-success)" }}>
+            ✓ 8 sample inspiration ads loaded
+          </p>
+          <p className="text-xs" style={{ color: "var(--sf-text-muted)" }}>
+            Demo mode — connect your account to use real winning ads from your category.
+          </p>
+        </div>
+      ) : (
+        /* Graceful fallback: no inspirations seeded (empty BDD library) */
+        <div
+          className="rounded-md p-5 border mb-6"
+          style={{ borderColor: "var(--sf-border)", background: "var(--sf-bg-secondary)" }}
+        >
+          <p className="text-sm font-semibold mb-1" style={{ color: "var(--sf-text-secondary)" }}>
+            No inspiration ads yet
+          </p>
+          <p className="text-sm" style={{ color: "var(--sf-text-muted)" }}>
+            You can add inspiration ads from your dashboard after setup. StaticsFlow will still generate great creatives from your Brand DNA.
+          </p>
+        </div>
+      )}
+
+      {/* Educational note */}
+      <div
+        className="flex items-start gap-3 p-4 rounded-md border mb-8"
+        style={{ background: "rgba(52,199,89,0.06)", borderColor: "rgba(52,199,89,0.2)" }}
+      >
+        <span className="text-base mt-0.5" aria-hidden>💡</span>
+        <p className="text-sm" style={{ color: "var(--sf-text-secondary)" }}>
+          <strong style={{ color: "var(--sf-text-primary)" }}>How it works:</strong> StaticsFlow analyzes these winning ads and uses them as creative benchmarks — ensuring every creative we generate follows proven patterns for your niche.
+        </p>
+      </div>
+
+      <button
+        onClick={onContinue}
+        className="w-full py-3.5 px-6 text-white font-semibold rounded-md hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+        style={{ background: "var(--sf-accent)" }}
+      >
+        These look right → Continue
+      </button>
+
+      <button
+        onClick={onContinue}
+        className="mt-3 w-full py-2.5 text-sm text-center hover:opacity-80"
+        style={{ color: "var(--sf-text-muted)" }}
+      >
+        Add more later
+      </button>
+
+      <button
+        onClick={onBack}
+        className="mt-1 w-full py-2 text-sm hover:opacity-80"
+        style={{ color: "var(--sf-text-secondary)" }}
+      >
+        ← Back to Brand DNA
       </button>
     </div>
   );
@@ -747,18 +979,26 @@ function ProductConfirmStep({
         )}
       </div>
 
-      {/* Gemini key reminder — only on this step since it's needed to generate */}
-      {!isDemo && !geminiKey && (
+      {/* Gemini key — collected here (Step 4) to reduce first-impression friction (STA-145 P2) */}
+      {!isDemo && (
         <div
           className="mb-4 p-4 rounded-md border"
-          style={{ background: "rgba(255,159,10,0.1)", borderColor: "rgba(255,159,10,0.25)" }}
+          style={geminiKey
+            ? { background: "var(--sf-bg-secondary)", borderColor: "var(--sf-border)" }
+            : { background: "rgba(255,159,10,0.08)", borderColor: "rgba(255,159,10,0.25)" }
+          }
         >
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold flex items-center gap-2" style={{ color: "var(--sf-warning)" }}>
+            <p
+              className="text-sm font-semibold flex items-center gap-2"
+              style={{ color: geminiKey ? "var(--sf-text-primary)" : "var(--sf-warning)" }}
+            >
               <Key className="w-4 h-4" />
-              Gemini API key needed
+              Gemini API key {geminiKey ? <span className="text-green-500 font-normal text-xs ml-1">✓ saved</span> : <span className="text-xs font-normal ml-1" style={{ color: "var(--sf-warning)" }}>required to generate images</span>}
             </p>
-            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-xs font-medium hover:opacity-80" style={{ color: "var(--sf-warning)" }}>Get key →</a>
+            {!geminiKey && (
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-xs font-medium hover:opacity-80" style={{ color: "var(--sf-warning)" }}>Get key →</a>
+            )}
           </div>
           <input
             type="password"
@@ -769,6 +1009,9 @@ function ProductConfirmStep({
             className="w-full px-3 py-2 text-sm rounded-md border focus:outline-none font-mono"
             style={{ background: "var(--sf-bg-elevated)", borderColor: "var(--sf-border)", color: "var(--sf-text-primary)" }}
           />
+          <p className="mt-1.5 text-xs" style={{ color: "var(--sf-text-muted)" }}>
+            Your key is saved in your browser and never sent to our servers.
+          </p>
         </div>
       )}
 
@@ -860,12 +1103,15 @@ export default function OnboardingPage() {
     setStep(s);
     if (s === "url") { setDna(null); setCreative(null); setIsDemo(false); setBrandId(null); setInspirationSeed(null); }
     if (s === "dna") { setCreative(null); }
+    if (s === "inspirations") { setCreative(null); }
     if (s === "product") { setCreative(null); setGenerateError(null); }
   }
 
   function handleTryDemo() {
     setIsDemo(true);
     setDna(DEMO_DNA);
+    // Provide demo inspiration seed so Step 3 shows content
+    setInspirationSeed({ seeded: 8, category: "fashion", message: "We pre-loaded 8 top-performing fashion ads as inspiration." });
     setStep("dna");
   }
 
@@ -1006,79 +1252,46 @@ export default function OnboardingPage() {
                 } as React.CSSProperties}
               />
 
-              {/* API keys */}
+              {/* Claude API key — only key needed at this step (Gemini moved to Step 4, STA-145 P2) */}
               <div className="rounded-md overflow-hidden border" style={{ borderColor: 'var(--sf-border)' }}>
                 <div
                   className="px-4 py-3 flex items-center gap-2 border-b"
                   style={{ background: 'var(--sf-bg-elevated)', borderColor: 'var(--sf-border)' }}
                 >
                   <Key className="w-4 h-4" style={{ color: 'var(--sf-text-muted)' }} />
-                  <span className="text-sm font-semibold" style={{ color: 'var(--sf-text-primary)' }}>Your API Keys</span>
-                  <span className="ml-auto text-xs" style={{ color: 'var(--sf-text-muted)' }}>Saved in your browser — never sent to our servers</span>
+                  <span className="text-sm font-semibold" style={{ color: 'var(--sf-text-primary)' }}>Claude API Key</span>
+                  <span className="ml-auto text-xs" style={{ color: 'var(--sf-text-muted)' }}>Saved in browser — never sent to our servers</span>
                 </div>
-                <div className="p-4 space-y-4" style={{ background: 'var(--sf-bg-secondary)' }}>
-                  {/* Claude key */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold" style={{ color: 'var(--sf-text-secondary)' }}>
-                        Claude API Key <span style={{ color: 'var(--sf-error)' }}>*</span>
-                      </label>
-                      <a
-                        href="https://console.anthropic.com/settings/keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-medium hover:opacity-80"
-                        style={{ color: 'var(--sf-accent)' }}
-                      >
-                        Get key →
-                      </a>
-                    </div>
-                    <input
-                      type="password"
-                      value={anthropicKey}
-                      onChange={(e) => setAnthropicKey(e.target.value)}
-                      placeholder="sk-ant-..."
-                      autoComplete="off"
-                      className="w-full px-3 py-2.5 text-sm rounded-md border focus:outline-none font-mono"
-                      style={{
-                        background: 'var(--sf-bg-elevated)',
-                        borderColor: 'var(--sf-border)',
-                        color: 'var(--sf-text-primary)',
-                      }}
-                    />
+                <div className="p-4" style={{ background: 'var(--sf-bg-secondary)' }}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold" style={{ color: 'var(--sf-text-secondary)' }}>
+                      Required to extract Brand DNA <span style={{ color: 'var(--sf-error)' }}>*</span>
+                    </label>
+                    <a
+                      href="https://console.anthropic.com/settings/keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-medium hover:opacity-80"
+                      style={{ color: 'var(--sf-accent)' }}
+                    >
+                      Get key →
+                    </a>
                   </div>
-                  {/* Gemini key */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-semibold" style={{ color: 'var(--sf-text-secondary)' }}>
-                        Gemini API Key <span style={{ color: 'var(--sf-error)' }}>*</span>
-                      </label>
-                      <a
-                        href="https://aistudio.google.com/app/apikey"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-medium hover:opacity-80"
-                        style={{ color: 'var(--sf-accent)' }}
-                      >
-                        Get key →
-                      </a>
-                    </div>
-                    <input
-                      type="password"
-                      value={geminiKey}
-                      onChange={(e) => setGeminiKey(e.target.value)}
-                      placeholder="AIza..."
-                      autoComplete="off"
-                      className="w-full px-3 py-2.5 text-sm rounded-md border focus:outline-none font-mono"
-                      style={{
-                        background: 'var(--sf-bg-elevated)',
-                        borderColor: 'var(--sf-border)',
-                        color: 'var(--sf-text-primary)',
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs" style={{ color: 'var(--sf-text-muted)' }}>
-                    StaticsFlow is BYOK — your keys power the AI, we never store them.
+                  <input
+                    type="password"
+                    value={anthropicKey}
+                    onChange={(e) => setAnthropicKey(e.target.value)}
+                    placeholder="sk-ant-..."
+                    autoComplete="off"
+                    className="w-full px-3 py-2.5 text-sm rounded-md border focus:outline-none font-mono"
+                    style={{
+                      background: 'var(--sf-bg-elevated)',
+                      borderColor: 'var(--sf-border)',
+                      color: 'var(--sf-text-primary)',
+                    }}
+                  />
+                  <p className="mt-1.5 text-xs" style={{ color: 'var(--sf-text-muted)' }}>
+                    StaticsFlow is BYOK — your key powers the AI, we never store it. Gemini key asked later.
                   </p>
                 </div>
               </div>
@@ -1138,13 +1351,24 @@ export default function OnboardingPage() {
           <DnaReviewStep
             dna={dna}
             onDnaChange={setDna}
-            onContinue={() => navigateTo("product")}
+            onContinue={() => navigateTo("inspirations")}
             onBack={() => navigateTo("url")}
             inspirationSeed={inspirationSeed}
           />
         )}
 
-        {/* ── Step 3: Your Product (STA-122 P0b) ───────────────────── */}
+        {/* ── Step 3: Inspirations (STA-145 P0) ────────────────────── */}
+        {step === "inspirations" && dna && (
+          <InspirationConfirmStep
+            inspirationSeed={inspirationSeed}
+            brandId={brandId}
+            isDemo={isDemo}
+            onContinue={() => navigateTo("product")}
+            onBack={() => navigateTo("dna")}
+          />
+        )}
+
+        {/* ── Step 4: Your Product (STA-122 P0b) ───────────────────── */}
         {step === "product" && dna && (
           <ProductConfirmStep
             dna={dna}
@@ -1160,7 +1384,7 @@ export default function OnboardingPage() {
           />
         )}
 
-        {/* ── Step 4: Generated creative ────────────────────────────── */}
+        {/* ── Step 5: Generated creative ────────────────────────────── */}
         {step === "creative" && creative && dna && (
           <div>
             <div className="flex items-center gap-2 mb-6">
