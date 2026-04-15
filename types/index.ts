@@ -102,7 +102,7 @@ export type CreativeAngle =
 
 /**
  * Image generation quality tier.
- * - "flash"  → gemini-2.0-flash-exp-image-generation  — fast, cost-effective
- * - "pro"    → gemini-2.0-flash-exp-image-generation  — highest quality (same model until Google releases a distinct pro tier)
+ * - "flash"  → gemini-3.1-flash-image-preview  — fast, cost-effective
+ * - "pro"    → gemini-3-pro-image-preview       — highest quality, higher cost
  */
 export type ImageQuality = 'flash' | 'pro'

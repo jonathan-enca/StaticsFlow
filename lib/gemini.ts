@@ -1,39 +1,37 @@
-// Gemini API client (Google Generative AI)
+// Gemini API client (@google/genai SDK)
 // THE ONLY image generation model used in StaticsFlow — no alternatives (SPECS.md §1.5)
 // BYOK: user provides their own key in production
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
+import type { ImageQuality } from "@/types/index";
 
 /**
- * Create a Gemini client.
+ * Create a Gemini client using the @google/genai SDK (replaces deprecated
+ * @google/generative-ai which was locked to the removed v1beta endpoint).
+ *
  * In production, apiKey comes from the user's BYOK settings.
  * During development, falls back to GEMINI_API_KEY env var.
  */
-export function createGeminiClient(apiKey?: string): GoogleGenerativeAI {
+export function createGeminiClient(apiKey?: string): GoogleGenAI {
   const key = apiKey ?? process.env.GEMINI_API_KEY;
   if (!key) {
     throw new Error(
       "Gemini API key is required. Set GEMINI_API_KEY or provide a user API key."
     );
   }
-  return new GoogleGenerativeAI(key);
+  return new GoogleGenAI({ apiKey: key });
 }
-
-import type { ImageQuality } from "@/types/index";
 
 /**
  * Gemini image generation model tiers.
  *
- * flash → gemini-2.0-flash-exp-image-generation  Fast, cost-effective. Good for bulk / drafts.
- * pro   → gemini-2.0-flash-exp-image-generation  Highest quality available via Gemini native.
- *         (A distinct higher-quality model will be wired in when Google releases one.)
+ * flash → gemini-3.1-flash-image-preview  Fast, cost-effective. Good for bulk / drafts.
+ * pro   → gemini-3-pro-image-preview       Highest quality available via Gemini native.
  *
- * Both require responseModalities: ["IMAGE", "TEXT"] at model instantiation.
- *
- * NOTE: "preview" model was removed by Google. "exp" is the current replacement.
+ * Both require responseModalities: [Modality.IMAGE, Modality.TEXT] in the request config.
  */
-export const GEMINI_IMAGE_MODEL_FLASH = "gemini-2.0-flash-exp-image-generation";
-export const GEMINI_IMAGE_MODEL_PRO   = "gemini-2.0-flash-exp-image-generation";
+export const GEMINI_IMAGE_MODEL_FLASH = "gemini-3.1-flash-image-preview";
+export const GEMINI_IMAGE_MODEL_PRO   = "gemini-3-pro-image-preview";
 
 /** Default model (flash) kept for backward compatibility. */
 export const GEMINI_IMAGE_MODEL = GEMINI_IMAGE_MODEL_FLASH;

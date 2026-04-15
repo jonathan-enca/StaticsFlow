@@ -671,9 +671,8 @@ Call the submit_creative_brief tool with the completed brief. For imagePrompt: w
  * Gemini generates the ad image from the creative brief.
  * This is THE ONLY image generation model (SPECS.md §1.5 §4.1 step 5).
  *
- * responseModalities must be set at model instantiation (not per-request) in
- * @google/generative-ai >=0.21. Passing it only in generateContent is silently
- * ignored in some SDK versions, causing Gemini to return text only.
+ * Uses the @google/genai SDK (replaces legacy @google/generative-ai).
+ * responseModalities is passed in the request config (not at model instantiation).
  */
 async function generateImageWithGemini(
   brief: CreativeBrief,
@@ -684,15 +683,6 @@ async function generateImageWithGemini(
 ): Promise<string> {
   const client = createGeminiClient(apiKey);
   const modelName = getGeminiImageModel(quality);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const model = client.getGenerativeModel({
-    model: modelName,
-    // responseModalities is not yet in the SDK's GenerationConfig types but is
-    // required for the image generation model — cast to any.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    generationConfig: { responseModalities: ["IMAGE", "TEXT"] } as any,
-  });
 
   // Build multimodal prompt: product images first (real assets), then style references, then text
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -724,11 +714,15 @@ async function generateImageWithGemini(
   }
   parts.push({ text: promptText });
 
-  const response = await model.generateContent({
+  const response = await client.models.generateContent({
+    model: modelName,
     contents: [{ role: "user", parts }],
+    config: {
+      responseModalities: ["IMAGE", "TEXT"],
+    },
   });
 
-  const candidate = response.response.candidates?.[0];
+  const candidate = response.candidates?.[0];
   if (!candidate) throw new Error("Gemini returned no candidates");
 
   // Extract base64 image data from the inline image part
