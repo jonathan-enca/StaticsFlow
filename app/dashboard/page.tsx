@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import type { ExtractedBrandDNA } from "@/lib/brand-dna-extractor";
 import { Sparkles, Check, AlertCircle } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
+import DeleteBrandButton from "@/components/DeleteBrandButton";
 
 export default async function DashboardPage() {
   let session;
@@ -131,19 +132,23 @@ export default async function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Pillar count badge */}
-                    <div
-                      className="flex-shrink-0 text-xs font-medium px-2.5 py-1 rounded-full"
-                      style={{
-                        background: allDone
-                          ? "rgba(52,199,89,0.12)"
-                          : "var(--sf-bg-elevated)",
-                        color: allDone
-                          ? "var(--sf-success)"
-                          : "var(--sf-text-muted)",
-                      }}
-                    >
-                      {pillarsComplete}/3 pillars ready
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* Pillar count badge */}
+                      <div
+                        className="text-xs font-medium px-2.5 py-1 rounded-full"
+                        style={{
+                          background: allDone
+                            ? "rgba(52,199,89,0.12)"
+                            : "var(--sf-bg-elevated)",
+                          color: allDone
+                            ? "var(--sf-success)"
+                            : "var(--sf-text-muted)",
+                        }}
+                      >
+                        {pillarsComplete}/3 pillars ready
+                      </div>
+                      {/* Delete brand */}
+                      <DeleteBrandButton brandId={brand.id} brandName={brand.name} />
                     </div>
                   </div>
 
