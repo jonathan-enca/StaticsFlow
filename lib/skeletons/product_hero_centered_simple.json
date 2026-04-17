@@ -1,0 +1,111 @@
+{
+  "id": "product_hero_centered_simple",
+  "name": "Product Hero — Centered, Sharp background (1:1)",
+  "adType": "product_hero",
+  "layout": "centered",
+  "nativeFormat": "1080x1080",
+  "aspectRatio": "1:1",
+  "backgroundType": "simple",
+  "background": {
+    "type": "gradient",
+    "gradientStops": [
+      {
+        "color": "brand_secondary",
+        "position": 0
+      },
+      {
+        "color": "white",
+        "position": 1
+      }
+    ],
+    "gradientDirection": "radial",
+    "textureName": "grain_light",
+    "textureOpacity": 0.04
+  },
+  "zones": {
+    "eyebrow": {
+      "x": 0.1,
+      "y": 0.06,
+      "width": 0.8,
+      "height": 0.06,
+      "align": "center",
+      "typography": {
+        "role": "eyebrow",
+        "sizeRatio": 0.02,
+        "weightBold": false,
+        "letterSpacing": 0.12,
+        "lineHeight": 1.2,
+        "maxLines": 1,
+        "uppercase": true
+      }
+    },
+    "headline": {
+      "x": 0.08,
+      "y": 0.13,
+      "width": 0.84,
+      "height": 0.14,
+      "align": "center",
+      "typography": {
+        "role": "headline",
+        "sizeRatio": 0.052,
+        "weightBold": true,
+        "letterSpacing": -0.02,
+        "lineHeight": 1.1,
+        "maxLines": 2
+      }
+    },
+    "product": {
+      "x": 0.12,
+      "y": 0.28,
+      "width": 0.76,
+      "height": 0.48,
+      "effect": {
+        "dropShadow": true,
+        "shadowBlur": 0.04,
+        "shadowOpacity": 0.18,
+        "shadowOffsetX": 0,
+        "shadowOffsetY": 0.025
+      }
+    },
+    "cta": {
+      "x": 0.28,
+      "y": 0.78,
+      "width": 0.44,
+      "height": 0.09,
+      "align": "center",
+      "typography": {
+        "role": "cta",
+        "sizeRatio": 0.026,
+        "weightBold": true,
+        "letterSpacing": 0.08,
+        "lineHeight": 1,
+        "maxLines": 1,
+        "uppercase": true
+      },
+      "badgeStyle": "pill"
+    },
+    "logo": {
+      "x": 0.04,
+      "y": 0.93,
+      "width": 0.12,
+      "height": 0.05,
+      "anchor": "bottom-left"
+    }
+  },
+  "spacing": {
+    "safeMargin": 0.04,
+    "verticalGap": 0.025
+  },
+  "premiumStyling": {
+    "grainOverlay": true,
+    "grainOpacity": 0.04,
+    "globalCornerRadius": 0,
+    "decorativeElement": "none",
+    "backgroundBleedProduct": false
+  },
+  "matchCriteria": {
+    "type": "product_hero",
+    "layout": "centered",
+    "backgroundCategory": "simple"
+  }
+}

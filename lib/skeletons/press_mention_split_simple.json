@@ -1,0 +1,117 @@
+{
+  "id": "press_mention_split_simple",
+  "name": "Press Mention — Split (1:1)",
+  "adType": "press_mention",
+  "layout": "split",
+  "nativeFormat": "1080x1080",
+  "aspectRatio": "1:1",
+  "backgroundType": "simple",
+  "background": {
+    "type": "solid",
+    "color": "white",
+    "textureName": "paper",
+    "textureOpacity": 0.05
+  },
+  "zones": {
+    "product": {
+      "x": 0.02,
+      "y": 0.1,
+      "width": 0.46,
+      "height": 0.8,
+      "effect": {
+        "dropShadow": true,
+        "shadowBlur": 0.02,
+        "shadowOpacity": 0.12,
+        "shadowOffsetX": 0,
+        "shadowOffsetY": 0.025
+      }
+    },
+    "eyebrow": {
+      "x": 0.52,
+      "y": 0.1,
+      "width": 0.44,
+      "height": 0.06,
+      "align": "left",
+      "typography": {
+        "role": "eyebrow",
+        "sizeRatio": 0.016,
+        "weightBold": true,
+        "letterSpacing": 0.08,
+        "lineHeight": 1.2,
+        "maxLines": 1,
+        "uppercase": true
+      }
+    },
+    "quoteText": {
+      "x": 0.52,
+      "y": 0.18,
+      "width": 0.44,
+      "height": 0.36,
+      "align": "left",
+      "typography": {
+        "role": "headline",
+        "sizeRatio": 0.038,
+        "weightBold": true,
+        "letterSpacing": -0.01,
+        "lineHeight": 1.2,
+        "maxLines": 5
+      },
+      "quoteStyle": "large_quote"
+    },
+    "subheadline": {
+      "x": 0.52,
+      "y": 0.56,
+      "width": 0.44,
+      "height": 0.1,
+      "align": "left",
+      "typography": {
+        "role": "subheadline",
+        "sizeRatio": 0.024,
+        "weightBold": false,
+        "letterSpacing": 0,
+        "lineHeight": 1.4,
+        "maxLines": 2
+      }
+    },
+    "cta": {
+      "x": 0.52,
+      "y": 0.7,
+      "width": 0.4,
+      "height": 0.09,
+      "align": "center",
+      "typography": {
+        "role": "cta",
+        "sizeRatio": 0.024,
+        "weightBold": true,
+        "letterSpacing": 0.08,
+        "lineHeight": 1,
+        "maxLines": 1,
+        "uppercase": true
+      },
+      "badgeStyle": "pill"
+    },
+    "logo": {
+      "x": 0.52,
+      "y": 0.9,
+      "width": 0.12,
+      "height": 0.05,
+      "anchor": "bottom-left"
+    }
+  },
+  "spacing": {
+    "safeMargin": 0.04,
+    "verticalGap": 0.02
+  },
+  "premiumStyling": {
+    "grainOverlay": false,
+    "grainOpacity": 0.04,
+    "globalCornerRadius": 0,
+    "decorativeElement": "none",
+    "backgroundBleedProduct": false
+  },
+  "matchCriteria": {
+    "type": "press_mention",
+    "layout": "split",
+    "backgroundCategory": "simple"
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "id": "ugc_screenshot_grid_simple",
+  "name": "UGC Screenshot — Grid (1:1)",
+  "adType": "ugc_screenshot",
+  "layout": "grid",
+  "nativeFormat": "1080x1080",
+  "aspectRatio": "1:1",
+  "backgroundType": "simple",
+  "background": {
+    "type": "solid",
+    "color": "white",
+    "textureName": "grain_light",
+    "textureOpacity": 0.03
+  },
+  "zones": {
+    "headline": {
+      "x": 0.06,
+      "y": 0.04,
+      "width": 0.88,
+      "height": 0.1,
+      "align": "center",
+      "typography": {
+        "role": "headline",
+        "sizeRatio": 0.042,
+        "weightBold": true,
+        "letterSpacing": -0.01,
+        "lineHeight": 1.1,
+        "maxLines": 2
+      }
+    },
+    "screenshotFrame": {
+      "x": 0.04,
+      "y": 0.16,
+      "width": 0.44,
+      "height": 0.42,
+      "frameStyle": "phone"
+    },
+    "rating": {
+      "x": 0.52,
+      "y": 0.16,
+      "width": 0.44,
+      "height": 0.1
+    },
+    "quoteText": {
+      "x": 0.52,
+      "y": 0.28,
+      "width": 0.44,
+      "height": 0.3,
+      "align": "left",
+      "typography": {
+        "role": "body",
+        "sizeRatio": 0.026,
+        "weightBold": false,
+        "letterSpacing": 0,
+        "lineHeight": 1.5,
+        "maxLines": 6
+      },
+      "quoteStyle": "inline"
+    },
+    "subheadline": {
+      "x": 0.06,
+      "y": 0.62,
+      "width": 0.88,
+      "height": 0.1,
+      "align": "center",
+      "typography": {
+        "role": "subheadline",
+        "sizeRatio": 0.026,
+        "weightBold": false,
+        "letterSpacing": 0,
+        "lineHeight": 1.4,
+        "maxLines": 2
+      }
+    },
+    "cta": {
+      "x": 0.28,
+      "y": 0.75,
+      "width": 0.44,
+      "height": 0.09,
+      "align": "center",
+      "typography": {
+        "role": "cta",
+        "sizeRatio": 0.026,
+        "weightBold": true,
+        "letterSpacing": 0.08,
+        "lineHeight": 1,
+        "maxLines": 1,
+        "uppercase": true
+      },
+      "badgeStyle": "pill"
+    },
+    "logo": {
+      "x": 0.04,
+      "y": 0.93,
+      "width": 0.12,
+      "height": 0.05,
+      "anchor": "bottom-left"
+    }
+  },
+  "spacing": {
+    "safeMargin": 0.04,
+    "verticalGap": 0.025
+  },
+  "premiumStyling": {
+    "grainOverlay": false,
+    "grainOpacity": 0.04,
+    "globalCornerRadius": 0,
+    "decorativeElement": "none",
+    "backgroundBleedProduct": false
+  },
+  "matchCriteria": {
+    "type": "ugc_screenshot",
+    "layout": "grid",
+    "backgroundCategory": "simple"
+  }
+}

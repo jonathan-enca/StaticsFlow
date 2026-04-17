@@ -1,0 +1,110 @@
+{
+  "id": "listicle_split_simple",
+  "name": "Listicle — Split (1:1)",
+  "adType": "listicle",
+  "layout": "split",
+  "nativeFormat": "1080x1080",
+  "aspectRatio": "1:1",
+  "backgroundType": "simple",
+  "background": {
+    "type": "gradient",
+    "gradientStops": [
+      {
+        "color": "brand_secondary",
+        "position": 0
+      },
+      {
+        "color": "white",
+        "position": 1
+      }
+    ],
+    "gradientDirection": "radial",
+    "textureName": "grain_light",
+    "textureOpacity": 0.04
+  },
+  "zones": {
+    "product": {
+      "x": 0.02,
+      "y": 0.08,
+      "width": 0.46,
+      "height": 0.84,
+      "effect": {
+        "dropShadow": true,
+        "shadowBlur": 0.03,
+        "shadowOpacity": 0.15,
+        "shadowOffsetX": 0,
+        "shadowOffsetY": 0.025
+      }
+    },
+    "headline": {
+      "x": 0.52,
+      "y": 0.08,
+      "width": 0.44,
+      "height": 0.14,
+      "align": "left",
+      "typography": {
+        "role": "headline",
+        "sizeRatio": 0.044,
+        "weightBold": true,
+        "letterSpacing": -0.01,
+        "lineHeight": 1.1,
+        "maxLines": 2
+      }
+    },
+    "listItems": {
+      "x": 0.52,
+      "y": 0.24,
+      "width": 0.44,
+      "height": 0.5,
+      "maxItems": 4,
+      "itemTypography": {
+        "role": "body",
+        "sizeRatio": 0.026,
+        "weightBold": false,
+        "letterSpacing": 0,
+        "lineHeight": 1.4,
+        "maxLines": 2
+      }
+    },
+    "cta": {
+      "x": 0.52,
+      "y": 0.78,
+      "width": 0.4,
+      "height": 0.09,
+      "align": "center",
+      "typography": {
+        "role": "cta",
+        "sizeRatio": 0.024,
+        "weightBold": true,
+        "letterSpacing": 0.08,
+        "lineHeight": 1,
+        "maxLines": 1,
+        "uppercase": true
+      },
+      "badgeStyle": "pill"
+    },
+    "logo": {
+      "x": 0.52,
+      "y": 0.93,
+      "width": 0.12,
+      "height": 0.05,
+      "anchor": "bottom-left"
+    }
+  },
+  "spacing": {
+    "safeMargin": 0.04,
+    "verticalGap": 0.025
+  },
+  "premiumStyling": {
+    "grainOverlay": true,
+    "grainOpacity": 0.04,
+    "globalCornerRadius": 0,
+    "decorativeElement": "none",
+    "backgroundBleedProduct": false
+  },
+  "matchCriteria": {
+    "type": "listicle",
+    "layout": "split",
+    "backgroundCategory": "simple"
+  }
+}

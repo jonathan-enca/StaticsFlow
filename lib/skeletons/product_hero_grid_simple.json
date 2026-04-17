@@ -1,0 +1,117 @@
+{
+  "id": "product_hero_grid_simple",
+  "name": "Product Hero — Grid Layout (1:1)",
+  "adType": "product_hero",
+  "layout": "grid",
+  "nativeFormat": "1080x1080",
+  "aspectRatio": "1:1",
+  "backgroundType": "simple",
+  "background": {
+    "type": "gradient",
+    "gradientStops": [
+      {
+        "color": "brand_secondary",
+        "position": 0
+      },
+      {
+        "color": "white",
+        "position": 1
+      }
+    ],
+    "gradientDirection": "radial",
+    "textureName": "grain_light",
+    "textureOpacity": 0.04
+  },
+  "zones": {
+    "headline": {
+      "x": 0.06,
+      "y": 0.05,
+      "width": 0.88,
+      "height": 0.12,
+      "align": "center",
+      "typography": {
+        "role": "headline",
+        "sizeRatio": 0.046,
+        "weightBold": true,
+        "letterSpacing": -0.01,
+        "lineHeight": 1.1,
+        "maxLines": 2
+      }
+    },
+    "product": {
+      "x": 0.06,
+      "y": 0.2,
+      "width": 0.42,
+      "height": 0.42,
+      "effect": {
+        "dropShadow": true,
+        "shadowBlur": 0.02,
+        "shadowOpacity": 0.12,
+        "shadowOffsetX": 0,
+        "shadowOffsetY": 0.025
+      }
+    },
+    "badge": {
+      "x": 0.54,
+      "y": 0.2,
+      "width": 0.4,
+      "height": 0.42,
+      "badgeType": "bestseller"
+    },
+    "subheadline": {
+      "x": 0.06,
+      "y": 0.64,
+      "width": 0.88,
+      "height": 0.1,
+      "align": "center",
+      "typography": {
+        "role": "subheadline",
+        "sizeRatio": 0.026,
+        "weightBold": false,
+        "letterSpacing": 0,
+        "lineHeight": 1.4,
+        "maxLines": 2
+      }
+    },
+    "cta": {
+      "x": 0.28,
+      "y": 0.77,
+      "width": 0.44,
+      "height": 0.09,
+      "align": "center",
+      "typography": {
+        "role": "cta",
+        "sizeRatio": 0.026,
+        "weightBold": true,
+        "letterSpacing": 0.08,
+        "lineHeight": 1,
+        "maxLines": 1,
+        "uppercase": true
+      },
+      "badgeStyle": "pill"
+    },
+    "logo": {
+      "x": 0.04,
+      "y": 0.93,
+      "width": 0.12,
+      "height": 0.05,
+      "anchor": "bottom-left"
+    }
+  },
+  "spacing": {
+    "safeMargin": 0.04,
+    "verticalGap": 0.025
+  },
+  "premiumStyling": {
+    "grainOverlay": true,
+    "grainOpacity": 0.04,
+    "globalCornerRadius": 0,
+    "decorativeElement": "none",
+    "backgroundBleedProduct": false
+  },
+  "matchCriteria": {
+    "type": "product_hero",
+    "layout": "grid",
+    "backgroundCategory": "simple"
+  }
+}

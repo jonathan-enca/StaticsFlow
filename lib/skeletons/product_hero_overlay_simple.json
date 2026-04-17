@@ -1,0 +1,93 @@
+{
+  "id": "product_hero_overlay_simple",
+  "name": "Product Hero — Overlay Layout (1:1)",
+  "adType": "product_hero",
+  "layout": "overlay",
+  "nativeFormat": "1080x1080",
+  "aspectRatio": "1:1",
+  "backgroundType": "simple",
+  "background": {
+    "type": "gradient",
+    "gradientStops": [
+      {
+        "color": "brand_primary",
+        "position": 0
+      },
+      {
+        "color": "black",
+        "position": 1
+      }
+    ],
+    "gradientDirection": "linear_tb"
+  },
+  "zones": {
+    "product": {
+      "x": 0.08,
+      "y": 0.04,
+      "width": 0.84,
+      "height": 0.72,
+      "effect": {
+        "dropShadow": true,
+        "shadowBlur": 0.05,
+        "shadowOpacity": 0.25,
+        "shadowOffsetX": 0,
+        "shadowOffsetY": 0.025
+      }
+    },
+    "headline": {
+      "x": 0.06,
+      "y": 0.68,
+      "width": 0.88,
+      "height": 0.14,
+      "align": "center",
+      "typography": {
+        "role": "headline",
+        "sizeRatio": 0.05,
+        "weightBold": true,
+        "letterSpacing": -0.02,
+        "lineHeight": 1.1,
+        "maxLines": 2
+      }
+    },
+    "cta": {
+      "x": 0.28,
+      "y": 0.84,
+      "width": 0.44,
+      "height": 0.09,
+      "align": "center",
+      "typography": {
+        "role": "cta",
+        "sizeRatio": 0.026,
+        "weightBold": true,
+        "letterSpacing": 0.08,
+        "lineHeight": 1,
+        "maxLines": 1,
+        "uppercase": true
+      },
+      "badgeStyle": "pill"
+    },
+    "logo": {
+      "x": 0.04,
+      "y": 0.04,
+      "width": 0.12,
+      "height": 0.05,
+      "anchor": "top-left"
+    }
+  },
+  "spacing": {
+    "safeMargin": 0.04,
+    "verticalGap": 0.02
+  },
+  "premiumStyling": {
+    "grainOverlay": true,
+    "grainOpacity": 0.05,
+    "globalCornerRadius": 0,
+    "decorativeElement": "none",
+    "backgroundBleedProduct": false
+  },
+  "matchCriteria": {
+    "type": "product_hero",
+    "layout": "overlay",
+    "backgroundCategory": "simple"
+  }
+}

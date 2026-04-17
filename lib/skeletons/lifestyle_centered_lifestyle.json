@@ -1,0 +1,98 @@
+{
+  "id": "lifestyle_centered_lifestyle",
+  "name": "Lifestyle — Centered with Lifestyle Background (1:1)",
+  "adType": "lifestyle",
+  "layout": "centered",
+  "nativeFormat": "1080x1080",
+  "aspectRatio": "1:1",
+  "backgroundType": "lifestyle",
+  "background": {
+    "type": "lifestyle",
+    "geminiPromptHint": "clean aspirational lifestyle scene, natural light, soft bokeh, uncluttered"
+  },
+  "zones": {
+    "headline": {
+      "x": 0.08,
+      "y": 0.08,
+      "width": 0.84,
+      "height": 0.16,
+      "align": "center",
+      "typography": {
+        "role": "headline",
+        "sizeRatio": 0.054,
+        "weightBold": true,
+        "letterSpacing": -0.02,
+        "lineHeight": 1.1,
+        "maxLines": 2
+      }
+    },
+    "subheadline": {
+      "x": 0.12,
+      "y": 0.26,
+      "width": 0.76,
+      "height": 0.1,
+      "align": "center",
+      "typography": {
+        "role": "subheadline",
+        "sizeRatio": 0.03,
+        "weightBold": false,
+        "letterSpacing": 0,
+        "lineHeight": 1.4,
+        "maxLines": 2
+      }
+    },
+    "product": {
+      "x": 0.2,
+      "y": 0.38,
+      "width": 0.6,
+      "height": 0.4,
+      "effect": {
+        "dropShadow": true,
+        "shadowBlur": 0.05,
+        "shadowOpacity": 0.2,
+        "shadowOffsetX": 0,
+        "shadowOffsetY": 0.025
+      }
+    },
+    "cta": {
+      "x": 0.3,
+      "y": 0.82,
+      "width": 0.4,
+      "height": 0.09,
+      "align": "center",
+      "typography": {
+        "role": "cta",
+        "sizeRatio": 0.026,
+        "weightBold": true,
+        "letterSpacing": 0.08,
+        "lineHeight": 1,
+        "maxLines": 1,
+        "uppercase": true
+      },
+      "badgeStyle": "pill"
+    },
+    "logo": {
+      "x": 0.04,
+      "y": 0.04,
+      "width": 0.12,
+      "height": 0.05,
+      "anchor": "top-left"
+    }
+  },
+  "spacing": {
+    "safeMargin": 0.05,
+    "verticalGap": 0.03
+  },
+  "premiumStyling": {
+    "grainOverlay": false,
+    "grainOpacity": 0,
+    "globalCornerRadius": 0,
+    "decorativeElement": "none",
+    "backgroundBleedProduct": false
+  },
+  "matchCriteria": {
+    "type": "lifestyle",
+    "layout": "centered",
+    "backgroundCategory": "lifestyle"
+  }
+}

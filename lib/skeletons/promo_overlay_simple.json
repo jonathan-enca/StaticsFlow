@@ -1,0 +1,102 @@
+{
+  "id": "promo_overlay_simple",
+  "name": "Promo — Overlay (1:1)",
+  "adType": "promo",
+  "layout": "overlay",
+  "nativeFormat": "1080x1080",
+  "aspectRatio": "1:1",
+  "backgroundType": "simple",
+  "background": {
+    "type": "gradient",
+    "gradientStops": [
+      {
+        "color": "brand_accent",
+        "position": 0
+      },
+      {
+        "color": "brand_primary",
+        "position": 1
+      }
+    ],
+    "gradientDirection": "diagonal",
+    "textureName": "grain_light",
+    "textureOpacity": 0.04
+  },
+  "zones": {
+    "product": {
+      "x": 0.08,
+      "y": 0.04,
+      "width": 0.84,
+      "height": 0.6,
+      "effect": {
+        "dropShadow": true,
+        "shadowBlur": 0.04,
+        "shadowOpacity": 0.2,
+        "shadowOffsetX": 0,
+        "shadowOffsetY": 0.025
+      }
+    },
+    "badge": {
+      "x": 0.32,
+      "y": 0.62,
+      "width": 0.36,
+      "height": 0.1,
+      "badgeType": "discount"
+    },
+    "headline": {
+      "x": 0.06,
+      "y": 0.73,
+      "width": 0.88,
+      "height": 0.12,
+      "align": "center",
+      "typography": {
+        "role": "headline",
+        "sizeRatio": 0.048,
+        "weightBold": true,
+        "letterSpacing": -0.02,
+        "lineHeight": 1.05,
+        "maxLines": 2
+      }
+    },
+    "cta": {
+      "x": 0.28,
+      "y": 0.87,
+      "width": 0.44,
+      "height": 0.09,
+      "align": "center",
+      "typography": {
+        "role": "cta",
+        "sizeRatio": 0.028,
+        "weightBold": true,
+        "letterSpacing": 0.08,
+        "lineHeight": 1,
+        "maxLines": 1,
+        "uppercase": true
+      },
+      "badgeStyle": "box"
+    },
+    "logo": {
+      "x": 0.04,
+      "y": 0.04,
+      "width": 0.12,
+      "height": 0.05,
+      "anchor": "top-left"
+    }
+  },
+  "spacing": {
+    "safeMargin": 0.04,
+    "verticalGap": 0.02
+  },
+  "premiumStyling": {
+    "grainOverlay": true,
+    "grainOpacity": 0.04,
+    "globalCornerRadius": 0,
+    "decorativeElement": "none",
+    "backgroundBleedProduct": false
+  },
+  "matchCriteria": {
+    "type": "promo",
+    "layout": "overlay",
+    "backgroundCategory": "simple"
+  }
+}

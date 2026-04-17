@@ -1,0 +1,101 @@
+{
+  "id": "lifestyle_overlay_lifestyle",
+  "name": "Lifestyle — Overlay Text on Lifestyle Background (1:1)",
+  "adType": "lifestyle",
+  "layout": "overlay",
+  "nativeFormat": "1080x1080",
+  "aspectRatio": "1:1",
+  "backgroundType": "lifestyle",
+  "background": {
+    "type": "lifestyle",
+    "geminiPromptHint": "immersive lifestyle environment, warm natural tones, shallow depth of field"
+  },
+  "zones": {
+    "eyebrow": {
+      "x": 0.08,
+      "y": 0.06,
+      "width": 0.84,
+      "height": 0.06,
+      "align": "center",
+      "typography": {
+        "role": "eyebrow",
+        "sizeRatio": 0.018,
+        "weightBold": false,
+        "letterSpacing": 0.14,
+        "lineHeight": 1.2,
+        "maxLines": 1,
+        "uppercase": true
+      }
+    },
+    "headline": {
+      "x": 0.06,
+      "y": 0.62,
+      "width": 0.88,
+      "height": 0.16,
+      "align": "center",
+      "typography": {
+        "role": "headline",
+        "sizeRatio": 0.052,
+        "weightBold": true,
+        "letterSpacing": -0.02,
+        "lineHeight": 1.1,
+        "maxLines": 2
+      }
+    },
+    "subheadline": {
+      "x": 0.1,
+      "y": 0.79,
+      "width": 0.8,
+      "height": 0.08,
+      "align": "center",
+      "typography": {
+        "role": "subheadline",
+        "sizeRatio": 0.026,
+        "weightBold": false,
+        "letterSpacing": 0,
+        "lineHeight": 1.3,
+        "maxLines": 2
+      }
+    },
+    "cta": {
+      "x": 0.3,
+      "y": 0.89,
+      "width": 0.4,
+      "height": 0.08,
+      "align": "center",
+      "typography": {
+        "role": "cta",
+        "sizeRatio": 0.024,
+        "weightBold": true,
+        "letterSpacing": 0.08,
+        "lineHeight": 1,
+        "maxLines": 1,
+        "uppercase": true
+      },
+      "badgeStyle": "pill"
+    },
+    "logo": {
+      "x": 0.04,
+      "y": 0.04,
+      "width": 0.12,
+      "height": 0.05,
+      "anchor": "top-left"
+    }
+  },
+  "spacing": {
+    "safeMargin": 0.05,
+    "verticalGap": 0.02
+  },
+  "premiumStyling": {
+    "grainOverlay": false,
+    "grainOpacity": 0,
+    "globalCornerRadius": 0,
+    "decorativeElement": "none",
+    "backgroundBleedProduct": false
+  },
+  "matchCriteria": {
+    "type": "lifestyle",
+    "layout": "overlay",
+    "backgroundCategory": "lifestyle"
+  }
+}
